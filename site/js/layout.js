@@ -8,28 +8,27 @@ export const REPO = "https://github.com/ysoktar/parallel-computing";
 export const EXAM = { start: new Date("2026-11-11T15:30:00+03:00"), end: new Date("2026-11-11T17:30:00+03:00") };
 
 /**
- * Site map. `lec` = lecture slide deck. `scope`: "m2" (CUDA, the focus of midterm 2), "m1" (lectures 1–3: covered
- * by midterm 1, still inside midterm 2's "everything from the start of term" scope), none for tools.
+ * Site map, in the order of the course. `lec` = lecture slide deck. An item may carry a `scope` key from SCOPES.
  */
 export const NAV = [
   { part: "Başlangıç", part_en: "Start", items: [
-    { id: "index", title: "Genel bakış", title_en: "Overview", desc: "Sınav bilgisi, kapsam, plan.", desc_en: "Exam information, scope, plan." },
+    { id: "index", title: "Genel bakış", title_en: "Overview", desc: "Dersin konuları ve sitenin kullanımı.", desc_en: "The course topics and how to use the site." },
   ] },
-  { part: "2. ara sınav", part_en: "Midterm 2", short: "11 Kasım", short_en: "11 Nov", items: [
-    { id: "exam-midterm2", title: "Çalışma rehberi", title_en: "Study guide", desc: "Ne bilinmeli, çözümlü sınav tipi sorular, deneme seti.", desc_en: "What to know, worked exam-style problems, a practice set." },
+  { part: "Dersler", part_en: "Lectures", short: "Lecture 1–6", items: [
+    { id: "l1-intro", title: "Paralel hesaplamaya giriş", title_en: "Introduction", lec: "L1", desc: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson.", desc_en: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson." },
+    { id: "l2-design", title: "Paralel program tasarımı", title_en: "Parallel program design", lec: "L2", desc: "PCAM, ayrıştırma desenleri, program yapısı desenleri.", desc_en: "PCAM, decomposition patterns, program structure patterns." },
+    { id: "l3-threads", title: "Thread'ler ve senkronizasyon", title_en: "Threads and synchronization", lec: "L3", desc: "C++11 thread, mutex, semafor, atomik, monitör, future.", desc_en: "C++11 threads, mutexes, semaphores, atomics, monitors, futures." },
+    { id: "l4-cuda-intro", title: "GPU ve CUDA'ya giriş", title_en: "GPUs and CUDA", lec: "L4", desc: "SIMT, host/device, thread hiyerarşisi, warp, bellek hiyerarşisi.", desc_en: "SIMT, host/device, thread hierarchy, warps, memory hierarchy." },
+    { id: "l5-cuda-kernels", title: "Kernel, indeks, shared memory", title_en: "Kernels, indexing, shared memory", lec: "L5", desc: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul.", desc_en: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul." },
+    { id: "l6-cuda-memory", title: "Derleme ve bellek türleri", title_en: "Compilation and memory types", lec: "L6", desc: "nvcc/PTX, register/shared limitleri, pitch, local, constant, texture.", desc_en: "nvcc/PTX, register/shared limits, pitch, local, constant, texture." },
+    { id: "coalescing", title: "Coalescing, transpose, unrolling", title_en: "Coalescing, transpose, unrolling", lec: "L6", desc: "Global bellek transaction'ları, naive/shared transpose, loop unrolling.", desc_en: "Global memory transactions, naive/shared transpose, loop unrolling." },
+  ] },
+  { part: "Uygulama", part_en: "Practice", items: [
     { id: "lab", title: "İndeks ve coalescing lab", title_en: "Index & coalescing lab", desc: "Hangi thread hangi elemana dokunur? Kaç transaction?", desc_en: "Which thread touches which element? How many transactions?" },
+  ] },
+  { part: "Sınav", part_en: "Exams", short: "2. vize", short_en: "Midterm 2", items: [
+    { id: "exam-midterm2", title: "2. vize çalışma rehberi", title_en: "Midterm 2 study guide", desc: "Ne bilinmeli, çözümlü sınav tipi sorular, deneme seti.", desc_en: "What to know, worked exam-style problems, a practice set." },
     { id: "cheatsheet", title: "Kopya kâğıdı önerisi", title_en: "Cheat-sheet proposal", desc: "A4 iki yüz yerleşim planı ve içerik.", desc_en: "A two-sided A4 layout and its content." },
-  ] },
-  { part: "CUDA", part_en: "CUDA", short: "Lect 4–6", items: [
-    { id: "l4-cuda-intro", title: "GPU ve CUDA'ya giriş", title_en: "GPUs and CUDA", lec: "L4", scope: "m2", desc: "SIMT, host/device, thread hiyerarşisi, warp, bellek hiyerarşisi.", desc_en: "SIMT, host/device, thread hierarchy, warps, memory hierarchy." },
-    { id: "l5-cuda-kernels", title: "Kernel, indeks, shared memory", title_en: "Kernels, indexing, shared memory", lec: "L5", scope: "m2", desc: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul.", desc_en: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul." },
-    { id: "l6-cuda-memory", title: "Derleme ve bellek türleri", title_en: "Compilation and memory types", lec: "L6", scope: "m2", desc: "nvcc/PTX, register/shared limitleri, pitch, local, constant, texture.", desc_en: "nvcc/PTX, register/shared limits, pitch, local, constant, texture." },
-    { id: "coalescing", title: "Coalescing, transpose, unrolling", title_en: "Coalescing, transpose, unrolling", lec: "L6", scope: "m2", desc: "Global bellek transaction'ları, naive/shared transpose, loop unrolling.", desc_en: "Global memory transactions, naive/shared transpose, loop unrolling." },
-  ] },
-  { part: "Temeller (1. vize)", part_en: "Foundations (midterm 1)", short: "Lect 1–3", items: [
-    { id: "l1-intro", title: "Paralel hesaplamaya giriş", title_en: "Introduction", lec: "L1", scope: "m1", desc: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson.", desc_en: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson." },
-    { id: "l2-design", title: "Paralel program tasarımı", title_en: "Parallel program design", lec: "L2", scope: "m1", desc: "PCAM, ayrıştırma desenleri, program yapısı desenleri.", desc_en: "PCAM, decomposition patterns, program structure patterns." },
-    { id: "l3-threads", title: "Thread'ler ve senkronizasyon", title_en: "Threads and synchronization", lec: "L3", scope: "m1", desc: "C++11 thread, mutex, semafor, atomik, monitör, future.", desc_en: "C++11 threads, mutexes, semaphores, atomics, monitors, futures." },
   ] },
 ];
 
@@ -85,7 +84,7 @@ function buildHeader() {
   });
   const brand = h("a", { class: "brand", href: "index.html" });
   brand.innerHTML = LOGO;
-  brand.append(h("span", { class: "brand-title" }, tl("Paralel Hesaplama", "Parallel Computing")), h("span", { class: "brand-sub" }, tl("BİL 455/533 · 2. vize", "BİL 455/533 · midterm 2")));
+  brand.append(h("span", { class: "brand-title" }, tl("Paralel Hesaplama", "Parallel Computing")), h("span", { class: "brand-sub" }, tl("BİL 455/533 · 2026 Güz", "BİL 455/533 · Fall 2026")));
   const gh = h("a", { class: "icon-btn", href: REPO, target: "_blank", rel: "noopener", title: tl("GitHub'daki kaynak kod", "Source code on GitHub"), "aria-label": tl("GitHub'daki kaynak kod", "Source code on GitHub") });
   gh.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.3 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.5 7.5 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.7-3.6 3.9.3.3.5.8.5 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 .2z"/></svg>';
   const id = document.body.dataset.page || "index";
