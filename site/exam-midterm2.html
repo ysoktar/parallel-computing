@@ -18,13 +18,13 @@
 <p class="lead">Hocanın duyurusuna ve derste söylenenlere göre önceliklendirilmiş özet: ne sorulacak, nasıl sorulacak, nasıl çözülür. Her bölümde çözümlü sınav tipi sorular var; sonda bir deneme seti.</p>
 
 <div class="exam-card">
-  <div><strong>11 Kasım 2026 Çarşamba, 15:30–17:00 · Derslik 306</strong></div>
+  <div><strong>11 Kasım 2026 Çarşamba, 15:30–17:30 · Derslik 306</strong></div>
   <div class="countdown-big" id="countdown"></div>
   <ul>
     <li><strong>Kapsam:</strong> dönem başından 10 Kasım Salı dersinin sonuna kadar her şey. Pratikte: <strong>Lecture 6'nın sonuna kadar</strong>, ağırlık CUDA'da (Lecture 4–6).</li>
-    <li><strong>Kopya kâğıdı:</strong> 1 adet A4, iki yüz, <strong>el yazısı</strong> (fotokopi/çıktı olmaz), sınavdan önce kontrol edilir. Plan: <a href="cheatsheet.html">kopya kâğıdı sayfası</a>.</li>
+    <li><strong>Kopya kâğıdı:</strong> 1 adet A4, iki yüz, <strong>el yazısı</strong> (fotokopi/çıktı olmaz), sınavdan önce kontrol edilir. Plan: <a href="cheatsheet.html">kopya kâğıdı önerisi</a>.</li>
     <li><strong>Hesap makinesi yok</strong> (akıllı saat, telefon, kulaklık da yasak): 768/256, 16·16·4, 86,4/4 gibi hesapları elle yapmaya alışın.</li>
-    <li>En fazla 15 dakika geç girilebilir.</li>
+    <li><strong>Süre: 2 saat</strong> (15:30–17:30). En fazla 15 dakika geç girilebilir.</li>
   </ul>
 </div>
 
@@ -42,13 +42,14 @@
     <tr><td><span class="prio p2">2</span></td><td>For loop unrolling</td><td>Ders</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Bellek türleri; CGMA; register/shared limitleri ve blok boyutu seçimi</td><td>L5, L6</td><td><a href="#soru-tipi-5-sayisal-sorular">aşağıda</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Warp, latency hiding, blokların SM'lere atanması, ölçeklenebilirlik</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
-    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant/texture bellek</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant bellek</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
     <tr><td><span class="prio p3">3</span></td><td>1. vize konuları: Amdahl/Gustafson, PCAM, thread/mutex/semafor/atomik</td><td>L1–L3</td><td><a href="l1-intro.html">L1</a>, <a href="l2-design.html">L2</a>, <a href="l3-threads.html">L3</a></td></tr>
   </tbody>
 </table>
 
 <div class="callout beyond">
   <p><strong>Shared memory bank optimization (bank conflict'ler) bu sınavda yok</strong>, finalde olacak (duyuru + derste "banking bank yok, finalde olacak"). L6'nın 59–64. slaytları ve transpose'taki <code>[TILE][TILE+1]</code> padding hilesi bu yüzden sitede "2. vizede yok" diye işaretli.</p>
+  <p><strong>Texture memory de bu sınavda yok</strong> (texture object, CUDA array, adresleme/filtreleme modları, <code>texRotate.cu</code>). L6'daki texture bölümü de "2. vizede yok" olarak işaretli.</p>
 </div>
 
 <div class="callout class">
@@ -411,7 +412,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
 // countdown to 11 Nov 2026 15:30 (UTC+3)
 (function () {
   var el = document.getElementById("countdown"); if (!el) return;
-  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:00:00+03:00").getTime();
+  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:30:00+03:00").getTime();
   function tick() {
     var now = Date.now(), d = t0 - now;
     if (now > t1) { el.textContent = "Sınav bitti."; return; }

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cheat-sheet plan · Parallel Computing</title>
-<meta name="description" content="What to put on the handwritten A4 cheat sheet for midterm 2: index formulas, tiled matmul, __syncthreads rules, coalescing, transpose, numerical examples, memory types.">
+<title>Cheat-sheet proposal · Parallel Computing</title>
+<meta name="description" content="A proposal for the handwritten A4 cheat sheet for midterm 2: layout of both sides and what to write in each region (indices, tiled matmul, __syncthreads, coalescing, transpose, unrolling, numerical examples, memory types, L1–L3).">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
@@ -13,107 +13,161 @@
 <body data-page="cheatsheet">
 <main><div class="content">
 
-<h1>Cheat-sheet plan</h1>
-<p class="lead">The rule: one A4 sheet, both sides, <strong>handwritten</strong>, checked before the exam. Each box below is roughly one region of the sheet. Compress while writing by hand; the writing itself is good revision.</p>
+<h1>Cheat-sheet proposal</h1>
+<p class="lead">The rule: one A4 sheet, both sides, <strong>handwritten</strong>, checked before the exam. Below are a layout for both sides and what to write in each region. The exam is 2 hours; the most likely topics go on the front so you spend little time searching.</p>
 
 <div class="callout gotcha">
-  <p>You cannot print this page and bring it: photocopies and printouts are forbidden. Copy it onto the sheet in your own hand.</p>
+  <p>You cannot print this page and bring it: photocopies and printouts are forbidden. Copy it by hand; the writing itself is good revision. <strong>Do not write:</strong> bank conflicts and texture memory (not on this exam), the long explanations from the slides.</p>
 </div>
 
-<h2>Front: the CUDA core</h2>
+<h2>Layout</h2>
+<p>Red-bordered regions are the topics named explicitly in the announcement (shared memory, <code>__syncthreads()</code>, coalescing) and the past exam question. Region numbers match the headings below.</p>
+<div class="a4-pair">
+  <div class="a4 front">
+    <div class="hd a4-title">Front: the CUDA core</div>
+    <div class="rg hot"><b>1. Indices + warp shape</b><span>row/col, linear id, warp = id/32, sketch of dim3(8,32)</span></div>
+    <div class="rg hot tall"><b>3. Tiled matmul (square T)</b><span>full code, meaning of the Mds/Nds lines, why two syncs, read reduction T</span></div>
+    <div class="rg"><b>2. Host skeleton</b><span>Malloc → Memcpy → &lt;&lt;&lt;&gt;&gt;&gt; → Memcpy → Free, qualifiers</span></div>
+    <div class="rg hot span2"><b>4. &lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt; solution + 8×32 tiled</b><span>2304 threads, 72 warps, 96×24, sample thread (2,1)/(5,10) → (42,21); Mds[32][8], Nds[8][8]</span></div>
+    <div class="rg hot"><b>5. __syncthreads rules</b><span>within a block, everyone must run it, if/return trap, right/wrong example</span></div>
+    <div class="rg"><b>6. Shared memory pattern</b><span>load → sync → use → sync → write; reverse example; "copy first"</span></div>
+  </div>
+  <div class="a4 back">
+    <div class="hd a4-title">Back: memory and numbers</div>
+    <div class="rg hot"><b>7. Coalescing</b><span>32/64/128 B, alignment, pattern → segment table, 1024 vs 128</span></div>
+    <div class="rg"><b>8. Transpose</b><span>copy, naive (write ✗), shared tile (both ✓), 32×8 block</span></div>
+    <div class="rg"><b>9. Numerical examples</b><span>G80, GT200, CGMA, pitch</span></div>
+    <div class="rg"><b>10. Memory types</b><span>register, local, shared, global, constant: scope/lifetime/speed</span></div>
+    <div class="rg"><b>11. Unrolling + compilation</b><span>#pragma unroll pros/cons; .cu→PTX→SASS, -arch/-code</span></div>
+    <div class="rg"><b>12. Warps, blocks, occupancy</b><span>block assignment to SMs, latency hiding, block independence</span></div>
+    <div class="rg span2"><b>13. L1–L3 quick</b><span>Amdahl, Gustafson, efficiency, Flynn, PCAM, patterns, data races, mutex/semaphore, deadlock/livelock/starvation</span></div>
+  </div>
+</div>
+<div class="callout key">
+  <p>Writing tips: a fine pen; abbreviate formulas with variable names (<code>bx, by, tx, ty, T, W</code>); write code lines in full (you may be asked to write code); make two small sketches: the warp shape in an 8×32 block and the M/N tiles in phase m. Write the numbers out ready, since there is no calculator.</p>
+</div>
 
-<h3>1. Indices</h3>
+<h2>Front</h2>
+
+<h3>1. Indices + warp shape</h3>
 <div class="formula-box">dim3(x, y): x = column, y = row      block ≤ 1024 threads, warp = 32
 col = blockIdx.x*blockDim.x + threadIdx.x
 row = blockIdx.y*blockDim.y + threadIdx.y      A[row*W + col]
-id(2D)  = ty*bdx + tx        id(3D) = tz*bdx*bdy + ty*bdx + tx      warp = id/32
-gid(1D) = blockIdx.x*blockDim.x + threadIdx.x
-grid = (W + bx - 1)/bx  ;  if (row &lt; H &amp;&amp; col &lt; W)
+id(2D) = ty*bdx + tx     id(3D) = tz*bdx*bdy + ty*bdx + tx     warp = id/32
+gid(1D) = blockIdx.x*blockDim.x + threadIdx.x      (block b, thread t: b*M + t)
+grid = (W + bx − 1)/bx ;  if (row &lt; H &amp;&amp; col &lt; W)
 covered = (gx*bx) columns × (gy*by) rows
-dim3(8,32): warp = 4 rows × 8 columns (ty 4w..4w+3)</div>
+dim3(8,32): warp w = ty 4w..4w+3 (4 rows × 8 cols)   dim3(32,8): warp = 1 row</div>
 
 <h3>2. Host skeleton</h3>
-<div class="formula-box">float *d; cudaMalloc((void**)&amp;d, bytes);
+<div class="formula-box">float *d; cudaMalloc((void**)&amp;d, bytes);           // &amp;d: the address is written there
 cudaMemcpy(dst, src, bytes, cudaMemcpyHostToDevice);   // synchronous
-k&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);   // asynchronous → cudaDeviceSynchronize()
-cudaMemcpy(h, d, bytes, cudaMemcpyDeviceToHost); cudaFree(d);
-__global__: on device, called by host | __device__: d/d | __host__: h/h</div>
+k&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);   // asynchronous → cudaDeviceSynchronize() for timing
+cudaMemcpy(h, d, bytes, cudaMemcpyDeviceToHost);  cudaFree(d);
+__global__ dev/called by host | __device__ dev/dev | __host__ host/host (default)</div>
 
-<h3>3. Tiled matmul (memorise)</h3>
+<h3>3. Tiled matmul (square T)</h3>
 <div class="formula-box">__shared__ float Mds[T][T], Nds[T][T];
 Row = by*T + ty;  Col = bx*T + tx;  P = 0;
 for (m = 0; m &lt; W/T; ++m) {
-  Mds[ty][tx] = M[Row*W + m*T + tx];
-  Nds[ty][tx] = N[(m*T + ty)*W + Col];
-  __syncthreads();                      // (1) filled (RAW)
+  Mds[ty][tx] = M[Row*W + m*T + tx];        // M: row Row, column m*T+tx
+  Nds[ty][tx] = N[(m*T + ty)*W + Col];      // N: row m*T+ty, column Col
+  __syncthreads();                          // (1) tile filled (RAW)
   for (k = 0; k &lt; T; ++k) P += Mds[ty][k]*Nds[k][tx];
-  __syncthreads();                      // (2) not overwritten (WAR)
+  __syncthreads();                          // (2) not overwritten (WAR)
 }
 Pd[Row*W + Col] = P;
-global reads/thread: 2W → 2W/T ; reduction T ; BX×BY: 2·BX·BY/(BX+BY)
-8×32 block: Mds[32][8] (everyone), Nds[8][8] (ty&lt;8), sync outside the if</div>
+global reads/thread: 2W → 2W/T (T times fewer) ; shared/block = 2·T²·4 B
+reduction for a BX×BY block = 2·BX·BY/(BX+BY)   (16×8 ≈ 10.7 ; 32×8 = 12.8)</div>
 
-<h3>4. <code>__syncthreads()</code></h3>
+<h3>4. <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> solution + 8×32 tiled</h3>
+<div class="formula-box">256 thr/block, 9 blocks, 2304 threads ; 8 warps/block, 72 warps
+bx,by ∈ 0..2 ; tx ∈ 0..7 ; ty ∈ 0..31 ; covered 96 rows × 24 columns
+block (bx,by) → rows 32by..32by+31, columns 8bx..8bx+7
+example: blockIdx(2,1) threadIdx(5,10) → row 42, col 21, P[42*24+21] = P[1029]
+coalescing: N[k*24+col] 1 seg ✓ | M[row*K+k] 4 addresses ✗ | P write 4 × 32 B
+tiled (TK = 8): Mds[32][8] ← M[row*K + m*8 + tx] (everyone)
+                Nds[8][8]  ← if (ty &lt; 8) N[(m*8+ty)*24 + col]
+                sync (OUTSIDE the if) ; k = 0..7: sum += Mds[ty][k]*Nds[k][tx] ; sync</div>
+
+<h3>5. <code>__syncthreads()</code> rules</h3>
 <ul>
-  <li>Barrier within a block only; none across blocks (cooperative groups, CUDA 9+).</li>
-  <li><strong>All</strong> threads of the block must execute it; inside an <code>if</code> / after an early <code>return</code> = undefined (unless the condition is the same for everyone).</li>
-  <li>Required before reading shared data written by another thread.</li>
+  <li>Barrier <strong>within a block</strong> only; none across blocks (split the kernel / cooperative groups, CUDA 9+).</li>
+  <li><strong>All</strong> threads of the block must execute it. Inside an <code>if</code> or after an early <code>return</code> = undefined (unless the condition is the same for everyone).</li>
+  <li>Required before reading shared data written by another thread. It actually synchronises warps.</li>
+  <li>✗ <code>if (tid&lt;16){ s[tid]=..; __syncthreads(); }</code> → ✓ <code>if (tid&lt;16) s[tid]=..; __syncthreads();</code></li>
 </ul>
 
-<h3>5. Coalescing</h3>
-<div class="formula-box">transaction: 32/64/128 B, aligned to its size; cudaMalloc ≥ 256 B aligned
-word 1/2/4/8/16 B, naturally aligned; struct __align__(8/16)
-random 4B: 32×32 = 1024 B ; consecutive: 128 B → 8 times
-a[i] 4 seg ✓ | a[i+1] 5 seg | a[2i] 8 seg (50%) | a[i*W] 32 seg ✗ | a[0] 1 seg
-2D: block width and array width multiples of 32 → cudaMallocPitch
-row = (float*)((char*)p + r*pitch)</div>
+<h3>6. Shared memory pattern</h3>
+<div class="formula-box">__shared__ float s[N];   // one copy per block, block lifetime, on-chip
+1) load cooperatively  2) __syncthreads()  3) use repeatedly  4) sync  5) write to global
+reverse: s[t] = d[base+t]; sync; d[base+t] = s[B-1-t];   (race without sync)
+"copy first": global→shared→global, output == input? then add the computation</div>
 
-<h3>6. Transpose</h3>
-<div class="formula-box">naive: out[x*W + y] = in[y*W + x]   read ✓ write ✗ (stride W)
-shared: tile[ty][tx] = in[y*W + x]; sync;
-        x = by*T + tx; y = bx*T + ty;  out[y*W + x] = tile[tx][ty]
-NVIDIA: T=32, block 32×8, 4 elements per thread (j += 8)
-padding [T][T+1] = bank conflicts (ON THE FINAL)</div>
+<h2>Back</h2>
 
-<h2>Back: numbers, memory, compilation, L1–L3</h2>
+<h3>7. Coalescing</h3>
+<div class="formula-box">transaction 32/64/128 B, aligned to its size ; reading 33 B = 2 × 32 B
+cudaMalloc ≥ 256 B aligned ; word 1/2/4/8/16 B naturally aligned ; struct __align__(8/16)
+32 threads random 4 B: 32×32 = 1024 B ; consecutive aligned: 128 B → 8 times
+float, 32 threads: a[i] 4 seg (100%) | a[i+1] 5 seg (80%) | a[2i] 8 (50%)
+                   a[3i] 12 | a[i*W] 32 (12.5%) | a[0] 1 seg | double a[i] 8 seg (100%)
+rule: threadIdx.x without multiplier, rightmost ; 2D: block and array width multiples of 32
+pitch: row = (float*)((char*)p + r*pitch) ; cudaMemcpy2D</div>
 
-<h3>7. Numerical examples</h3>
-<div class="formula-box">G80: 16 SMs, 8192 reg/SM, 768 thr/SM, 8 blocks/SM, 16 KB shared/SM
-  8192/768 ≈ 10 reg/thread ; 16KB/8 = 2 KB/block
-  16×16 tile: 2 KB/block ; 768/256 = 3 blocks → 6 KB used
-GT200: 30 SMs, 1024 thr/SM, 8 blocks/SM, 512 thr/block → 16×16 best (4 blocks)
-  8×8: 8×64 = 512 (half) ; 32×32 = 1024 &gt; 512 ✗
-CGMA naive = 1 ; 86.4/4 = 21.6 GFLOPS ; 367 peak → 6%
-pitch: 5/50/250 → 256 ; 500 → 512 ; 700 → 768</div>
+<h3>8. Transpose</h3>
+<div class="formula-box">T = 32, block dim3(32, 8), grid (N/32, N/32), 4 elements per thread (j += 8)
+copy:   o[(y+j)*W + x] = i[(y+j)*W + x]                    ✓ ✓ (ceiling)
+naive:  o[x*W + (y+j)] = i[(y+j)*W + x]                    read ✓ write ✗ (stride W)
+shared: tile[ty+j][tx] = i[(y+j)*W + x];  __syncthreads();
+        x = by*T + tx;  y = bx*T + ty;                     // blocks swap places
+        o[(y+j)*W + x] = tile[tx][ty+j];                   ✓ ✓
+GB/s (M2050): copy 105, naive 19, coalesced 51</div>
 
-<h3>8. Memory types</h3>
+<h3>9. Numerical examples</h3>
+<div class="formula-box">G80: 16 SMs, 8192 reg/SM, 768 thr/SM, 8 blocks/SM, 16 KB shared/SM, 86.4 GB/s, 367 GFLOPS
+  8192/768 ≈ 10 reg/thread ; 16 KB/8 = 2 KB/block
+  16×16 tile: 2 KB/block → shared allows 8 blocks but 768/256 = 3 blocks → 6 KB used
+GT200: 30 SMs, 1024 thr/SM, 8 blocks/SM, 512 thr/block
+  8×8: 8×64 = 512 (half) | 16×16: 4 blocks = 1024 ✓ | 32×32 = 1024 &gt; 512 ✗
+CGMA naive = 1 → 86.4/4 = 21.6 GFLOPS ≈ 6%
+pitch (256 alignment): 5/50/250 → 256 ; 500 → 512 ; 700 → 768</div>
+
+<h3>10. Memory types</h3>
 <table class="simple">
-  <thead><tr><th>Type</th><th>Scope</th><th>Note</th></tr></thead>
+  <thead><tr><th>Type</th><th>Declaration</th><th>Scope / lifetime</th><th>Note</th></tr></thead>
   <tbody>
-    <tr><td>register</td><td>thread</td><td>fastest; spills to local when exceeded</td></tr>
-    <tr><td>local</td><td>thread</td><td>in global; variable-indexed arrays, spills</td></tr>
-    <tr><td>shared</td><td>block</td><td>on-chip, <code>__shared__</code>, sync</td></tr>
-    <tr><td>global</td><td>grid + host</td><td>DRAM, 400–600 cycles, coalesce</td></tr>
-    <tr><td>constant</td><td>all grids</td><td>64 KB, cached, all same address = best; <code>cudaMemcpyToSymbol</code></td></tr>
-    <tr><td>texture</td><td>grid</td><td>read-only, 2D cache, filtering, clamp/border/wrap/mirror</td></tr>
+    <tr><td>register</td><td>automatic scalar</td><td>thread / thread</td><td>fastest; spills to local when exceeded</td></tr>
+    <tr><td>local</td><td>automatic array</td><td>thread / thread</td><td>in global, slow; variable-indexed arrays, spills</td></tr>
+    <tr><td>shared</td><td><code>__shared__</code></td><td>block / block</td><td>on-chip, needs sync</td></tr>
+    <tr><td>global</td><td><code>__device__</code>, cudaMalloc</td><td>grid + host / application</td><td>DRAM, 400–600 cycles, coalesce</td></tr>
+    <tr><td>constant</td><td><code>__constant__</code> (outside functions)</td><td>all grids / application</td><td>64 KB, cached, all same address = best; <code>cudaMemcpyToSymbol</code></td></tr>
   </tbody>
 </table>
 
-<h3>9. Compilation</h3>
-<div class="formula-box">.cu → PTX (virtual ISA) → ptxas → SASS/cubin (sm_XY)
-cubin X.y → X.z (z ≥ y) ; across majors ✗ ; future GPU = PTX + JIT
--arch=compute_XY (PTX) ; -code=sm_XY (binary) ; __CUDA_ARCH__ = XY0
---ptxas-options=-v → registers/lmem ; runtime cuda* , driver cu*
-loop unroll: #pragma unroll ; − loop control, + ILP ; + registers</div>
+<h3>11. Unrolling + compilation</h3>
+<div class="formula-box">#pragma unroll (constant trip count → full) ; #pragma unroll 4 ; #pragma unroll 1
++ fewer counter/compare/branch, + ILP, constant indices  − bigger code, + registers (spill/occupancy)
+.cu → PTX (virtual ISA) → ptxas → SASS/cubin (sm_XY) ; -keep / -ptx / cuobjdump
+cubin X.y → X.z (z ≥ y), across majors ✗ ; new GPU = PTX + JIT ; __CUDA_ARCH__ = XY0
+--ptxas-options=-v → registers/lmem ; runtime cuda*, driver cu*</div>
 
-<h3>10. L1–L3 quick</h3>
-<div class="formula-box">Amdahl:    S = 1 / ((1−α) + α/N) ;  N→∞: 1/(1−α)     (α = parallel part)
-Gustafson: S = (1−α) + α·N        (problem grows with N)
-Speedup = Tseq/Tpar ; efficiency = S/N
-Flynn: SISD SIMD MISD MIMD ; SM-MIMD (shared) vs DM-MIMD (messages)
-PCAM: Partition, Communication, Agglomeration, Mapping
-data race: ≥1 writer + no synchronisation ; mutex = binary semaphore + ownership
-deadlock / livelock / starvation ; CAS, LL/SC ; atomic&lt;T&gt;</div>
+<h3>12. Warps, blocks, occupancy</h3>
+<div class="formula-box">block → one SM (all together) ; no order, independent → scalable
+warp = 32 consecutive ids ; scheduling unit ; 256 thr = 8 warps ; 3 blocks = 24 warps
+latency hiding: a ready warp replaces a waiting one, zero overhead → many warps are good
+limits: thr/block, blocks/SM, thr/SM, reg/SM, shared/SM</div>
+
+<h3>13. L1–L3 quick</h3>
+<div class="formula-box">speedup = Tseq/Tpar ; efficiency = speedup/N
+Amdahl:    S = 1/((1−α) + α/N) ; N→∞: 1/(1−α) ; α=0.9 → &lt;10
+Gustafson: S = (1−α) + α·N ; eff = (1−α)/N + α
+Flynn: SISD SIMD MISD MIMD ; SM-MIMD (NUMA, SMP) vs DM-MIMD (messages, MPI)
+PCAM: Partition (10–100×) Communication Agglomeration (10×) Mapping (NP-complete)
+patterns: task, D&amp;C, geometric, recursive data, pipeline (slowest stage), event
+GPLS: SPMD MPMD master-worker map-reduce ; GSLP: fork/join, loop
+data race: ≥1 writer, no sync ; mutex 1 thread + ownership ; semaphore N
+deadlock (CPU low) / livelock (CPU high) / starvation ; CAS, LL/SC</div>
 
 </div></main>
 </body>

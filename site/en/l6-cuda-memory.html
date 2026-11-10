@@ -21,7 +21,7 @@
     <li>Tell the runtime API from the driver API; explain PTX, cubin and JIT compilation.</li>
     <li>Say which code is loaded on which GPU from a <code>-gencode</code> line.</li>
     <li>Compute blocks/threads per SM from the register and shared memory limits.</li>
-    <li>Say what local, constant and texture memory are and their best access patterns.</li>
+    <li>Say what local and constant memory are and their best access patterns (texture is not on this midterm).</li>
   </ul>
 </div>
 
@@ -159,7 +159,10 @@ float data[256];                             // host-side buffer
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel launch
 </pre>
 
-<h2>Texture memory</h2>
+<section class="is-beyond">
+<h2 data-toc="Texture memory">Texture memory <span class="badge-beyond">not on midterm 2</span></h2>
+<div class="callout beyond"><p>Texture memory is not in the scope of midterm 2. This section is for reference and later.</p></div>
+
 <ul>
   <li>A subset of the texturing hardware the GPU uses for graphics. Textures are <strong>read-only</strong>; a surface is like a texture that can be written.</li>
   <li>Resides in device memory, cached in the <strong>texture cache</strong>: a fetch costs a device memory read only on a cache miss. The cache is optimised for <strong>2D spatial locality</strong>: a warp reading addresses close together in 2D gets the best performance. Designed for streaming with constant latency: a hit reduces DRAM traffic, not latency.</li>
@@ -213,6 +216,8 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Reading on the device: linear-memory textures <code>tex1Dfetch()</code>, array textures <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Management functions: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. In the older <em>texture reference API</em>, type, dimensionality and read mode are fixed at compile time; normalisation, filter and address mode can change at run time (CUDA array textures only).</p>
 
+</section>
+
 <h2>Memory overview</h2>
 <table class="simple">
   <thead><tr><th>Memory</th><th>Scope</th><th>Latency</th><th>Note</th></tr></thead>
@@ -222,7 +227,7 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
     <tr><td>Local</td><td>Thread</td><td>400–600 cycles</td><td>Actually global memory.</td></tr>
     <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 cycles</td><td>Always cached in L2; coalescing essential.</td></tr>
     <tr><td>Constant</td><td>Kernel</td><td>400–600 cycles</td><td>Constant cache; same address → broadcast.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 cycles</td><td>Texture cache, optimised for 2D.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 cycles</td><td>Texture cache, optimised for 2D (not on midterm 2).</td></tr>
   </tbody>
 </table>
 <ul>
@@ -259,12 +264,12 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
   </ol>
 </div>
 <div class="quiz" data-answer="3">
-  <p>In a 2D texture with normalised coordinates and <code>cudaAddressModeBorder</code>, what does an out-of-range fetch return?</p>
+  <p>Rows of 700 bytes were allocated with <code>cudaMallocPitch</code> (256 B alignment). How do you reach the start of row <code>r</code>?</p>
   <ol>
-    <li data-why="That is clamp mode.">The nearest border pixel.</li>
-    <li data-why="That is wrap mode.">The value wrapped from the opposite edge.</li>
-    <li data-why="True: border mode returns zero outside the range.">Zero.</li>
-    <li data-why="That is mirror mode.">The mirrored value.</li>
+    <li data-why="Rows are pitch (768 B) apart, not 700.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch is in bytes; float* arithmetic multiplies by 4.">p + r * pitch</li>
+    <li data-why="True: pitch = 768 B; cast to char* first and add bytes.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="The pitch cannot be smaller than the width.">(float*)((char*)p + r * 512)</li>
   </ol>
 </div>
 

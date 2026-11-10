@@ -28,12 +28,13 @@
   </div>
   <div class="exam-card" style="margin:0">
     <div class="card-kicker">2. ara sınav</div>
-    <div><strong>11 Kasım 2026 Çarşamba · 15:30–17:00 · Derslik 306</strong></div>
+    <div><strong>11 Kasım 2026 Çarşamba · 15:30–17:30 · Derslik 306</strong></div>
     <div class="countdown-big" id="countdown"></div>
     <ul>
       <li>Kapsam: dönem başından 10 Kasım dersine kadar (Lecture 1–6), ağırlık CUDA.</li>
       <li>Duyuruda: shared memory kullanımı, <code>__syncthreads()</code>, coalescing.</li>
-      <li><strong>Yok:</strong> shared memory bank optimizasyonu (finalde).</li>
+      <li><strong>Yok:</strong> shared memory bank optimizasyonu ve texture memory.</li>
+      <li>Süre 2 saat.</li>
       <li>1 A4 el yazısı kopya kâğıdı (iki yüz). Hesap makinesi yok.</li>
     </ul>
   </div>
@@ -49,7 +50,7 @@
   <li><strong>Nasıl tasarlanır? (L2)</strong> PCAM: problemi parçala, iletişimi belirle, parçaları birleştir, işlemcilere eşle. Ayrıştırma desenleri (geometrik, pipeline, …) ve program yapıları (SPMD, master-worker, map-reduce, fork/join).</li>
   <li><strong>CPU'da paylaşımlı bellek (L3)</strong> C++11 thread'leri; veri yarışlarını mutex, semafor, atomik ve monitörlerle önlemek.</li>
   <li><strong>GPU'da veri paralelliği (L4–L5)</strong> Her veri elemanına bir thread: grid → blok → thread, <code>blockIdx/threadIdx</code> ile indeksleme, warp'lar, blok içi senkronizasyon ve shared memory ile tiling.</li>
-  <li><strong>Belleği beslemek (L6)</strong> Hesap ucuz, bellek pahalı: register/shared sınırları, coalescing, pitch, constant ve texture bellek. Transpose örneği bunların hepsini bir araya getirir.</li>
+  <li><strong>Belleği beslemek (L6)</strong> Hesap ucuz, bellek pahalı: register/shared sınırları, coalescing, pitch, constant bellek (texture bu vizede yok). Transpose örneği bunların hepsini bir araya getirir.</li>
 </ol>
 
 <h2>Sitenin kullanımı</h2>
@@ -66,7 +67,7 @@
     <div class="callout key"><p>Akılda kalması gereken kural.</p></div>
     <div class="callout gotcha"><p>Sınavda sık yapılan hata.</p></div>
     <div class="callout class"><p>Derste anlatılan, slaytlarda olmayan içerik.</p></div>
-    <div class="callout beyond"><p>2. vize kapsamı dışında (ör. bank conflict'ler, finalde).</p></div>
+    <div class="callout beyond"><p>2. vize kapsamı dışında (bank conflict'ler, texture memory).</p></div>
   </div>
 </div>
 

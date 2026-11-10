@@ -28,12 +28,13 @@
   </div>
   <div class="exam-card" style="margin:0">
     <div class="card-kicker">Midterm 2</div>
-    <div><strong>Wednesday 11 November 2026 · 15:30–17:00 · Room 306</strong></div>
+    <div><strong>Wednesday 11 November 2026 · 15:30–17:30 · Room 306</strong></div>
     <div class="countdown-big" id="countdown"></div>
     <ul>
       <li>Scope: from the start of term to the 10 November lecture (Lectures 1–6), weighted towards CUDA.</li>
       <li>In the announcement: using shared memory, <code>__syncthreads()</code>, coalescing.</li>
-      <li><strong>Not included:</strong> shared memory bank optimisation (on the final).</li>
+      <li><strong>Not included:</strong> shared memory bank optimisation and texture memory.</li>
+      <li>Duration: 2 hours.</li>
       <li>One handwritten A4 cheat sheet (both sides). No calculator.</li>
     </ul>
   </div>
@@ -49,7 +50,7 @@
   <li><strong>How to design? (L2)</strong> PCAM: partition the problem, identify communication, agglomerate the pieces, map them to processors. Decomposition patterns (geometric, pipeline, …) and program structures (SPMD, master-worker, map-reduce, fork/join).</li>
   <li><strong>Shared memory on the CPU (L3)</strong> C++11 threads; preventing data races with mutexes, semaphores, atomics and monitors.</li>
   <li><strong>Data parallelism on the GPU (L4–L5)</strong> One thread per data element: grid → block → thread, indexing with <code>blockIdx/threadIdx</code>, warps, synchronisation within a block, and tiling with shared memory.</li>
-  <li><strong>Feeding the memory (L6)</strong> Arithmetic is cheap, memory is expensive: register/shared limits, coalescing, pitch, constant and texture memory. The transpose example brings all of this together.</li>
+  <li><strong>Feeding the memory (L6)</strong> Arithmetic is cheap, memory is expensive: register/shared limits, coalescing, pitch, constant memory (texture is not on this midterm). The transpose example brings all of this together.</li>
 </ol>
 
 <h2>Using the site</h2>
@@ -66,7 +67,7 @@
     <div class="callout key"><p>A rule to remember.</p></div>
     <div class="callout gotcha"><p>A common mistake in exams.</p></div>
     <div class="callout class"><p>Content covered in class but not in the slides.</p></div>
-    <div class="callout beyond"><p>Outside the scope of midterm 2 (e.g. bank conflicts, on the final).</p></div>
+    <div class="callout beyond"><p>Outside the scope of midterm 2 (bank conflicts, texture memory).</p></div>
   </div>
 </div>
 

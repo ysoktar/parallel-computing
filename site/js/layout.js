@@ -4,8 +4,8 @@ import { h, $, $$, CALLOUT_ICONS, highlightC, dedent } from "./lib/ui.js";
 import { t as tl, tx, EN } from "./lib/i18n.js";
 
 export const REPO = "https://github.com/ysoktar/parallel-computing";
-/** Midterm 2: Wednesday 11 November 2026, 15:30–17:00 (Türkiye, UTC+3), room 306. */
-export const EXAM = { start: new Date("2026-11-11T15:30:00+03:00"), end: new Date("2026-11-11T17:00:00+03:00") };
+/** Midterm 2: Wednesday 11 November 2026, 15:30–17:30 (Türkiye, UTC+3), room 306. */
+export const EXAM = { start: new Date("2026-11-11T15:30:00+03:00"), end: new Date("2026-11-11T17:30:00+03:00") };
 
 /**
  * Site map. `lec` = lecture slide deck. `scope`: "m2" (CUDA, the focus of midterm 2), "m1" (lectures 1–3: covered
@@ -18,7 +18,7 @@ export const NAV = [
   { part: "2. ara sınav", part_en: "Midterm 2", short: "11 Kasım", short_en: "11 Nov", items: [
     { id: "exam-midterm2", title: "Çalışma rehberi", title_en: "Study guide", desc: "Ne bilinmeli, çözümlü sınav tipi sorular, deneme seti.", desc_en: "What to know, worked exam-style problems, a practice set." },
     { id: "lab", title: "İndeks ve coalescing lab", title_en: "Index & coalescing lab", desc: "Hangi thread hangi elemana dokunur? Kaç transaction?", desc_en: "Which thread touches which element? How many transactions?" },
-    { id: "cheatsheet", title: "Kopya kâğıdı planı", title_en: "Cheat-sheet plan", desc: "El yazısı A4'e ne yazılmalı.", desc_en: "What to put on the handwritten A4." },
+    { id: "cheatsheet", title: "Kopya kâğıdı önerisi", title_en: "Cheat-sheet proposal", desc: "A4 iki yüz yerleşim planı ve içerik.", desc_en: "A two-sided A4 layout and its content." },
   ] },
   { part: "CUDA", part_en: "CUDA", short: "Lect 4–6", items: [
     { id: "l4-cuda-intro", title: "GPU ve CUDA'ya giriş", title_en: "GPUs and CUDA", lec: "L4", scope: "m2", desc: "SIMT, host/device, thread hiyerarşisi, warp, bellek hiyerarşisi.", desc_en: "SIMT, host/device, thread hierarchy, warps, memory hierarchy." },

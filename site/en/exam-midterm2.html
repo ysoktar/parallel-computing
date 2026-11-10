@@ -18,13 +18,13 @@
 <p class="lead">A summary prioritised by the instructor's announcement and what was said in class: what will be asked, how, and how to solve it. Every section has worked exam-style problems; a practice set closes the page.</p>
 
 <div class="exam-card">
-  <div><strong>Wednesday 11 November 2026, 15:30–17:00 · Room 306</strong></div>
+  <div><strong>Wednesday 11 November 2026, 15:30–17:30 · Room 306</strong></div>
   <div class="countdown-big" id="countdown"></div>
   <ul>
     <li><strong>Scope:</strong> everything from the start of term to the end of the Tuesday 10 November lecture. In practice: <strong>up to the end of Lecture 6</strong>, weighted towards CUDA (Lectures 4–6).</li>
-    <li><strong>Cheat sheet:</strong> one A4 sheet, both sides, <strong>handwritten</strong> (no photocopies or printouts), checked before the exam. Plan: <a href="cheatsheet.html">cheat-sheet page</a>.</li>
+    <li><strong>Cheat sheet:</strong> one A4 sheet, both sides, <strong>handwritten</strong> (no photocopies or printouts), checked before the exam. Plan: <a href="cheatsheet.html">cheat-sheet proposal</a>.</li>
     <li><strong>No calculator</strong> (no smart watch, phone or earphones either): practise 768/256, 16·16·4, 86.4/4 and the like by hand.</li>
-    <li>You may enter at most 15 minutes late.</li>
+    <li><strong>Duration: 2 hours</strong> (15:30–17:30). You may enter at most 15 minutes late.</li>
   </ul>
 </div>
 
@@ -42,13 +42,14 @@
     <tr><td><span class="prio p2">2</span></td><td>For-loop unrolling</td><td>Class</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Memory types; CGMA; register/shared limits and choosing a block size</td><td>L5, L6</td><td><a href="#problem-type-5-numerical-questions">below</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Warps, latency hiding, assigning blocks to SMs, scalability</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
-    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant/texture memory</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant memory</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
     <tr><td><span class="prio p3">3</span></td><td>Midterm 1 material: Amdahl/Gustafson, PCAM, threads/mutexes/semaphores/atomics</td><td>L1–L3</td><td><a href="l1-intro.html">L1</a>, <a href="l2-design.html">L2</a>, <a href="l3-threads.html">L3</a></td></tr>
   </tbody>
 </table>
 
 <div class="callout beyond">
   <p><strong>Shared memory bank optimization (bank conflicts) is not on this exam</strong>; it will be on the final (announcement, and in class: "no banks, that's for the final"). Slides 59–64 of L6 and the <code>[TILE][TILE+1]</code> padding trick in the transpose are therefore marked "not on midterm 2" on this site.</p>
+  <p><strong>Texture memory is not on this exam either</strong> (texture objects, CUDA arrays, addressing/filtering modes, <code>texRotate.cu</code>). The texture section of L6 is also marked "not on midterm 2".</p>
 </div>
 
 <div class="callout class">
@@ -410,7 +411,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
 <script>
 (function () {
   var el = document.getElementById("countdown"); if (!el) return;
-  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:00:00+03:00").getTime();
+  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:30:00+03:00").getTime();
   function tick() {
     var now = Date.now(), d = t0 - now;
     if (now > t1) { el.textContent = "The exam is over."; return; }

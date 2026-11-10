@@ -21,7 +21,7 @@
     <li>Runtime API ile driver API'yi ayırt etmek; PTX, cubin ve JIT derlemeyi açıklamak.</li>
     <li>Bir <code>-gencode</code> satırından hangi GPU'ya hangi kodun yükleneceğini söylemek.</li>
     <li>Register ve shared bellek sınırlarından SM başına blok/thread sayısını hesaplamak.</li>
-    <li>Local, constant ve texture belleğin ne olduğunu ve en iyi erişim desenlerini söylemek.</li>
+    <li>Local ve constant belleğin ne olduğunu ve en iyi erişim desenlerini söylemek (texture bu vizede yok).</li>
   </ul>
 </div>
 
@@ -159,7 +159,10 @@ float data[256];                             // host tarafındaki tampon
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // kernel'den önce kopyala
 </pre>
 
-<h2>Texture memory</h2>
+<section class="is-beyond">
+<h2 data-toc="Texture memory">Texture memory <span class="badge-beyond">2. vizede yok</span></h2>
+<div class="callout beyond"><p>Texture memory 2. vize kapsamında değil. Bu bölüm sadece bilgi ve sonrası için.</p></div>
+
 <ul>
   <li>GPU'nun grafik için kullandığı texture donanımının bir alt kümesi. Texture <strong>salt okunur</strong>; surface yazılabilen texture gibidir.</li>
   <li>Cihaz belleğinde durur, <strong>texture cache</strong>'te önbelleklenir: fetch sadece cache miss'te bir cihaz belleği okumasına mal olur. Cache <strong>2D uzamsal yerellik</strong> için optimize: 2D'de birbirine yakın adresleri okuyan warp en iyi performansı alır. Sabit gecikmeli akış için tasarlanmıştır: hit DRAM trafiğini azaltır, gecikmeyi değil.</li>
@@ -213,6 +216,8 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Device tarafında okuma: doğrusal bellek texture'ları <code>tex1Dfetch()</code>, array texture'ları <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Yönetim fonksiyonları: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. Eski <em>texture reference API</em>'de tip, boyut ve okuma modu derleme zamanında sabit; normalize, filtre ve adres modu çalışma zamanında değiştirilebilir (sadece CUDA array texture'ları).</p>
 
+</section>
+
 <h2>Bellek özeti</h2>
 <table class="simple">
   <thead><tr><th>Bellek</th><th>Kapsam</th><th>Gecikme</th><th>Not</th></tr></thead>
@@ -222,7 +227,7 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
     <tr><td>Local</td><td>Thread</td><td>400–600 çevrim</td><td>Aslında global bellek.</td></tr>
     <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 çevrim</td><td>Her zaman L2'de önbelleklenir; coalescing şart.</td></tr>
     <tr><td>Constant</td><td>Kernel</td><td>400–600 çevrim</td><td>Constant cache; aynı adres → yayın.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize (2. vizede yok).</td></tr>
   </tbody>
 </table>
 <ul>
@@ -259,12 +264,12 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
   </ol>
 </div>
 <div class="quiz" data-answer="3">
-  <p>Normalize koordinatlı bir 2D texture'da <code>cudaAddressModeBorder</code> ile sınır dışı bir okuma ne döndürür?</p>
+  <p><code>cudaMallocPitch</code> ile 700 baytlık satırlar ayrıldı (256 B hizalama). <code>r</code>. satırın başına nasıl ulaşılır?</p>
   <ol>
-    <li data-why="Bu clamp modu.">En yakın kenar pikselini.</li>
-    <li data-why="Bu wrap modu.">Karşı kenardan sarılmış değeri.</li>
-    <li data-why="Doğru: border modu sınır dışında sıfır döndürür.">Sıfır.</li>
-    <li data-why="Bu mirror modu.">Aynalanmış değeri.</li>
+    <li data-why="Satırlar 700 değil, pitch kadar (768 B) aralıklı.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch bayt cinsinden; float* aritmetiği 4 ile çarpar.">p + r * pitch</li>
+    <li data-why="Doğru: pitch = 768 B; önce char*'a çevirip bayt ekle.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="Pitch genişlikten küçük olamaz.">(float*)((char*)p + r * 512)</li>
   </ol>
 </div>
 

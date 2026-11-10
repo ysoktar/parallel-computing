@@ -82,6 +82,6 @@ test("quizzes have a valid answer and every option explains itself", () => {
 
 test("the exam date is the announced one", () => {
   assert.match(layout, /2026-11-11T15:30:00\+03:00/);
-  assert.match(tr["exam-midterm2.html"], /11 Kasım 2026 Çarşamba, 15:30–17:00 · Derslik 306/);
-  assert.match(en["exam-midterm2.html"], /Wednesday 11 November 2026, 15:30–17:00 · Room 306/);
+  assert.match(tr["exam-midterm2.html"], /11 Kasım 2026 Çarşamba, 15:30–17:30 · Derslik 306/);
+  assert.match(en["exam-midterm2.html"], /Wednesday 11 November 2026, 15:30–17:30 · Room 306/);
 });
