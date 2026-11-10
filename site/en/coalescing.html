@@ -107,7 +107,7 @@ cudaMemcpy2D(devPtr, devPitch,            // destination and its pitch (GPU)
 </pre>
 <p>Pitch examples (256 B alignment): width 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
 
-<h2>Matrix transpose <span class="badge-class">class</span></h2>
+<h2 id="matrix-transpose" data-toc="Matrix transpose">Matrix transpose <span class="badge-class">class</span></h2>
 <p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>
 
 <h3>Set-up: 32×32 tile, 32×8 threads</h3>
@@ -207,7 +207,7 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
 </table>
 <p>Effective bandwidth = 2 × matrix size (one read + one write) / time. Conclusion: <strong>coalescing global memory is the most critical factor</strong>; the cost of shared memory and synchronisation is much smaller.</p>
 
-<h2>Loop unrolling <span class="badge-class">class</span></h2>
+<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
 <p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
 <div class="two-col">
 <pre class="code" data-title="Normal">

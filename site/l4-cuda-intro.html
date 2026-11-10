@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU ve CUDA'ya giriş · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 4: GPU vs CPU, SIMD/SIMT, çok çekirdek neden, genel CUDA yaklaşımı, terminoloji (host, device, SM, warp, blok), thread hiyerarşisi ve lineer thread indeksi, bloklar ve ölçeklenebilirlik, thread block cluster, bellek hiyerarşisi, compute capability.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l4-cuda-intro">
+<main><div class="content">
+
+<h1>GPU ve CUDA'ya giriş</h1>
+<p class="lead">GPU neden bu kadar çok FLOP'a sahip, ve onu genel amaçlı hesap için nasıl programlarız? Temel kavramlar: host/device, SIMT, grid → blok → thread, warp, bellek hiyerarşisi.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>CPU ile GPU'nun silikonu neden farklı harcadığını açıklamak.</li>
+    <li>SIMD ile SIMT'yi ayırt etmek.</li>
+    <li>1D/2D/3D blokta lineer thread indeksini ve warp'ı hesaplamak.</li>
+    <li>Blokların neden bağımsız olması gerektiğini ve bunun ölçeklenebilirlikle ilişkisini söylemek.</li>
+  </ul>
+</div>
+
+<h2>GPU ve CUDA</h2>
+<ul>
+  <li><strong>GPU</strong>: görsel işler (2D/3D grafik, oyun, CAD, efektler) için tasarlanmış; tüketici pazarının baskısıyla çok yüksek FP throughput ve bellek bant genişliği. 2001 civarından beri programlanabilir.</li>
+  <li><strong>CUDA</strong> (Compute Unified Device Architecture): GPU'yu programlanabilir yapan donanım + yazılım; C, C++, Fortran türleri. CUDA C/C++ C'yi küçük bir anahtar kelime grubuyla genişletir. <strong>GPGPU</strong>: GPU'da genel amaçlı hesap (CUDA / OpenCL).</li>
+  <li>CUDA öncesi: veriler OpenGL yapılarına sarılıp grafik işlemi taklit edilirdi; grafik işlemlerinin çoğu FP matris/vektör işlemi olduğu için.</li>
+  <li>GPU çekirdeklerine <strong>Streaming Multiprocessor (SM)</strong> denir: skaler işlemciler (SP), yerel önbellek ve özel fonksiyon birimlerinin birleşimi. SM thread bloklarını, SP bloktaki bir thread'i çalıştırır.</li>
+</ul>
+<h3>Farkın nedeni</h3>
+<div class="two-col">
+  <div><p><strong>CPU:</strong> çok karmaşık kontrol mantığı + büyük çok seviyeli önbellekler. Rastgele erişimli, bağımsız görevli paralel yürütme için ideal; gecikme odaklı.</p></div>
+  <div><p><strong>GPU:</strong> veri düzeyi paralellik. Kontrol mantığı basit, önbellek küçük → daha çok transistör hesaba. Bellek türleri daha hızlı ve optimize. SIMD/SIMT yürütmeye uygun; throughput odaklı.</p></div>
+</div>
+<p>Mimari örnekleri: ayrık GPU (PCIe üzerinden), bellek denetleyicisi CPU'ya entegre (AMD Athlon 64, Intel Nehalem), ve CPU+GPU tek yongada (AMD APU; hUMA ile ortak bellek uzayı ve önbellek tutarlılığı).</p>
+
+<h2>SIMD ve SIMT</h2>
+<ul>
+  <li><strong>SIMD</strong> (Single Instruction Multiple Data): aynı komut birçok veri elemanına paralel uygulanır (vektör işlemciler).</li>
+  <li><strong>SIMT</strong> (Single Instruction Multiple Thread): aynı komut birçok thread tarafından paralel çalıştırılır. SIMD'nin daha esnek hâli. <strong>CUDA SIMT'dir</strong>: thread'lere farklı işler verebilirsiniz, ama <strong>thread divergence</strong> arttıkça performans düşer.</li>
+  <li>Aynı komut herkese uygulandığı için akış kontrolü basit kalır. Aritmetik yoğunluk yüksekse (komut / bellek erişimi), bellek gecikmesi büyük önbellekler yerine hesapla gizlenir.</li>
+  <li>Veri paralel programlama: veri elemanları → paralel thread'ler. 3D render, görüntü/video işleme, kodlama, stereo görme, nesne tanıma, fizik simülasyonu, finans, biyoloji…</li>
+</ul>
+
+<h2>Neden çok çekirdek?</h2>
+<ul>
+  <li><strong>Moore yasası</strong>: entegre devredeki transistör sayısı ~2 yılda iki katına çıkar (hız azalıyor).</li>
+  <li>Frekansı artırmak artık mümkün değil: güç frekansın küpüyle ölçeklenir (P ∝ f³), yüksek saat sinyalini üretmek ve dağıtmak zor; ısı ve dalga şekli bozulmaları.</li>
+  <li><strong>Çok çekirdek</strong>: düşük frekansta daha güç verimli; birden çok işlemi aynı anda çalıştırarak performans. Bedeli: performans için <strong>paralelleştirilmiş yazılım</strong> gerekir.</li>
+  <li>Bazı işler doğası gereği seridir; CPU onlara daha uygun. Her işte en iyi tek bir işlemci yok → <strong>heterojen</strong> çok çekirdekli platformlar (OpenCL burada devreye girer). Mobil/gömülü sistemlerde güç sınırları da çok çekirdeği zorunlu kılar.</li>
+</ul>
+
+<h2>Genel CUDA yaklaşımı</h2>
+<ol>
+  <li>Kodu analiz et, darboğazları bul (profiling): toplam sürenin büyük kısmını alan, hesap yoğun ve/veya bant genişliği isteyen kısımlar (disk, kullanıcı girişi, ağ bekleme değil).</li>
+  <li>Veri paralel kısımları bul (bazı algoritmalar seri: Newton yöntemi, çoğu sıkıştırma algoritması).</li>
+  <li>Gerekli girdileri CPU belleğinden GPU belleğine kopyala (PCIe; istisna: zero-copy, birleşik DRAM).</li>
+  <li>GPU'da hesapla: iyi bir <strong>thread → veri eşlemesi</strong> bul, kernel'leri yaz.</li>
+  <li>Sonuçları CPU'ya geri kopyala.</li>
+  <li>GPU sonuçlarının CPU sonuçlarıyla (tolerans içinde) eşleştiğini kontrol et. Dikkat: FP işlemleri <strong>değişmeli ama birleşmeli değil</strong>: <code>(a + b) + c ≠ a + (b + c)</code> olabilir.</li>
+  <li>Tekrarla: teorik tepe GFLOPS ve GB/s'ye ne kadar yakınız? Değilse optimize et.</li>
+</ol>
+<p>İyi kazanç beklenen yerler: tüm veri noktalarına aynı işlemi uygulayan kod; <code>float</code> ağırlıklı kod (double destekli ama özellikle eski mimarilerde yavaş); taşınacak veri, eleman başına hesaba göre küçük olan kod.</p>
+
+<h2>Terminoloji</h2>
+<table class="simple">
+  <thead><tr><th>Terim</th><th>Anlamı</th></tr></thead>
+  <tbody>
+    <tr><td>Host / device</td><td>CPU = host (denetleyici: cihazı hazırlar, iş gönderir); GPU = device (yardımcı işlemci: işi yürütür, sonucu döndürür).</td></tr>
+    <tr><td>SM</td><td>GPU'nun yapı taşı, CPU çekirdeğine benzer.</td></tr>
+    <tr><td>Thread</td><td>İş elemanı. Açıkça oluşturmaya/zamanlamaya gerek yok; donanım yönetir.</td></tr>
+    <tr><td>Warp</td><td>Birlikte oluşturulan, zamanlanan ve çalıştırılan 32 thread.</td></tr>
+    <tr><td>Blok (CTA)</td><td>Aynı SM'de çalışan thread grubu (Cooperative/Concurrent Thread Array).</td></tr>
+    <tr><td>Kernel</td><td><code>__global__</code> GPU fonksiyonu; <code>&lt;&lt;&lt;numberOfBlocks, threadsPerBlock&gt;&gt;&gt;</code> ile çağrılır.</td></tr>
+  </tbody>
+</table>
+
+<h2>Thread hiyerarşisi</h2>
+<ul>
+  <li><code>threadIdx</code> 3 bileşenli bir vektör (<code>.x .y .z</code>): thread'in 3D thread küpündeki koordinatları. 1D (vektör), 2D (matris), 3D (hacim) düzenlenebilir. <strong>Pratik kural: thread boyutu → veri boyutu.</strong></li>
+  <li>Sabit boyutlu thread grubu = <strong>thread bloğu</strong>; boyutları kernel başlatılmadan önce belirlenir, kernel içinde <code>blockDim</code> ile okunur. Günümüz GPU'larında blok başına en fazla <strong>1024</strong> thread.</li>
+  <li>Thread'ler warp'lar hâlinde oluşturulur/çalıştırılır; thread → warp ataması keyfî değil, thread <strong>indeksi</strong> belirler:</li>
+</ul>
+<div class="formula-box">1D: index = threadIdx.x
+2D: index = threadIdx.y * blockDim.x + threadIdx.x
+3D: index = threadIdx.z * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x
+warp  = index / 32</div>
+<div class="callout example">
+  <p><code>dim3 block(16, 8, 2)</code>: 256 thread, 8 warp. <code>threadIdx = (5, 3, 1)</code> → index = 1·16·8 + 3·16 + 5 = 128 + 48 + 5 = <strong>181</strong> → warp 181/32 = <strong>5</strong>.</p>
+</div>
+<pre class="code" data-title="Basit örnekler">
+__global__ void VecAdd(float* A, float* B, float* C) {   // <<<1, N>>>: 1 blok, N thread
+    int i = threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+__global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
+    const int i = threadIdx.y * blockDim.x + threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+</pre>
+<p class="small muted">Slaytlarda <code>blockDimx.x</code> diye geçen yazım hatası; doğrusu <code>blockDim.x</code>.</p>
+
+<h2>Bloklar ve ölçeklenebilirlik</h2>
+<ul>
+  <li>Thread blokları <strong>bağımsız çalışmak zorunda</strong>: herhangi bir sırada, paralel ya da seri çalıştırılabilmeli. Hangi bloğun hangi SM'de çalışacağını kontrol edemezsiniz. Bu sayede program SM sayısıyla <strong>ölçeklenir</strong>.</li>
+  <li>CUDA yaklaşımı: önce problemi bloklarda bağımsız çözülebilecek <strong>kaba alt problemlere</strong> böl (bloklar arası etkileşim yok); sonra her alt problemi bloktaki thread'lerin <strong>işbirliğiyle</strong> çözeceği ince parçalara böl (yerel etkileşimler blok içinde).</li>
+  <li>Blok içindeki thread'ler shared memory ile veri paylaşır ve <code>__syncthreads()</code> ile senkronize olur (bariyer: herkes gelene kadar kimse devam etmez; hafif).</li>
+  <li>Tasarım: (1) algoritmanın tüm yerel etkileşimleri blok içinde olacak şekilde blokları tasarla, (2) bloktaki her veri elemanını işleyecek thread eşlemesini tasarla, (3) blokların SM'lerde bağımsız ve belirsiz sırada çalıştığını unutma.</li>
+</ul>
+<h3>Thread block cluster (compute 9.0)</h3>
+<ul>
+  <li>İsteğe bağlı yeni seviye: thread → blok → <strong>cluster</strong>. Bir bloğun thread'leri aynı SM'de birlikte zamanlanması garanti olduğu gibi, cluster'daki bloklar aynı <strong>GPC</strong>'de (GPU Processing Cluster) birlikte zamanlanır. (Ampere: 2 SM = 1 TPC, 8 TPC = 1 GPC, 8 GPC = tam GPU.)</li>
+  <li>Taşınabilir en büyük cluster: 8 blok. Derleme zamanında <code>__cluster_dims__(X,Y,Z)</code> ya da çalışma zamanında <code>cudaLaunchKernelEx</code>. Grid boyutu cluster boyutunun katı olmalı.</li>
+  <li>Cluster'daki bloklar <code>cluster.sync()</code> ile donanım destekli senkronize olur ve <strong>distributed shared memory</strong>'ye erişir.</li>
+</ul>
+
+<h2>Bellek hiyerarşisi</h2>
+<ul>
+  <li>Her thread'in özel <strong>local</strong> belleği var.</li>
+  <li>Her bloğun, bloktaki tüm thread'lerin gördüğü ve bloğun ömrü kadar yaşayan <strong>shared</strong> belleği var.</li>
+  <li>Tüm thread'ler aynı <strong>global</strong> belleğe erişir.</li>
+  <li>Ek iki salt okunur bellek: <strong>constant</strong> ve <strong>texture</strong>. Global, constant ve texture kernel başlatmaları arasında kalıcıdır.</li>
+</ul>
+<p>Ayrıntılar: <a href="l5-cuda-kernels.html#cuda-bellek-turleri">L5 bellek türleri</a>, <a href="l6-cuda-memory.html">L6</a>.</p>
+
+<h2>Compute capability</h2>
+<p>Major.minor. Aynı major = aynı çekirdek mimarisi (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = artımlı iyileştirme, yeni özellikler. Yeni mimari, daha iyi CUDA yetenekleri.</p>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p><code>dim3 block(32, 4, 2)</code> bloğunda <code>threadIdx = (0, 2, 1)</code> olan thread kaçıncı warp'tadır?</p>
+  <ol>
+    <li data-why="z bileşeni unutulmuş: 2·32 = 64 → warp 2.">2</li>
+    <li data-why="Lineer indeks 192, 192/32 = 6, 1 değil.">1</li>
+    <li data-why="1·32·4 + 2·32 + 0 = 128 + 64 = 192 → 192/32 = 6.">6</li>
+    <li data-why="Bloktaki toplam warp sayısı 256/32 = 8; soru tek bir thread'in warp'ı.">8</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>CUDA programlarının farklı sayıda SM'li GPU'larda değişmeden çalışabilmesini sağlayan nedir?</p>
+  <ol>
+    <li data-why="Warp boyutu sabittir ama ölçeklenebilirliğin nedeni değildir.">Warp boyutunun her GPU'da 32 olması.</li>
+    <li data-why="Doğru: bağımsız bloklar istenen sırada istenen SM'ye dağıtılabilir.">Thread bloklarının bağımsız olması ve herhangi bir sırada çalıştırılabilmesi.</li>
+    <li data-why="__syncthreads blok içidir.">__syncthreads()'in tüm blokları senkronize etmesi.</li>
+    <li data-why="Programcı blok → SM atamasını kontrol edemez.">Programcının blokları SM'lere elle ataması.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU sonuçları CPU sonuçlarıyla bit bit aynı çıkmıyor. En olası neden?</p>
+  <ol>
+    <li data-why="GPU float'ı IEEE 754 ile destekler.">GPU float'ı desteklemez.</li>
+    <li data-why="Değişme özelliği korunur (a+b = b+a).">FP toplama değişmeli değildir.</li>
+    <li data-why="Bariyer eksikliği yanlış sonuç verir ama 'küçük farklar' tipik olarak sıralamadandır.">__syncthreads() her zaman eksiktir.</li>
+    <li data-why="Doğru: paralel toplama işlem sırasını değiştirir; FP birleşmeli değildir.">FP işlemleri birleşmeli değildir; paralel kod işlemleri farklı sırada yapar.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

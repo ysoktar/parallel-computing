@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kopya kâğıdı planı · Paralel Hesaplama</title>
+<meta name="description" content="2. ara sınav için el yazısı A4 kopya kâğıdına yazılacaklar: indeks formülleri, tiled matmul, __syncthreads kuralları, coalescing, transpose, sayısal örnekler, bellek türleri.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="cheatsheet">
+<main><div class="content">
+
+<h1>Kopya kâğıdı planı</h1>
+<p class="lead">Kural: 1 adet A4, iki yüz, <strong>el yazısı</strong>, sınavdan önce kontrol ediliyor. Aşağıdaki her kutu kâğıtta yaklaşık bir bölge. Elle yazarken sıkıştırın; yazmanın kendisi de iyi bir tekrar.</p>
+
+<div class="callout gotcha">
+  <p>Bu sayfayı yazdırıp götüremezsiniz: fotokopi ve bilgisayar çıktısı yasak. Buradakini kendi elinizle kâğıda geçirin.</p>
+</div>
+
+<h2>Ön yüz: CUDA çekirdeği</h2>
+
+<h3>1. İndeksler</h3>
+<div class="formula-box">dim3(x, y): x = sütun, y = satır      blok ≤ 1024 thread, warp = 32
+col = blockIdx.x*blockDim.x + threadIdx.x
+row = blockIdx.y*blockDim.y + threadIdx.y      A[row*W + col]
+id(2D)  = ty*bdx + tx        id(3D) = tz*bdx*bdy + ty*bdx + tx      warp = id/32
+gid(1D) = blockIdx.x*blockDim.x + threadIdx.x
+grid = (W + bx - 1)/bx  ;  if (row &lt; H &amp;&amp; col &lt; W)
+kapsanan = (gx*bx) sütun × (gy*by) satır
+dim3(8,32): warp = 4 satır × 8 sütun (ty 4w..4w+3)</div>
+
+<h3>2. Host iskeleti</h3>
+<div class="formula-box">float *d; cudaMalloc((void**)&amp;d, bytes);
+cudaMemcpy(dst, src, bytes, cudaMemcpyHostToDevice);   // senkron
+k&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);   // asenkron → cudaDeviceSynchronize()
+cudaMemcpy(h, d, bytes, cudaMemcpyDeviceToHost); cudaFree(d);
+__global__: device'ta, host çağırır | __device__: d/d | __host__: h/h</div>
+
+<h3>3. Tiled matmul (ezber)</h3>
+<div class="formula-box">__shared__ float Mds[T][T], Nds[T][T];
+Row = by*T + ty;  Col = bx*T + tx;  P = 0;
+for (m = 0; m &lt; W/T; ++m) {
+  Mds[ty][tx] = M[Row*W + m*T + tx];
+  Nds[ty][tx] = N[(m*T + ty)*W + Col];
+  __syncthreads();                      // (1) dolsun (RAW)
+  for (k = 0; k &lt; T; ++k) P += Mds[ty][k]*Nds[k][tx];
+  __syncthreads();                      // (2) üzerine yazılmasın (WAR)
+}
+Pd[Row*W + Col] = P;
+global okuma/thread: 2W → 2W/T ; azalma T ; BX×BY: 2·BX·BY/(BX+BY)
+8×32 blok: Mds[32][8] (herkes), Nds[8][8] (ty&lt;8), sync if dışında</div>
+
+<h3>4. <code>__syncthreads()</code></h3>
+<ul>
+  <li>Sadece blok içi bariyer; bloklar arası yok (cooperative groups, CUDA 9+).</li>
+  <li>Bloktaki <strong>tüm</strong> thread'ler çalıştırmalı; <code>if</code> içinde / erken <code>return</code> sonrası = tanımsız (koşul herkes için aynıysa hariç).</li>
+  <li>Başka thread'in yazdığı shared veriyi okumadan önce şart.</li>
+</ul>
+
+<h3>5. Coalescing</h3>
+<div class="formula-box">transaction: 32/64/128 B, boyutuna hizalı; cudaMalloc ≥ 256 B hizalı
+kelime 1/2/4/8/16 B, doğal hizalı; struct __align__(8/16)
+rastgele 4B: 32×32 = 1024 B ; ardışık: 128 B → 8 kat
+a[i] 4 seg ✓ | a[i+1] 5 seg | a[2i] 8 seg (%50) | a[i*W] 32 seg ✗ | a[0] 1 seg
+2D: blok genişliği ve dizi genişliği 32'nin katı → cudaMallocPitch
+row = (float*)((char*)p + r*pitch)</div>
+
+<h3>6. Transpose</h3>
+<div class="formula-box">naive: out[x*W + y] = in[y*W + x]   okuma ✓ yazma ✗ (stride W)
+shared: tile[ty][tx] = in[y*W + x]; sync;
+        x = by*T + tx; y = bx*T + ty;  out[y*W + x] = tile[tx][ty]
+NVIDIA: T=32, blok 32×8, thread başına 4 eleman (j += 8)
+padding [T][T+1] = bank conflict (FİNALDE)</div>
+
+<h2>Arka yüz: sayılar, bellek, derleme, L1–L3</h2>
+
+<h3>7. Sayısal örnekler</h3>
+<div class="formula-box">G80: 16 SM, 8192 reg/SM, 768 thr/SM, 8 blok/SM, 16 KB shared/SM
+  8192/768 ≈ 10 reg/thread ; 16KB/8 = 2 KB/blok
+  16×16 tile: 2 KB/blok ; 768/256 = 3 blok → 6 KB kullanılır
+GT200: 30 SM, 1024 thr/SM, 8 blok/SM, 512 thr/blok → 16×16 en iyi (4 blok)
+  8×8: 8×64 = 512 (yarım) ; 32×32 = 1024 &gt; 512 ✗
+CGMA naive = 1 ; 86,4/4 = 21,6 GFLOPS ; 367 tepe → %6
+pitch: 5/50/250 → 256 ; 500 → 512 ; 700 → 768</div>
+
+<h3>8. Bellek türleri</h3>
+<table class="simple">
+  <thead><tr><th>Tür</th><th>Kapsam</th><th>Not</th></tr></thead>
+  <tbody>
+    <tr><td>register</td><td>thread</td><td>en hızlı; aşılırsa spill → local</td></tr>
+    <tr><td>local</td><td>thread</td><td>global'de; değişken indeksli diziler, spill</td></tr>
+    <tr><td>shared</td><td>blok</td><td>on-chip, <code>__shared__</code>, sync</td></tr>
+    <tr><td>global</td><td>grid + host</td><td>DRAM, 400–600 çevrim, coalesce</td></tr>
+    <tr><td>constant</td><td>tüm grid'ler</td><td>64 KB, cache, herkes aynı adres = en iyi; <code>cudaMemcpyToSymbol</code></td></tr>
+    <tr><td>texture</td><td>grid</td><td>salt okunur, 2D cache, filtre, clamp/border/wrap/mirror</td></tr>
+  </tbody>
+</table>
+
+<h3>9. Derleme</h3>
+<div class="formula-box">.cu → PTX (sanal ISA) → ptxas → SASS/cubin (sm_XY)
+cubin X.y → X.z (z ≥ y) ; major arası ✗ ; gelecek GPU = PTX + JIT
+-arch=compute_XY (PTX) ; -code=sm_XY (ikili) ; __CUDA_ARCH__ = XY0
+--ptxas-options=-v → register/lmem ; runtime cuda* , driver cu*
+loop unroll: #pragma unroll ; − döngü kontrolü, + ILP ; + register</div>
+
+<h3>10. L1–L3 hızlı</h3>
+<div class="formula-box">Amdahl:    S = 1 / ((1−α) + α/N) ;  N→∞: 1/(1−α)     (α = paralel kısım)
+Gustafson: S = (1−α) + α·N        (problem N ile büyür)
+Speedup = Tseq/Tpar ; efficiency = S/N
+Flynn: SISD SIMD MISD MIMD ; SM-MIMD (paylaşımlı) vs DM-MIMD (mesaj)
+PCAM: Partition, Communication, Agglomeration, Mapping
+data race: ≥1 yazan + senkronizasyon yok ; mutex = binary semafor + sahiplik
+deadlock / livelock / starvation ; CAS, LL/SC ; atomic&lt;T&gt;</div>
+
+</div></main>
+</body>
+</html>
