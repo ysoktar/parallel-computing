@@ -37,12 +37,12 @@ function helpPanel() {
     `<p><strong>Yerel çalıştırıcı bulunamadı.</strong> Kodlar sizin bilgisayarınızda çalışır; bunun için küçük bir yardımcı program gerekir:</p>
      <ol><li><a href="${RUNNER_URL}" download>runner.py</a> dosyasını indirin (Python 3 yeterli, kurulum yok).</li>
      <li>Terminalde çalıştırın: <code>python3 runner.py</code> (Windows: <code>py runner.py</code>). Açık kaldığı sürece bu sayfadaki ▶ düğmeleri çalışır.</li>
-     <li>C/C++ için <code>g++</code> veya <code>clang++</code>, CUDA için <code>nvcc</code> (CUDA Toolkit) ve bir NVIDIA GPU gerekir.</li></ol>
+     <li>C/C++ için <code>g++</code>/<code>clang++</code> (Windows'ta MSVC de olur), CUDA için <code>nvcc</code> (CUDA Toolkit) ve bir NVIDIA GPU gerekir. <strong>Windows:</strong> nvcc, Microsoft'un <code>cl.exe</code> derleyicisini ister: ücretsiz <a href="https://visualstudio.microsoft.com/visual-cpp-build-tools/" target="_blank" rel="noopener">Build Tools for Visual Studio 2022</a>'yi "Desktop development with C++" ile kurun; çalıştırıcı onu kendisi bulur.</li></ol>
      <p class="small muted">Tarayıcı "yerel ağa erişim" izni sorarsa izin verin. Çalıştırıcı sadece 127.0.0.1'i dinler ve sadece bu sitenin isteklerini kabul eder. Safari localhost'a erişime izin vermeyebilir; Chrome, Edge veya Firefox kullanın.</p>`,
     `<p><strong>Local runner not found.</strong> The code runs on your own computer; that needs a small helper program:</p>
      <ol><li>Download <a href="${RUNNER_URL}" download>runner.py</a> (Python 3 is enough, nothing to install).</li>
      <li>Run it in a terminal: <code>python3 runner.py</code> (Windows: <code>py runner.py</code>). While it is open, the ▶ buttons on this page work.</li>
-     <li>C/C++ needs <code>g++</code> or <code>clang++</code>; CUDA needs <code>nvcc</code> (the CUDA Toolkit) and an NVIDIA GPU.</li></ol>
+     <li>C/C++ needs <code>g++</code>/<code>clang++</code> (MSVC also works on Windows); CUDA needs <code>nvcc</code> (the CUDA Toolkit) and an NVIDIA GPU. <strong>Windows:</strong> nvcc needs Microsoft's <code>cl.exe</code>: install the free <a href="https://visualstudio.microsoft.com/visual-cpp-build-tools/" target="_blank" rel="noopener">Build Tools for Visual Studio 2022</a> with "Desktop development with C++"; the runner finds it by itself.</li></ol>
      <p class="small muted">If the browser asks for "local network access", allow it. The runner listens only on 127.0.0.1 and accepts requests only from this site. Safari may block access to localhost; use Chrome, Edge or Firefox.</p>`) });
 }
 
@@ -99,7 +99,7 @@ export function attachRunner(pre) {
     runHere.addEventListener("click", run);
     editor = h("div", { class: "run-edit" },
       h("div", { class: "run-fields" },
-        h("label", {}, h("span", {}, `${lang === "cuda" ? "nvcc" : "g++"} ${tl("bayrakları", "flags")}`), flagsIn),
+        h("label", {}, h("span", {}, `${lang === "cuda" ? "nvcc" : info?.cxx_name || "g++"} ${tl("bayrakları", "flags")}`), flagsIn),
         h("label", {}, h("span", {}, tl("program argümanları", "program arguments") + (usage ? ` · ${usage}` : "")), argsIn)),
       ta, h("div", { class: "btn-row" }, runHere, reset));
     bar.after(editor);
