@@ -46,12 +46,21 @@ def find_msvc_env():
             pass
     for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), pf86):
         roots += sorted(glob.glob(os.path.join(base, "Microsoft Visual Studio", "*", "*")), reverse=True)
-    for root in roots:
+    # candidates: (vcvars64.bat, toolset version or None). CUDA 12.x accepts MSVC toolsets 14.1x–14.4x (VS 2017–2022);
+    # VS 2026 ships 14.5x. If an older toolset is installed side by side (e.g. the "MSVC v143" component), prefer it.
+    cands = []
+    for root in dict.fromkeys(roots):
         bat = os.path.join(root, "VC", "Auxiliary", "Build", "vcvars64.bat")
         if not os.path.exists(bat):
             continue
+        tools = sorted((os.path.basename(t) for t in glob.glob(os.path.join(root, "VC", "Tools", "MSVC", "14.*"))),
+                       key=lambda v: [int(x) for x in v.split(".") if x.isdigit()], reverse=True)
+        for v in tools:
+            cands.append((bat, v))
+    cands.sort(key=lambda c: (0 if c[1] < "14.50" else 1))     # supported toolsets first, newest first within each group
+    for bat, ver in cands:
         try:
-            out = subprocess.run(f'cmd /s /c ""{bat}" >nul 2>&1 && set"', capture_output=True, timeout=60, shell=False, **TEXT)
+            out = subprocess.run(f'cmd /s /c ""{bat}" -vcvars_ver={ver} >nul 2>&1 && set"', capture_output=True, timeout=60, **TEXT)
         except Exception:
             continue
         env = {}
@@ -61,6 +70,7 @@ def find_msvc_env():
                 env[k] = v
         path = env.get("PATH") or env.get("Path")
         if path and shutil.which("cl", path=path):
+            env["PC_RUNNER_MSVC"] = ver
             return env
     return None
 
@@ -138,6 +148,9 @@ def run_code(lang, code, flags=None, args=None):
             cmds = [[TC["nvcc"]] + fl + [src, "-o", exe]]
             if "-arch=native" in fl:                  # older nvcc: retry without it
                 cmds.append([TC["nvcc"]] + [f for f in fl if f != "-arch=native"] + [src, "-o", exe])
+            if WINDOWS:                               # MSVC newer than this CUDA supports (e.g. VS 2026 + CUDA 12.x)
+                newer = ["-allow-unsupported-compiler", "-Xcompiler", "/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"]
+                cmds += [c[:1] + newer + c[1:] for c in list(cmds)]
         elif lang == "cpp":
             cxx = TC["cxx"]
             if not cxx:
@@ -170,6 +183,9 @@ def run_code(lang, code, flags=None, args=None):
                 return {"ok": False, "stage": "compile", "cmd": show(cmd), "stderr": str(e)}
             if comp.returncode == 0:
                 break
+            msg = comp.stdout + comp.stderr
+            if "-allow-unsupported-compiler" not in cmd and "allow-unsupported-compiler" not in msg and "-arch=native" not in cmd:
+                break                                 # a real error in the code: do not retry
         t_compile = time.time() - t0
         if comp.returncode != 0:
             return {"ok": False, "stage": "compile", "cmd": show(cmd), "stdout": clip(comp.stdout), "stderr": clip(comp.stderr), "compile_s": t_compile}
@@ -247,7 +263,7 @@ if __name__ == "__main__":
     print(f"  C++ compiler : {i['cxx'] or 'not found'}")
     print(f"  nvcc         : {i['nvcc'] or 'not found'}")
     if WINDOWS:
-        print(f"  cl.exe (MSVC): {TC['cl'] or 'not found  <- needed by nvcc on Windows: install Build Tools for Visual Studio 2022, workload Desktop development with C++'}")
+        print(f"  cl.exe (MSVC): {(TC['cl'] + '  (toolset ' + TC['msvc'].get('PC_RUNNER_MSVC', '?') + ')') if TC['cl'] else 'not found  <- needed by nvcc on Windows: install Build Tools for Visual Studio 2022, workload Desktop development with C++'}")
     print(f"  GPU          : {i['gpu'] or 'not found'}")
     print(f"  listening on http://127.0.0.1:{PORT}  (Ctrl+C to stop)")
     try:
