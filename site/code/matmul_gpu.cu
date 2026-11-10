@@ -2,6 +2,7 @@
 // and the tiled shared-memory kernel (slide 90). Both are checked against the CPU and timed.
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <vector>
 #define TILE_WIDTH 16
