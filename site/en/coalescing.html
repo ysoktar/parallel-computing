@@ -50,9 +50,9 @@
   <li>An access to data in global memory compiles to a single instruction <strong>if and only if</strong> (1) the size of the type is 1, 2, 4, 8 or 16 bytes and (2) the data is <strong>naturally aligned</strong> (its address is a multiple of its size). Otherwise it is split into several instructions that cannot fully coalesce.</li>
   <li>Built-in types such as <code>char, short, int, long, long long, float, double, float2, float4</code> satisfy this automatically. For structs the compiler is told with <code>__align__(8)</code> or <code>__align__(16)</code>:</li>
 </ul>
-<pre class="code">
-struct __align__(8)  { float x; float y; };            // 8 bytes, 8-aligned → one 8 B load
-struct __align__(16) { float x; float y; float z; };   // 12 bytes of data, rounded up to 16 → one 16 B load
+<pre class="code" data-run="align_struct.cu">
+struct __align__(8)  Vec2 { float x; float y; };            // 8 bytes, 8-aligned → one 8 B load
+struct __align__(16) Vec3 { float x; float y; float z; };   // 12 bytes of data, rounded up to 16 → one 16 B load
 </pre>
 <ul>
   <li>Addresses returned by <code>cudaMalloc</code> and the other allocation functions are <strong>aligned to at least 256 bytes</strong>.</li>
@@ -84,7 +84,7 @@ struct __align__(16) { float x; float y; float z; };   // 12 bytes of data, roun
   <li>An array whose width is not a multiple of 32 is accessed much more efficiently if it is allocated with its width rounded up to the next multiple of 32 and its rows padded. The functions that do this hardware-independently: <code>cudaMallocPitch()</code> (2D), <code>cudaMalloc3D()</code> (3D). They compute and return the right stride (pitch); <strong>this pitch must be used</strong> to access elements.</li>
   <li>Copying: memory from <code>cudaMallocPitch</code> is copied with <code>cudaMemcpy2D</code>, from <code>cudaMalloc3D</code> with <code>cudaMemcpy3D</code>.</li>
 </ul>
-<pre class="code" data-title="Pitched 2D access (slide 40)">
+<pre class="code" data-run="pitch2d.cu" data-title="Pitched 2D access (slide 40)">
 // Host
 int width = 64, height = 64;
 float* devPtr; size_t pitch;
@@ -118,7 +118,7 @@ cudaMemcpy2D(devPtr, devPitch,            // destination and its pitch (GPU)
 </ul>
 
 <h3>1) Reference: copy</h3>
-<pre class="code" data-title="copy: the speed the transpose aims for (same accesses, no swapping)">
+<pre class="code" data-run="transpose.cu" data-title="copy: the speed the transpose aims for (same accesses, no swapping)">
 const int TILE_DIM = 32;
 const int BLOCK_ROWS = 8;
 
@@ -138,7 +138,7 @@ __global__ void copy(float* odata, const float* idata)
 </div>
 
 <h3>2) Naive transpose</h3>
-<pre class="code" data-title="transposeNaive: the only difference is x and y swapped in the write index">
+<pre class="code" data-run="transpose.cu" data-title="transposeNaive: the only difference is x and y swapped in the write index">
 __global__ void transposeNaive(float* odata, const float* idata)
 {
     int x = blockIdx.x * TILE_DIM + threadIdx.x;
@@ -156,7 +156,7 @@ __global__ void transposeNaive(float* odata, const float* idata)
 
 <h3>3) Coalesced transpose with shared memory</h3>
 <p>Idea: read the tile from global memory <strong>row by row</strong> (coalesced) into shared memory; do the swapping inside shared memory (scattered access is cheap there); then write a <strong>column</strong> of the tile as a <strong>row</strong> of the output (coalesced). The block also has to write to the transposed place.</p>
-<pre class="code" data-title="transposeCoalesced">
+<pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">
 __global__ void transposeCoalesced(float* odata, const float* idata)
 {
     __shared__ float tile[TILE_DIM][TILE_DIM];
@@ -210,13 +210,13 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
 <h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
 <p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
 <div class="two-col">
-<pre class="code" data-title="Normal">
+<pre class="code" data-run="unroll.cu" data-title="Normal">
 float sum = 0;
 for (int k = 0; k < 16; ++k)
     sum += Mds[ty][k] * Nds[k][tx];
 // 16 iterations × (multiply-add + k++ + k<16 + branch)
 </pre>
-<pre class="code" data-title="Unrolled 4 times by hand">
+<pre class="code" data-run="unroll.cu" data-title="Unrolled 4 times by hand">
 float sum = 0;
 for (int k = 0; k < 16; k += 4) {
     sum += Mds[ty][k]     * Nds[k][tx];
@@ -227,15 +227,16 @@ for (int k = 0; k < 16; k += 4) {
 // 4 iterations: loop control cut 4 times
 </pre>
 </div>
-<pre class="code" data-title="Letting the compiler do it">
+<pre class="code" data-run="unroll.cu" data-title="Letting the compiler do it">
 #pragma unroll                 // fully unrolls if the trip count is known at compile time
 for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH is a #define / const → constant
-    Pvalue += Mds[ty][k] * Nds[k][tx];
+    sum += Mds[ty][k] * Nds[k][tx];
 
 #pragma unroll 4               // unroll 4 times
-for (int i = 0; i < n; ++i) { ... }
+for (int i = 0; i < n; ++i) a[i] *= s;
 
 #pragma unroll 1               // do not unroll
+for (int i = 0; i < n; ++i) a[i] += 1;
 </pre>
 <ul>
   <li><strong>Gain:</strong> fewer loop-control instructions; when fully unrolled the indices become constants (<code>Mds[ty][3]</code>) and address arithmetic is done at compile time; independent loads can be issued back to back, hiding latency.</li>

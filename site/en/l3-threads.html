@@ -30,7 +30,7 @@
   <li>What they are good for: (1) performance (multi-core), (2) background tasks, (3) asynchronous processing (non-blocking calls: e.g. <code>cudaMemcpyAsync</code> returns immediately), (4) improving program structure.</li>
   <li>Before C++11, pThreads (POSIX); since C++11, the standard <code>std::thread</code>.</li>
 </ul>
-<pre class="code" data-title="C++11 threads">
+<pre class="code" data-run="threads_basic.cpp" data-title="C++11 threads">
 #include <thread>
 #include <vector>
 void work(int id, int* out) { out[id] = id * id; }
@@ -60,7 +60,7 @@ int main() {
     <tr><td><strong>Semaphore</strong></td><td>Like a mutex but admits <strong>N threads</strong>: limits the number of threads using critical resources (CPU, I/O, RAM). Binary (0/1) or counting. Usable as a resource counter, a lock, a signalling mechanism.</td></tr>
   </tbody>
 </table>
-<pre class="code" data-title="Semaphore (logical) implementation">
+<pre class="code" data-run="semaphore.cpp" data-run-note="Pseudocode; the runnable version is the same semaphore written with std::atomic (at most 3 threads inside)." data-title="Semaphore (logical) implementation">
 acquire() {                       release() {
     while (1) {                       atomic { count++; return; }
         atomic {                  }
@@ -97,7 +97,7 @@ acquire() {                       release() {
 
 <h2>Producer-consumer</h2>
 <p>Producers put items into a shared buffer (e.g. <code>BUFFSIZE = 100</code>), consumers take them. Three semaphores: <code>slotsAvail</code> (initially BUFFSIZE), <code>resAvail</code> (initially 0), and a mutex (<code>l</code>) protecting the buffer indices.</p>
-<pre class="code" data-title="Pseudocode with synchronisation">
+<pre class="code" data-run="prodcons.cpp" data-run-note="Pseudocode; the runnable version has 2 producers, 3 consumers, BUFFSIZE = 100." data-title="Pseudocode with synchronisation">
 // producer                          // consumer
 slotsAvail.acquire();                resAvail.acquire();
 l.acquire();                         l.acquire();
@@ -115,7 +115,7 @@ resAvail.release();                  slotsAvail.release();
   <li>Atomic operations can build locks, replace them or complement them (lock-free data structures: <code>is_lock_free()</code>, does the hardware support it?). Example: <code>atomic&lt;bool&gt;</code> as a lock (spin lock). Floating-point atomics in C++20.</li>
   <li>On GPUs atomic operations can be very slow (the histogram example: many writes to the same bin).</li>
 </ul>
-<pre class="code" data-title="A spin lock with atomic&lt;bool&gt;">
+<pre class="code" data-run="spinlock.cpp" data-title="A spin lock with atomic&lt;bool&gt;">
 std::atomic<bool> locked{false};
 void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
 void unlock() { locked.store(false); }
@@ -133,7 +133,7 @@ void unlock() { locked.store(false); }
   <li><strong>Condition variable:</strong> for waiting on a condition inside a monitor: <code>wait()</code> releases the lock and sleeps, <code>notify_one()/notify_all()</code> wakes. If the signalling thread continues, the woken thread must recheck the condition (a <code>while</code> loop).</li>
   <li>C++11: <code>std::mutex</code> + <code>std::unique_lock</code> + <code>std::condition_variable</code>.</li>
 </ul>
-<pre class="code" data-title="The C++11 monitor pattern">
+<pre class="code" data-run="monitor.cpp" data-title="The C++11 monitor pattern">
 class Monitor {
     std::mutex m; std::condition_variable cv; int count = 0;
 public:

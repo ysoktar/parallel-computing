@@ -93,7 +93,7 @@ warp  = index / 32</div>
 <div class="callout example">
   <p><code>dim3 block(16, 8, 2)</code>: 256 threads, 8 warps. <code>threadIdx = (5, 3, 1)</code> → index = 1·16·8 + 3·16 + 5 = 128 + 48 + 5 = <strong>181</strong> → warp 181/32 = <strong>5</strong>.</p>
 </div>
-<pre class="code" data-title="Simple examples">
+<pre class="code" data-run="simple_add.cu" data-title="Simple examples">
 __global__ void VecAdd(float* A, float* B, float* C) {   // <<<1, N>>>: 1 block, N threads
     int i = threadIdx.x;
     C[i] = A[i] + B[i];

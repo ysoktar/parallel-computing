@@ -48,7 +48,7 @@
 <h3>Task parallelism</h3>
 <p>Modüller farklı düğümlere: ör. oyun döngüsündeki <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> ayrı görevler, her turun sonunda <code>barrier()</code>. Karmaşık bağımlılık yoksa çalışır ama <strong>ölçeklenmez</strong>: düğüm sayısı görev sayısını aşamaz.</p>
 <h3>Divide-and-conquer</h3>
-<pre class="code">
+<pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Sözde kod; çalışan hâli: iki yarısı ayrı görevlerde (std::async) sıralanan merge sort.">
 DnC(A) {
     if (A is a base case) return solution(A);
     split A into N subproblems B[N];

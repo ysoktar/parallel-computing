@@ -79,7 +79,7 @@ if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
 <p>Geçmiş yıl sorusu: <strong>"<code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> ile tiled matris çarpımı eşlemesi"</strong>. Aşağıdaki çözüm bu tipteki her soruyu kapsayacak şekilde adım adım gidiyor.</p>
 
 <h3>Çözümlü örnek: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
-<pre class="code" data-title="Kernel (her thread P'nin bir elemanı)">
+<pre class="code" data-run="matmul_rect.cu" data-title="Kernel (her thread P'nin bir elemanı)">
 __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;   // 0..95
@@ -109,7 +109,7 @@ __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcol
 
 <h3>Aynı konfigürasyonla tiled (shared memory) versiyon</h3>
 <p>Slayttaki tiled kernel <code>TILE_WIDTH × TILE_WIDTH</code> kare blok varsayar (<code>Mds[ty][tx]</code>, <code>Nds[ty][tx]</code>, her thread her matristen 1 eleman). 8×32 blokta bu doğrudan çalışmaz; P karosu <strong>32 satır × 8 sütun</strong>. Faz genişliğini (k yönü) <code>TK = 8</code> seçersek:</p>
-<pre class="code" data-title="8×32 blok için tiled matmul (P: 96×24, M: 96×K, N: K×24)">
+<pre class="code" data-run="matmul_rect.cu" data-title="8×32 blok için tiled matmul (P: 96×24, M: 96×K, N: K×24)">
 #define BX 8    // blockDim.x  = P karosunun sütun sayısı
 #define BY 32   // blockDim.y  = P karosunun satır sayısı
 #define TK 8    // her fazda k yönünde alınan genişlik
@@ -143,7 +143,7 @@ __global__ void MatMulTiled(const float* M, const float* N, float* P, int K, int
 <h3>"Bu kod nerelere dokunuyor?" alıştırmaları</h3>
 <p>Her birinde önce kendiniz cevaplayın, sonra çözümü açın.</p>
 <p><strong>(a)</strong> <code>A</code> 8×8 row-major, <code>k&lt;&lt;&lt;2, 4&gt;&gt;&gt;(A, 8)</code>:</p>
-<pre class="code">
+<pre class="code" data-run="touch_a.cu">
 __global__ void k(float* A, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;   // 0..7
     A[i * N] = 0;
@@ -152,7 +152,7 @@ __global__ void k(float* A, int N) {
 <div class="hint"><p><code>i = 0..7</code>, adres <code>8i</code>: A[0], A[8], …, A[56]. Bu <strong>0. sütun</strong>. Ardışık thread'ler 8 float (32 B) aralıklı adreslere yazar → her thread ayrı bir 32 B segment: coalesced <strong>değil</strong>. <code>A[i]</code> yazsaydık 0. satır olurdu ve coalesced olurdu.</p></div>
 
 <p><strong>(b)</strong> <code>B</code> 16×16 (width = 16), <code>k2&lt;&lt;&lt;dim3(2,2), dim3(8,8)&gt;&gt;&gt;</code>:</p>
-<pre class="code">
+<pre class="code" data-run="touch_b.cu">
 __global__ void k2(int* B, int width) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -176,7 +176,7 @@ __global__ void k2(int* B, int width) {
     </ul>
   </div>
   <div>
-<pre class="code" data-title="En basit örnek: blok içinde diziyi ters çevir">
+<pre class="code" data-run="reverse.cu" data-title="En basit örnek: blok içinde diziyi ters çevir">
 #define B 256
 __global__ void reverseBlock(int* d)
 {
@@ -198,7 +198,7 @@ __global__ void reverseBlock(int* d)
   <p><strong>"Önce işlem yapmadan sadece kopyala."</strong> Shared memory'ye, yazacağınız bölgenin dışından da veri (ör. konvolüsyonda kenar/halo bölgesi) gerekiyorsa: önce kernel'i sadece "global → shared → global" kopyası yapacak şekilde yazın ve <strong>çıktının girdiyle aynı olduğunu</strong> doğrulayın. İndeksler doğruysa hesaplamayı sonra ekleyin. Sınavda da shared'a yükleme indekslerini ayrı ayrı kontrol edin.</p>
 </div>
 <p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5 sayfası</a>. Kısa hâli:</p>
-<pre class="code" data-title="Slayt 90: tiled matmul (TILE_WIDTH × TILE_WIDTH blok)">
+<pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90: tiled matmul (TILE_WIDTH × TILE_WIDTH blok)">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
@@ -230,14 +230,14 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
   <li>Tiled matmul'deki iki bariyer: <strong>1.</strong> yazmalardan sonra: kimse karo dolmadan okumasın (read-after-write). <strong>2.</strong> hesaptan sonra: kimse diğerleri bitirmeden bir sonraki fazın verisini üzerine yazmasın (write-after-read).</li>
 </ul>
 <div class="two-col">
-<pre class="code" data-title="✗ Yanlış: bariyer koşulun içinde">
+<pre class="code" data-run="sync_barrier.cu" data-run-note="Program yanlış versiyonu derler ama çalıştırmaz (tanımsız davranış)." data-title="✗ Yanlış: bariyer koşulun içinde">
 if (threadIdx.x < 16) {
     s[threadIdx.x] = in[threadIdx.x];
     __syncthreads();   // tid ≥ 16 buraya hiç gelmez
 }
 out[threadIdx.x] = s[threadIdx.x % 16];
 </pre>
-<pre class="code" data-title="✓ Doğru: yükleme koşullu, bariyer herkes için">
+<pre class="code" data-run="sync_barrier.cu" data-title="✓ Doğru: yükleme koşullu, bariyer herkes için">
 if (threadIdx.x < 16)
     s[threadIdx.x] = in[threadIdx.x];
 __syncthreads();
@@ -260,7 +260,7 @@ out[threadIdx.x] = s[threadIdx.x % 16];
 <div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
 <p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing.html#matris-transpose">Coalescing sayfası</a>. Özet:</p>
 <div class="two-col">
-<pre class="code" data-title="Naive transpose: okuma ✓, yazma ✗">
+<pre class="code" data-run="transpose_simple.cu" data-title="Naive transpose: okuma ✓, yazma ✗">
 // in: height×width, out: width×height
 int x = blockIdx.x * TILE + threadIdx.x;  // sütun
 int y = blockIdx.y * TILE + threadIdx.y;  // satır
@@ -269,7 +269,7 @@ if (x < width && y < height)
 // warp'ta x ardışık: in ardışık okunur,
 // out'a 'height' aralıkla yazılır
 </pre>
-<pre class="code" data-title="Shared memory ile: ikisi de ✓">
+<pre class="code" data-run="transpose_simple.cu" data-title="Shared memory ile: ikisi de ✓">
 __shared__ float tile[TILE][TILE];
 int x = blockIdx.x * TILE + threadIdx.x;
 int y = blockIdx.y * TILE + threadIdx.y;

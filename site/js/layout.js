@@ -2,6 +2,7 @@
 // callouts, quizzes and code highlighting. Each page only contains its article and loads this module.
 import { h, $, $$, CALLOUT_ICONS, highlightC, dedent } from "./lib/ui.js";
 import { t as tl, tx, EN } from "./lib/i18n.js";
+import { attachRunner } from "./lib/runner.js";
 
 export const REPO = "https://github.com/ysoktar/parallel-computing";
 /** Midterm 2: Wednesday 11 November 2026, 15:30–17:30 (Türkiye, UTC+3), room 306. */
@@ -173,6 +174,7 @@ export function enhanceCode(root) {
       pre.replaceWith(wrap);
       wrap.append(pre);
     }
+    if (pre.dataset.run) attachRunner(pre);
   }
 }
 

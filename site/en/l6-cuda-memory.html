@@ -51,7 +51,7 @@
   <li><strong>PTX compatibility:</strong> some PTX instructions exist only on higher compute capabilities (e.g. warp shuffle 5.0+). <code>-arch</code> sets the compute capability assumed when compiling C++ → PTX (always give it for maximum performance). PTX for a given compute capability can always be compiled to binary of <strong>equal or greater</strong> capability. But a binary compiled from older PTX cannot use newer hardware features (e.g. a Volta 7.0 binary from Pascal 6.0 PTX does not use Tensor Cores).</li>
   <li><strong>Application compatibility:</strong> to run on future architectures (for which no binary can be generated yet), an application must contain <strong>PTX</strong> to be JIT-compiled.</li>
 </ul>
-<pre class="code" data-title="-gencode example (slides 19–20)">
+<pre class="code" data-run="arch_info.cu" data-run-note="A command line; the program prints your GPU's compute capability and the loaded code's __CUDA_ARCH__. Try the -gencode flags with ✎." data-title="-gencode example (slides 19–20)">
 nvcc x.cu -gencode arch=compute_50,code=sm_50
           -gencode arch=compute_60,code=sm_60
           -gencode arch=compute_70,code=\"compute_70,sm_70\"
@@ -98,7 +98,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li>Use <strong>shared memory</strong>.</li>
 </ol>
 <p>Details, segment calculations, pitch and the transpose: <a href="coalescing.html">Coalescing page</a>. In short: <code>cudaMalloc</code> addresses are aligned to at least 256 bytes; but in a 2D array the start of the next row depends on the width, so <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code> pad the rows and return a pitch. An instruction accessing addressable memory (global, local, shared, constant, texture) may have to be re-issued several times depending on the distribution of addresses across the warp.</p>
-<pre class="code" data-title="3D pitched access (slide 41)">
+<pre class="code" data-run="pitch3d.cu" data-title="3D pitched access (slide 41)">
 cudaExtent extent = make_cudaExtent(width * sizeof(float), height, depth);
 cudaPitchedPtr devPitchedPtr;
 cudaMalloc3D(&devPitchedPtr, extent);
@@ -153,7 +153,7 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
   <li>A request is split into as many separate requests as there are <strong>different addresses</strong> in it (throughput drops accordingly); served at constant-cache speed on a hit, at device-memory speed otherwise.</li>
   <li><strong>Best scenario: all threads read the same address</strong> (the opposite of global memory, where consecutive addresses are good).</li>
 </ul>
-<pre class="code" data-title="Usage">
+<pre class="code" data-run="constant.cu" data-title="Usage">
 __constant__ float constData[256];          // outside any function
 float data[256];                             // host-side buffer
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel launch
@@ -184,7 +184,7 @@ cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel l
   </tbody>
 </table>
 <p><strong>CUDA arrays:</strong> <strong>opaque</strong> (no direct access to values) 1D/2D/3D memory layouts optimised for texture fetching; elements with 1, 2 or 4 components (8/16/32-bit integers, 16/32-bit floats). Kernels access them only through texture fetches (read) or surface reads/writes.</p>
-<pre class="code" data-title="texRotate.cu (class example): image rotation with a texture, summary">
+<pre class="code" data-run="texrotate.cu" data-title="texRotate.cu (class example): image rotation with a texture, summary">
 // Host: 1) allocate CUDA array  2) copy data  3) resDesc  4) texDesc  5) create texture object
 cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 cudaArray_t cuArray;

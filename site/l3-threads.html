@@ -30,7 +30,7 @@
   <li>Ne işe yarar: (1) performans (çok çekirdek), (2) arka plan görevleri, (3) asenkron işlem (bloklamayan çağrılar: ör. <code>cudaMemcpyAsync</code> hemen döner), (4) program yapısını iyileştirmek.</li>
   <li>C++11 öncesi pThreads (POSIX); C++11'den beri standart <code>std::thread</code>.</li>
 </ul>
-<pre class="code" data-title="C++11 thread">
+<pre class="code" data-run="threads_basic.cpp" data-title="C++11 thread">
 #include <thread>
 #include <vector>
 void work(int id, int* out) { out[id] = id * id; }
@@ -60,7 +60,7 @@ int main() {
     <tr><td><strong>Semafor</strong></td><td>Mutex gibi ama <strong>N thread</strong>'in girmesine izin verir: kritik kaynakları (CPU, G/Ç, RAM) kullanan thread sayısını sınırlar. Binary (0/1) ya da counting. Kaynak sayacı, kilit, sinyal mekanizması olarak kullanılabilir.</td></tr>
   </tbody>
 </table>
-<pre class="code" data-title="Semafor (mantıksal) uygulaması">
+<pre class="code" data-run="semaphore.cpp" data-run-note="Sözde kod; çalışan hâli std::atomic ile yazılmış aynı semafor (en fazla 3 thread içeride)." data-title="Semafor (mantıksal) uygulaması">
 acquire() {                       release() {
     while (1) {                       atomic { count++; return; }
         atomic {                  }
@@ -97,7 +97,7 @@ acquire() {                       release() {
 
 <h2>Producer-consumer</h2>
 <p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>
-<pre class="code" data-title="Senkronizasyonlu sözde kod">
+<pre class="code" data-run="prodcons.cpp" data-run-note="Sözde kod; çalışan hâli 2 üretici, 3 tüketici, BUFFSIZE = 100." data-title="Senkronizasyonlu sözde kod">
 // producer                          // consumer
 slotsAvail.acquire();                resAvail.acquire();
 l.acquire();                         l.acquire();
@@ -115,7 +115,7 @@ resAvail.release();                  slotsAvail.release();
   <li>Atomik işlemlerle kilit oluşturmak, kilitlerin yerini almak ya da tamamlamak mümkün (lock-free veri yapıları: <code>is_lock_free()</code>, donanım destekliyor mu?). Örnek: <code>atomic&lt;bool&gt;</code> kilit olarak (spin lock). Floating-point atomikler C++20'de.</li>
   <li>GPU'da atomik işlemler çok yavaş olabilir (histogram örneği: aynı kutuya çok yazma).</li>
 </ul>
-<pre class="code" data-title="atomic&lt;bool&gt; ile spin lock">
+<pre class="code" data-run="spinlock.cpp" data-title="atomic&lt;bool&gt; ile spin lock">
 std::atomic<bool> locked{false};
 void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
 void unlock() { locked.store(false); }
@@ -133,7 +133,7 @@ void unlock() { locked.store(false); }
   <li><strong>Condition variable:</strong> monitör içinde bir koşulu beklemek için: <code>wait()</code> kilidi bırakıp uyur, <code>notify_one()/notify_all()</code> uyandırır. Sinyal veren thread devam ederse uyanan koşulu yeniden kontrol etmeli (<code>while</code> döngüsü).</li>
   <li>C++11: <code>std::mutex</code> + <code>std::unique_lock</code> + <code>std::condition_variable</code>.</li>
 </ul>
-<pre class="code" data-title="C++11 monitör deseni">
+<pre class="code" data-run="monitor.cpp" data-title="C++11 monitör deseni">
 class Monitor {
     std::mutex m; std::condition_variable cv; int count = 0;
 public:
