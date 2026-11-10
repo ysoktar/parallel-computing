@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPUs and CUDA · Parallel Computing</title>
+<meta name="description" content="Lecture 4: GPU vs CPU, SIMD/SIMT, why multi-core, the general CUDA approach, terminology (host, device, SM, warp, block), the thread hierarchy and linear thread index, blocks and scalability, thread block clusters, the memory hierarchy, compute capability.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l4-cuda-intro">
+<main><div class="content">
+
+<h1>GPUs and CUDA</h1>
+<p class="lead">Why does a GPU have so many FLOPs, and how do we program it for general-purpose computing? The basic concepts: host/device, SIMT, grid → block → thread, warps, the memory hierarchy.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Explain why CPUs and GPUs spend their silicon differently.</li>
+    <li>Tell SIMD from SIMT.</li>
+    <li>Compute the linear thread index and the warp in a 1D/2D/3D block.</li>
+    <li>Say why blocks must be independent and how this relates to scalability.</li>
+  </ul>
+</div>
+
+<h2>GPUs and CUDA</h2>
+<ul>
+  <li><strong>GPU</strong>: designed for visual tasks (2D/3D graphics, games, CAD, effects); pushed by the consumer market to very high FP throughput and memory bandwidth. Programmable since around 2001.</li>
+  <li><strong>CUDA</strong> (Compute Unified Device Architecture): the hardware + software that make GPUs programmable; C, C++ and Fortran flavours. CUDA C/C++ extends C with a small group of keywords. <strong>GPGPU</strong>: general-purpose computing on GPUs (CUDA / OpenCL).</li>
+  <li>Before CUDA: data was wrapped into OpenGL structures to fake graphics operations, since most graphics operations are FP matrix/vector operations.</li>
+  <li>GPU cores are called <strong>Streaming Multiprocessors (SMs)</strong>: a combination of scalar processors (SPs), local cache and special function units. An SM executes thread blocks, an SP one thread of a block.</li>
+</ul>
+<h3>The reason for the difference</h3>
+<div class="two-col">
+  <div><p><strong>CPU:</strong> very complicated control logic + large multilevel caches. Ideal for random-access, independent-task parallel execution; latency-oriented.</p></div>
+  <div><p><strong>GPU:</strong> data-level parallelism. Simple control logic, small caches → more transistors for computation. Faster, more optimised memory types. Suited to SIMD/SIMT execution; throughput-oriented.</p></div>
+</div>
+<p>Architecture examples: discrete GPU (over PCIe), memory controller integrated in the CPU (AMD Athlon 64, Intel Nehalem), and CPU+GPU on one chip (AMD APU; with hUMA, a unified memory space and cache coherence).</p>
+
+<h2>SIMD and SIMT</h2>
+<ul>
+  <li><strong>SIMD</strong> (Single Instruction Multiple Data): the same instruction is applied to many data elements in parallel (vector processors).</li>
+  <li><strong>SIMT</strong> (Single Instruction Multiple Thread): the same instruction is executed by many threads in parallel. A more flexible version of SIMD. <strong>CUDA is SIMT</strong>: you can give threads different tasks, but as <strong>thread divergence</strong> increases, performance drops.</li>
+  <li>Since the same instruction is applied to everyone, flow control stays simple. With high arithmetic intensity (instructions / memory access), memory latency is hidden with computation instead of big caches.</li>
+  <li>Data-parallel programming: data elements → parallel threads. 3D rendering, image/video processing, encoding, stereo vision, object recognition, physics simulation, finance, biology…</li>
+</ul>
+
+<h2>Why multi-core?</h2>
+<ul>
+  <li><strong>Moore's law</strong>: the number of transistors on an integrated circuit doubles every ~2 years (the rate is slowing).</li>
+  <li>Raising the frequency is no longer possible: power scales with the cube of frequency (P ∝ f³), high clocks are hard to generate and distribute; heat and waveform degradation.</li>
+  <li><strong>Multi-core</strong>: more power-efficient at lower frequencies; performance by running several operations at once. The catch: performance needs <strong>parallelised software</strong>.</li>
+  <li>Some tasks are inherently serial; the CPU suits them better. No single processor is best for everything → <strong>heterogeneous</strong> multi-core platforms (where OpenCL comes in). Power limits in mobile/embedded systems also force multi-core.</li>
+</ul>
+
+<h2>The general CUDA approach</h2>
+<ol>
+  <li>Analyse the code, find the bottlenecks (profiling): parts that take most of the time and are compute-heavy and/or bandwidth-hungry (not disk, user input, network waits).</li>
+  <li>Find the data-parallel parts (some algorithms are serial: Newton's method, most compression algorithms).</li>
+  <li>Copy the required inputs from CPU memory to GPU memory (PCIe; exception: zero-copy, unified DRAM).</li>
+  <li>Compute on the GPU: find a good <strong>thread → data mapping</strong>, write the kernels.</li>
+  <li>Copy the results back to the CPU.</li>
+  <li>Check that GPU results match CPU results (within tolerance). Careful: FP operations are <strong>commutative but not associative</strong>: <code>(a + b) + c ≠ a + (b + c)</code> is possible.</li>
+  <li>Iterate: how close are we to the theoretical peak GFLOPS and GB/s? If not, optimise.</li>
+</ol>
+<p>Where to expect good gains: code applying the same operation to all data points; mostly <code>float</code> code (double is supported but slow, especially on old architectures); code where the data to move is small compared to the computation per element.</p>
+
+<h2>Terminology</h2>
+<table class="simple">
+  <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Host / device</td><td>CPU = host (controller: prepares the device, submits work); GPU = device (coprocessor: executes the work, returns the result).</td></tr>
+    <tr><td>SM</td><td>The building block of the GPU, similar to a CPU core.</td></tr>
+    <tr><td>Thread</td><td>Work element. No need to spawn/schedule explicitly; the hardware manages it.</td></tr>
+    <tr><td>Warp</td><td>32 threads created, scheduled and executed together.</td></tr>
+    <tr><td>Block (CTA)</td><td>A group of threads executing on the same SM (Cooperative/Concurrent Thread Array).</td></tr>
+    <tr><td>Kernel</td><td>A <code>__global__</code> GPU function; called with <code>&lt;&lt;&lt;numberOfBlocks, threadsPerBlock&gt;&gt;&gt;</code>.</td></tr>
+  </tbody>
+</table>
+
+<h2>Thread hierarchy</h2>
+<ul>
+  <li><code>threadIdx</code> is a 3-component vector (<code>.x .y .z</code>): the thread's coordinates in a 3D thread cube. Arranged as 1D (vector), 2D (matrix), 3D (volume). <strong>Rule of thumb: thread dimensionality → data dimensionality.</strong></li>
+  <li>A fixed-size group of threads = a <strong>thread block</strong>; its dimensions are decided before launch and read in the kernel via <code>blockDim</code>. On current GPUs a block has at most <strong>1024</strong> threads.</li>
+  <li>Threads are created/executed in warps; thread → warp assignment is not arbitrary, the thread <strong>index</strong> decides it:</li>
+</ul>
+<div class="formula-box">1D: index = threadIdx.x
+2D: index = threadIdx.y * blockDim.x + threadIdx.x
+3D: index = threadIdx.z * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x
+warp  = index / 32</div>
+<div class="callout example">
+  <p><code>dim3 block(16, 8, 2)</code>: 256 threads, 8 warps. <code>threadIdx = (5, 3, 1)</code> → index = 1·16·8 + 3·16 + 5 = 128 + 48 + 5 = <strong>181</strong> → warp 181/32 = <strong>5</strong>.</p>
+</div>
+<pre class="code" data-title="Simple examples">
+__global__ void VecAdd(float* A, float* B, float* C) {   // <<<1, N>>>: 1 block, N threads
+    int i = threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+__global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
+    const int i = threadIdx.y * blockDim.x + threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+</pre>
+<p class="small muted">The slides' <code>blockDimx.x</code> is a typo for <code>blockDim.x</code>.</p>
+
+<h2>Blocks and scalability</h2>
+<ul>
+  <li>Thread blocks <strong>must execute independently</strong>: it must be possible to run them in any order, in parallel or in series. You cannot control which block runs on which SM. This lets the program <strong>scale</strong> with the number of SMs.</li>
+  <li>The CUDA approach: first partition the problem into <strong>coarse sub-problems</strong> solved independently in blocks (no interaction between blocks); then partition each sub-problem into finer pieces solved <strong>cooperatively</strong> by the block's threads (local interactions within the block).</li>
+  <li>Threads in a block share data through shared memory and synchronise with <code>__syncthreads()</code> (a barrier: nobody proceeds until all arrive; lightweight).</li>
+  <li>Design: (1) design blocks so that all local interactions of the algorithm happen within a block, (2) design the thread mapping to process each data element within the block, (3) remember that blocks run independently on SMs in no deterministic order.</li>
+</ul>
+<h3>Thread block clusters (compute 9.0)</h3>
+<ul>
+  <li>An optional new level: thread → block → <strong>cluster</strong>. Just as a block's threads are guaranteed to be co-scheduled on one SM, a cluster's blocks are co-scheduled on one <strong>GPC</strong> (GPU Processing Cluster). (Ampere: 2 SMs = 1 TPC, 8 TPCs = 1 GPC, 8 GPCs = the full GPU.)</li>
+  <li>Largest portable cluster: 8 blocks. At compile time with <code>__cluster_dims__(X,Y,Z)</code> or at run time with <code>cudaLaunchKernelEx</code>. The grid dimension must be a multiple of the cluster size.</li>
+  <li>Blocks in a cluster can synchronise in hardware with <code>cluster.sync()</code> and access <strong>distributed shared memory</strong>.</li>
+</ul>
+
+<h2>Memory hierarchy</h2>
+<ul>
+  <li>Each thread has private <strong>local</strong> memory.</li>
+  <li>Each block has <strong>shared</strong> memory visible to all its threads, with the block's lifetime.</li>
+  <li>All threads access the same <strong>global</strong> memory.</li>
+  <li>Two additional read-only memories: <strong>constant</strong> and <strong>texture</strong>. Global, constant and texture persist across kernel launches.</li>
+</ul>
+<p>Details: <a href="l5-cuda-kernels.html#cuda-memory-types">L5 memory types</a>, <a href="l6-cuda-memory.html">L6</a>.</p>
+
+<h2>Compute capability</h2>
+<p>Major.minor. The same major = the same core architecture (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = incremental improvement, new features. Newer architecture, better CUDA capabilities.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>In a <code>dim3 block(32, 4, 2)</code> block, which warp is the thread with <code>threadIdx = (0, 2, 1)</code> in?</p>
+  <ol>
+    <li data-why="The z component was forgotten: 2·32 = 64 → warp 2.">2</li>
+    <li data-why="The linear index is 192, 192/32 = 6, not 1.">1</li>
+    <li data-why="1·32·4 + 2·32 + 0 = 128 + 64 = 192 → 192/32 = 6.">6</li>
+    <li data-why="The block has 256/32 = 8 warps in total; the question is about one thread's warp.">8</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>What lets CUDA programs run unchanged on GPUs with different numbers of SMs?</p>
+  <ol>
+    <li data-why="The warp size is constant, but it is not the reason for scalability.">The warp size being 32 on every GPU.</li>
+    <li data-why="True: independent blocks can be distributed to any SM in any order.">Thread blocks being independent and runnable in any order.</li>
+    <li data-why="__syncthreads is within a block.">__syncthreads() synchronising all blocks.</li>
+    <li data-why="The programmer cannot control block → SM assignment.">The programmer assigning blocks to SMs by hand.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU results do not match CPU results bit for bit. The most likely reason?</p>
+  <ol>
+    <li data-why="GPUs support IEEE 754 floats.">The GPU does not support floats.</li>
+    <li data-why="Commutativity holds (a+b = b+a).">FP addition is not commutative.</li>
+    <li data-why="A missing barrier gives wrong results, but 'small differences' typically come from ordering.">__syncthreads() is always missing.</li>
+    <li data-why="True: parallel summation changes the order of operations; FP is not associative.">FP operations are not associative; parallel code performs operations in a different order.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

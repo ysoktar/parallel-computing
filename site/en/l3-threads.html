@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threads and synchronization · Parallel Computing</title>
+<meta name="description" content="Lecture 3: what a thread is, C++11 threads, data races and race conditions, locks/mutexes/semaphores, consistency models, deadlock/livelock/starvation, producer-consumer, atomics, CAS and LL/SC, memory ordering, monitors and condition variables, futures/packaged_task, thread pools, fibers.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l3-threads">
+<main><div class="content">
+
+<h1>Threads and synchronization</h1>
+<p class="lead">Shared-memory parallel programming on the CPU: C++11 threads, data races and the tools that prevent them. The CPU counterparts of <code>__syncthreads()</code> and atomic operations on the GPU.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Tell a data race from a race condition.</li>
+    <li>Say when to use a lock, mutex, semaphore, atomic or monitor.</li>
+    <li>Define and illustrate deadlock, livelock and starvation.</li>
+  </ul>
+</div>
+
+<h2>What is a thread?</h2>
+<ul>
+  <li><strong>Process:</strong> a running program with its own address space, open files and PID (<code>fork()</code> copies a process: expensive). <strong>Thread:</strong> a separate flow of execution inside a process; it has its own program counter, stack, registers and state, but <strong>shares</strong> the address space with the other threads of the process. A "lightweight process": cheaper to create and switch.</li>
+  <li>What they are good for: (1) performance (multi-core), (2) background tasks, (3) asynchronous processing (non-blocking calls: e.g. <code>cudaMemcpyAsync</code> returns immediately), (4) improving program structure.</li>
+  <li>Before C++11, pThreads (POSIX); since C++11, the standard <code>std::thread</code>.</li>
+</ul>
+<pre class="code" data-title="C++11 threads">
+#include <thread>
+#include <vector>
+void work(int id, int* out) { out[id] = id * id; }
+int main() {
+    int out[8];
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 8; i++) ts.emplace_back(work, i, out);   // fork
+    for (auto& t : ts) t.join();                                  // join
+}
+</pre>
+
+<h2>Sharing data and races</h2>
+<ul>
+  <li>Reads only: no problem. If at least one writes: problems.</li>
+  <li><strong>Data race:</strong> multiple threads access the same variable concurrently and <strong>at least one writes</strong>. Undefined behaviour in C/C++; the compiler may assume it does not happen.</li>
+  <li><strong>Race condition:</strong> an error where the ordering of events compromises correctness. Not every data race causes a race condition (you may get the right output by luck); not every race condition comes from a data race (remove the data race with atomics and the order of operations can still give varying output).</li>
+  <li>Aligned 8-byte loads/stores are atomic on x86, but never code relying on it: larger types exist, compilers and hardware can reorder memory operations or split one read/write in two. And <strong>never assume</strong> 8-byte alignment.</li>
+  <li>GPU note: many threads writing the same variable concurrently is (much) slower on a GPU than on a CPU and a serious bottleneck; it depends on where the variable is stored (GPUs have many memory types).</li>
+</ul>
+
+<h2>Locks, mutexes, semaphores</h2>
+<table class="simple">
+  <thead><tr><th>Tool</th><th>Property</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Lock</strong></td><td>One thread at a time in the protected code section (<strong>critical section</strong>). Not shared between processes; the acquiring thread must release it. Some can be acquired repeatedly by the same thread (recursive), released the same number of times.</td></tr>
+    <tr><td><strong>Mutex</strong></td><td>Like a lock but can be system-wide (across processes). "Lock" usually means mutex. Mutual exclusion; like a binary semaphore that admits one thread at a time + <strong>ownership</strong>.</td></tr>
+    <tr><td><strong>Semaphore</strong></td><td>Like a mutex but admits <strong>N threads</strong>: limits the number of threads using critical resources (CPU, I/O, RAM). Binary (0/1) or counting. Usable as a resource counter, a lock, a signalling mechanism.</td></tr>
+  </tbody>
+</table>
+<pre class="code" data-title="Semaphore (logical) implementation">
+acquire() {                       release() {
+    while (1) {                       atomic { count++; return; }
+        atomic {                  }
+            if (count > 0) { count--; return; }
+        }
+    }
+}
+</pre>
+<ul>
+  <li>Without atomic support in hardware, true parallel programming is impossible.</li>
+  <li>If waiters are kept in a FIFO queue the semaphore is <strong>strong</strong>, otherwise <strong>weak</strong> (starvation possible).</li>
+  <li>A binary semaphore can be used for the "wait on an event" case (one thread releases, another acquires).</li>
+  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII wrappers <code>std::lock_guard</code> (releases at end of scope) and <code>std::unique_lock</code> (deferred locking, used with condition variables). Class examples: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
+  <li><strong>Lazy init / call once:</strong> initialise a resource exactly once on first use (<code>std::call_once</code>); e.g. a video decoder.</li>
+  <li><strong>Recursive locks:</strong> a normal mutex acquired twice by the same thread deadlocks; a recursive mutex allows it.</li>
+</ul>
+
+<h2>Consistency models</h2>
+<ul>
+  <li>Design concerns: cache <strong>coherence</strong> (the same address) and the memory <strong>consistency model</strong> (the order in which operations on different addresses become visible).</li>
+  <li><strong>Sequential consistency:</strong> events on shared objects should appear to happen one at a time and take effect in program order for each thread. Events of different threads may be shifted so that the overall history satisfies the object's sequential specification.</li>
+  <li>In high-level languages compiler optimisations can make the generated code very different from a sequential translation (instruction reordering), but the result preserves sequential consistency (from a single thread's point of view).</li>
+</ul>
+
+<h2>Things that can go wrong</h2>
+<table class="simple">
+  <thead><tr><th>Situation</th><th>Definition</th><th>CPU usage</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Deadlock</strong></td><td>Two or more threads wait forever for each other's resources while holding their own (P1 holds R2, P2 holds R1; each wants the other). Nobody progresses.</td><td>Low (sleeping)</td></tr>
+    <tr><td><strong>Livelock</strong></td><td>Threads are not blocked but too busy responding to each other; no progress (two people in a narrow corridor dodging the same way).</td><td>High (spent on the lock mechanism)</td></tr>
+    <tr><td><strong>Starvation</strong></td><td>A thread able to continue is postponed indefinitely; priorities or unfair scheduling (P1 and P3 alternate, P2 never gets in). No deadlock.</td><td>Normal</td></tr>
+  </tbody>
+</table>
+
+<h2>Producer-consumer</h2>
+<p>Producers put items into a shared buffer (e.g. <code>BUFFSIZE = 100</code>), consumers take them. Three semaphores: <code>slotsAvail</code> (initially BUFFSIZE), <code>resAvail</code> (initially 0), and a mutex (<code>l</code>) protecting the buffer indices.</p>
+<pre class="code" data-title="Pseudocode with synchronisation">
+// producer                          // consumer
+slotsAvail.acquire();                resAvail.acquire();
+l.acquire();                         l.acquire();
+buffer[in] = item;                   item = buffer[out];
+in = (in + 1) % BUFFSIZE;            out = (out + 1) % BUFFSIZE;
+l.release();                         l.release();
+resAvail.release();                  slotsAvail.release();
+</pre>
+<p>Without synchronisation: writing into a full buffer (old data lost), reading from an empty one, two threads using the same <code>in/out</code> index. Termination: with a shared data item (e.g. the total number to produce) or by sending consumers a special "done" message (poison pill).</p>
+
+<h2>Atomics</h2>
+<ul>
+  <li><code>std::atomic&lt;T&gt;</code>: operations are indivisible; a notification to the compiler. An atomic read has <strong>acquire</strong> semantics, an atomic write <strong>release</strong> semantics (default seq_cst).</li>
+  <li>Hardware support: <strong>CAS</strong> (compare-and-swap/exchange): compares a memory location with a value, stores the new value if they match, returns the value read in any case (x86: <code>CMPXCHG</code>). <strong>LL/SC</strong> (load-link / store-conditional): LL reads the value; SC writes only if nobody wrote the location in between (ARM, PowerPC).</li>
+  <li>Atomic operations can build locks, replace them or complement them (lock-free data structures: <code>is_lock_free()</code>, does the hardware support it?). Example: <code>atomic&lt;bool&gt;</code> as a lock (spin lock). Floating-point atomics in C++20.</li>
+  <li>On GPUs atomic operations can be very slow (the histogram example: many writes to the same bin).</li>
+</ul>
+<pre class="code" data-title="A spin lock with atomic&lt;bool&gt;">
+std::atomic<bool> locked{false};
+void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
+void unlock() { locked.store(false); }
+</pre>
+<h3>Memory ordering</h3>
+<ul>
+  <li><code>memory_order_relaxed</code>: changes are not forcibly propagated to other cores; threads may see different value sequences. Do not use unless you are very sure.</li>
+  <li><code>memory_order_acquire</code> / <code>release</code> (+ <code>acq_rel</code>, <code>consume</code>): changes propagate between pairs of threads; the writer uses release, the reader acquire. For older ARM/PowerPC.</li>
+  <li><code>memory_order_seq_cst</code> (default): all threads see a variable's values in the same order.</li>
+</ul>
+
+<h2>Monitors and condition variables</h2>
+<ul>
+  <li>Semaphores are flexible but hard to use correctly (the logic is spread over threads); atomics are even riskier. <strong>Monitor:</strong> an object designed to be accessed safely by multiple threads: its methods run under mutual exclusion (one thread inside at a time).</li>
+  <li><strong>Condition variable:</strong> for waiting on a condition inside a monitor: <code>wait()</code> releases the lock and sleeps, <code>notify_one()/notify_all()</code> wakes. If the signalling thread continues, the woken thread must recheck the condition (a <code>while</code> loop).</li>
+  <li>C++11: <code>std::mutex</code> + <code>std::unique_lock</code> + <code>std::condition_variable</code>.</li>
+</ul>
+<pre class="code" data-title="The C++11 monitor pattern">
+class Monitor {
+    std::mutex m; std::condition_variable cv; int count = 0;
+public:
+    void put()  { std::unique_lock<std::mutex> l(m); count++; cv.notify_one(); }
+    void take() { std::unique_lock<std::mutex> l(m);
+                  cv.wait(l, [&]{ return count > 0; });   // releases the lock while waiting
+                  count--; }
+};
+</pre>
+
+<h2>Asynchronous threads and thread management</h2>
+<ul>
+  <li><code>std::async</code> + <code>std::future</code>: run a function asynchronously and get its result later with <code>get()</code>. <code>std::packaged_task</code>: wraps a callable whose result is reached through a future (for task queues/thread pools).</li>
+  <li><strong>Dynamic</strong> (a new thread per task) vs <strong>static</strong> thread management (a <strong>thread pool</strong>). Pool pros: no per-task start-up cost; the thread count can match the workload (more for I/O-bound, one per core for CPU-bound); thousands of tasks for good load balancing; fewer system resources. Cons: complexity, deadlock risk with dependencies between tasks.</li>
+  <li><strong>Fibers / user-level threads</strong> (<code>boost::fibers</code>): scheduled by a library rather than the OS; tiny creation/switch overhead ("lightweight/green threads"), thousands easily, custom schedulers, portable. Con: if one makes a blocking system call, all block; no direct multi-core benefit.</li>
+</ul>
+<div class="callout key">
+  <p><strong>The CPU ↔ GPU bridge:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel launch + <code>cudaDeviceSynchronize()</code>; a barrier ≈ <code>__syncthreads()</code> (but within a block only); <code>std::atomic</code> ≈ <code>atomicAdd</code>; the histogram exercise shows the same race problem in both worlds.</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>Two threads only read the same <code>int</code>. Is this a data race?</p>
+  <ol>
+    <li data-why="A data race needs at least one write.">Yes, concurrent access is always a data race.</li>
+    <li data-why="True: reads only are no problem.">No, there is no data race unless at least one thread writes.</li>
+    <li data-why="Alignment does not change this.">Only if the variable is misaligned.</li>
+    <li data-why="No atomic needed; there is no write.">Only if it is not atomic.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Threads cannot make progress but CPU usage is high. Which is it?</p>
+  <ol>
+    <li data-why="In a deadlock threads wait/sleep; CPU is low.">Deadlock</li>
+    <li data-why="In starvation other threads progress.">Starvation</li>
+    <li data-why="True: in a livelock threads are busy responding to each other.">Livelock</li>
+    <li data-why="A race condition means wrong results, not lack of progress.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>The key difference between a mutex and a semaphore?</p>
+  <ol>
+    <li data-why="True: a semaphore admits N threads via its counter; a mutex one thread, with ownership.">A semaphore can admit N threads at once; a mutex one.</li>
+    <li data-why="Both can be cross-process.">A semaphore works only within one process.</li>
+    <li data-why="Both are implemented with atomic operations.">A mutex needs no atomic operations.</li>
+    <li data-why="With a mutex the acquiring thread must release (ownership); a semaphore can be released by another thread.">A mutex can be released by another thread.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

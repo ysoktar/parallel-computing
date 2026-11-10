@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parallel program design · Parallel Computing</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), decomposition patterns (task, divide-and-conquer, geometric, recursive data, pipeline, event-based), program structure patterns (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l2-design">
+<main><div class="content">
+
+<h1>Parallel program design</h1>
+<p class="lead">In a parallel program the order of statements is not unique; without careful design, erroneous updates and blocked communications creep in. The goals: <strong>correctness</strong> and <strong>performance</strong>.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>State the four PCAM steps and each step's rule of thumb.</li>
+    <li>Choose a suitable decomposition pattern for a problem.</li>
+    <li>Tell GPLS and GSLP program structure patterns apart.</li>
+  </ul>
+</div>
+
+<h2>Ask first: is parallel necessary and achievable?</h2>
+<ul>
+  <li>The algorithm may not allow a parallel implementation; time/engineering resources may be missing.</li>
+  <li>Parallel execution may need a completely new algorithm. GPUs impose so many restrictions on program structure that a complete redesign is typical.</li>
+</ul>
+
+<h2>PCAM</h2>
+<p>Partitioning, Communication, Agglomeration, Mapping: Ian Foster's (1995) four-step design method. Roughly: find pieces of work that can run concurrently, assign them to processors with their communication needs in mind.</p>
+<table class="simple">
+  <thead><tr><th>Step</th><th>What happens</th><th>Rule of thumb</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Partitioning</strong></td><td>Break the computation into as many pieces as possible; bring out the parallelism. <em>Functional decomposition</em> (by steps) or <em>domain/data decomposition</em> (by data).</td><td>Number of pieces 10–100 times the number of nodes.</td></tr>
+    <tr><td><strong>Communication</strong></td><td>Dependencies between tasks and the volume of data to pass are determined → the <strong>task dependency graph</strong> (node = task, edge = communication volume).</td><td>Ideal: totally independent tasks.</td></tr>
+    <tr><td><strong>Agglomeration</strong></td><td>Group tasks to reduce communication; communication within a group disappears.</td><td>Number of groups ~10 times the number of nodes.</td></tr>
+    <tr><td><strong>Mapping</strong></td><td>Assign the groups to nodes: <strong>load balance</strong> + reduce communication by putting heavily communicating groups on the same node (communication over shared memory is virtually free).</td><td>NP-complete in general → heuristics.</td></tr>
+  </tbody>
+</table>
+<p>Duplicating computations can improve performance by removing the need to communicate their results. Examples: matrix addition (fully independent), 2D convolution (needs neighbour data).</p>
+
+<h2>Decomposition patterns</h2>
+<p>The six patterns of Mattson et al.; functional and data decomposition are joined by <strong>data flow</strong> decomposition. There is no strict separation; a problem can be decomposed in several ways.</p>
+<h3>Task parallelism</h3>
+<p>Modules on different nodes: e.g. a game loop's <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> as separate tasks, with a <code>barrier()</code> at the end of each iteration. Works without complex dependencies but <strong>does not scale</strong>: the number of nodes cannot exceed the number of tasks.</p>
+<h3>Divide-and-conquer</h3>
+<pre class="code">
+DnC(A) {
+    if (A is a base case) return solution(A);
+    split A into N subproblems B[N];
+    for (int i = 0; i < N; i++) sol[i] = DnC(B[i]);
+    return mergeSolution(sol);
+}
+</pre>
+<ul>
+  <li>Example: merge sort. <strong>The dependency graph is not the call graph.</strong> For an 8-element merge sort the maximum concurrency is 4 tasks (size-1 calls do no work).</li>
+  <li>Tasks are generated dynamically at run time (long impossible on GPUs). Generation stops at a given size or at the number of processors; the parent can solve one subproblem itself instead of idling (N − 1 new tasks).</li>
+</ul>
+<h3>Geometric decomposition</h3>
+<p>Arrays/matrices are split along one or more dimensions and assigned to tasks. With no dependencies between data: <strong>embarrassingly parallel</strong>. Example: the 5-point Laplace filter <code>[0 1 0; 1 −4 1; 0 1 0]</code>: each output needs 5 values → neighbour (halo) rows are needed at region borders. This is the block/tile approach on GPUs.</p>
+<h3>Recursive data decomposition</h3>
+<p>Trees, lists, graphs are decomposed into elements assigned to nodes; the algorithm may be modified (similar to dynamic programming). Example: partial sums (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: sums of groups of 2, then 4, then 8.</p>
+<h3>Pipeline</h3>
+<ul>
+  <li>An assembly line: each stage applies an operation to an item. CPU instruction pipelines, signal processing (FFT → coefficient manipulation → inverse FFT), graphics pipelines, Unix shell pipes.</li>
+  <li>A benefit only if the stages run <strong>concurrently on different items</strong>. Stage durations should be close: <strong>the slowest stage dictates the pipeline's speed</strong> (throughput ≤ 1 / longest stage duration).</li>
+</ul>
+<h3>Event-based coordination</h3>
+<p>The communication flow is not fixed; tasks interact dynamically at run time; the execution profile cannot be known in advance. Example: discrete-event simulation (event = time-stamped message).</p>
+
+<h2>Program structure patterns</h2>
+<div class="two-col">
+  <div>
+    <p><strong>GPLS</strong> (Globally Parallel, Locally Sequential): many tasks concurrently, each sequential.</p>
+    <ul><li>SPMD</li><li>MPMD</li><li>Master-worker</li><li>Map-reduce</li></ul>
+  </div>
+  <div>
+    <p><strong>GSLP</strong> (Globally Sequential, Locally Parallel): the program runs sequentially, requested parts in parallel.</p>
+    <ul><li>Fork/join</li><li>Loop parallelism</li></ul>
+  </div>
+</div>
+<table class="simple">
+  <thead><tr><th>Pattern</th><th>Essence</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SPMD</strong></td><td>All nodes run the same program; different data and/or different paths. Steps: initialisation → <strong>obtain a unique ID</strong> (a vector in CUDA: <code>blockIdx/threadIdx</code>) → run according to the ID → shut down and combine results. CUDA and MPI follow this pattern.</td></tr>
+    <tr><td><strong>MPMD</strong></td><td>With a heterogeneous platform or tight memory, different programs are assembled into one application.</td></tr>
+    <tr><td><strong>Master-worker</strong></td><td>The master hands out work, collects results, does I/O and user interaction. A single master can be a bottleneck → hierarchical masters. Feeding idle workers gives <strong>implicit load balancing</strong>.</td></tr>
+    <tr><td><strong>Map-reduce</strong></td><td>A master-worker derivative (Google). Apply a function to independent data (map), combine partial results with a second function (reduce). Automated tools handle deployment and load balancing.</td></tr>
+    <tr><td><strong>Fork/join</strong></td><td>Tasks are created dynamically at run time (fork) and finish before the parent resumes (join). New threads or a <strong>thread pool</strong> (reduces creation overhead).</td></tr>
+    <tr><td><strong>Loop parallelism</strong></td><td>Parallelise the loops that dominate an existing sequential code (OpenMP directives). Little effort, usually small gains.</td></tr>
+  </tbody>
+</table>
+<p>Platforms impose patterns: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>In PCAM, which step groups heavily communicating tasks into one group?</p>
+  <ol>
+    <li data-why="Partitioning splits into pieces, it does not group.">Partitioning</li>
+    <li data-why="Communication determines the communication volume.">Communication</li>
+    <li data-why="True: agglomeration groups tasks, removing communication within the group.">Agglomeration</li>
+    <li data-why="Mapping assigns groups to nodes.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What is the steady-state throughput of a 3-stage pipeline with stage times 2, 5, 3 ms?</p>
+  <ol>
+    <li data-why="The slowest stage is 5 ms → one output every 5 ms = 200 outputs/s.">One item every 5 ms</li>
+    <li data-why="The total 10 ms is one item's latency, not the throughput.">One item every 10 ms</li>
+    <li data-why="The average stage time does not decide the pipeline.">One item every 3.33 ms</li>
+    <li data-why="The slowest stage decides, not the fastest.">One item every 2 ms</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which program structure pattern do CUDA kernels fit best?</p>
+  <ol>
+    <li data-why="The number of tasks is limited; CUDA is data-parallel.">Task parallelism</li>
+    <li data-why="Threads do not run different programs.">MPMD</li>
+    <li data-why="Not event-based.">Event-based coordination</li>
+    <li data-why="True: one program (the kernel), each thread different data via its ID.">SPMD</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

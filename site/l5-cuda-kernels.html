@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kernel, indeks, shared memory · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 5: vektör/matris toplama, matris çarpımı, cudaMalloc/cudaMemcpy/cudaFree, kernel ve fonksiyon niteleyicileri, blockIdx/threadIdx, __syncthreads, warp ve latency hiding, CGMA, bellek türleri, tiled matmul.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="l5-cuda-kernels">
+<main><div class="content">
+
+<h1>Kernel, indeks, shared memory</h1>
+<p class="lead">İç içe <code>for</code> döngüleri GPU'da nereye gider? Her thread kendi verisini nasıl bulur? Ve aynı veriyi tekrar tekrar global bellekten okumak neden kernel'i %6 verime mahkûm eder?</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Bir CPU döngüsünü kernel'e çevirmek: host tarafı (ayır, kopyala, başlat, geri kopyala, serbest bırak) ve device tarafı.</li>
+    <li><code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>'ten satır/sütun hesaplamak.</li>
+    <li><code>__syncthreads()</code>'in kuralları; warp'lar ve latency hiding.</li>
+    <li>CGMA'yı hesaplayıp tiling'in global trafiği neden T kat azalttığını göstermek; tiled matmul kernel'ini yazmak.</li>
+  </ul>
+</div>
+
+<h2>Veri paralelliği: döngüden kernel'e</h2>
+<p>Veri paralelliği: bağımsız veri elemanları üzerinde aynı işlemin aynı anda yapılması (vektör toplama, konvolüsyon, matris-vektör ve matris-matris çarpımı). Pratik kural: <strong>düzenli indekslenen iç içe <code>for</code> döngüleri gördüğünüzde büyük ihtimalle paralelleştirilebilir.</strong></p>
+<div class="two-col">
+<pre class="code" data-title="C">
+for (int i = 0; i < N; i++)
+    C[i] = A[i] + B[i];
+</pre>
+<pre class="code" data-title="CUDA: döngü kayboldu, i = thread numarası">
+__global__ void VecAdd(float* A, float* B, float* C) {
+    int i = threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+// VecAdd<<<1, N>>>(A, B, C);   // 1 blok, N thread
+</pre>
+</div>
+<div class="two-col">
+<pre class="code" data-title="C: matris toplama">
+for (int i = 0; i < N; i++)
+    for (int j = 0; j < N; j++)
+        C[i*N + j] = A[i*N + j] + B[i*N + j];
+</pre>
+<pre class="code" data-title="CUDA: 2D blok, lineer indeks">
+__global__ void MatAdd(float* A, float* B, float* C) {
+    const int i = threadIdx.y * blockDim.x + threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+// dim3 threadsPerBlock(N, N);
+// MatAdd<<<1, threadsPerBlock>>>(A, B, C);
+</pre>
+</div>
+
+<h3>Matris çarpımı: CPU versiyonu</h3>
+<pre class="code">
+void MatrixMultiplication(float* M, float* N, float* P, int width) {
+    for (int i = 0; i < width; ++i)
+        for (int j = 0; j < width; ++j) {
+            float sum = 0;
+            for (int k = 0; k < width; ++k)
+                sum += M[i*width + k] * N[k*width + j];
+            P[i*width + j] = sum;
+        }
+}
+</pre>
+<p>Çıktıdan başlayın: <strong>bir çıktı elemanı = bir iç çarpım = bir <code>for</code> döngüsü</strong>, ve komşu çıktı elemanları birbirinden bağımsız. Yani her thread bir <code>P[i][j]</code> hesaplayabilir; dıştaki iki döngü thread'lere dönüşür, içteki <code>k</code> döngüsü thread'in içinde kalır.</p>
+
+<h2>Host tarafı: ayır, kopyala, başlat</h2>
+<p>GPU bir <strong>yardımcı işlemcidir</strong> (coprocessor): paralel işi ona aktarırız (offload), sonucu geri kopyalayıp devam ederiz. Kernel asıl GPU kodu; gerisi kurulum ve host (CPU) tarafından çalıştırılır.</p>
+<pre class="code" data-title="Beş adım">
+void cuMatrixMultiplication(float* M, float* N, float* P, int width)
+{
+    int size = width * width * sizeof(float);
+    float *Md, *Nd, *Pd;
+    // 1. cihazda bellek ayır
+    cudaMalloc((void**)&Md, size);
+    cudaMalloc((void**)&Nd, size);
+    cudaMalloc((void**)&Pd, size);
+    // 2. girdileri cihaza kopyala
+    cudaMemcpy(Md, M, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(Nd, N, size, cudaMemcpyHostToDevice);
+    // 3. kernel'i başlat
+    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 dimGrid(width / TILE_WIDTH, width / TILE_WIDTH);
+    MatMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, width);
+    // 4. sonucu host'a geri kopyala
+    cudaMemcpy(P, Pd, size, cudaMemcpyDeviceToHost);
+    // 5. cihaz belleğini serbest bırak
+    cudaFree(Md); cudaFree(Nd); cudaFree(Pd);
+}
+</pre>
+<ul>
+  <li><code>cudaMalloc(void** devPtr, size_t size)</code>: ilk parametre <strong>pointer değişkeninin adresi</strong> (fonksiyon ayrılan adresi oraya yazar), <code>(void**)</code>'a çevrilir çünkü fonksiyon tipten bağımsızdır. İkinci parametre <strong>bayt</strong> cinsinden boyut (C'deki <code>malloc</code> gibi).</li>
+  <li><code>cudaFree(void* devPtr)</code>: <code>cudaMalloc</code> ile ayrılanı serbest bırakır.</li>
+  <li><code>cudaMemcpy(hedef, kaynak, bayt, tür)</code>: tür <code>cudaMemcpyHostToHost / HostToDevice / DeviceToDevice / DeviceToHost</code>. <strong>Senkrondur</strong> (bloklar, bitene kadar dönmez); asenkron versiyonları da var.</li>
+  <li>Kernel başlatma ise <strong>asenkrondur</strong>: süre ölçerken <code>cudaDeviceSynchronize()</code> ile bitmesini bekleyin (L6).</li>
+</ul>
+<div class="callout gotcha">
+  <p>Slayttaki <code>float* Md, Nd, Pd;</code> satırı C'de sadece <code>Md</code>'yi pointer yapar (<code>Nd</code>, <code>Pd</code> düz <code>float</code> olur). Doğrusu <code>float *Md, *Nd, *Pd;</code>. Sınavda kod yazarken dikkat.</p>
+</div>
+
+<h2>Kernel ve fonksiyon niteleyicileri</h2>
+<p>Kernel, tüm thread'lerin çalıştıracağı kodu tanımlar. <strong>SIMT</strong> (Single Instruction Multiple Threads): thread'ler aynı komutu görür ama komutun parametreleri her thread'in kendi register'larından gelir, bu yüzden farklı thread'ler farklı iş yapabilir. <code>threadIdx</code>, thread'in kendini ayırt edip verinin kendisine düşen kısmına yönelmesini sağlar (donanım register'larından okunan önceden tanımlı değişkenler).</p>
+<table class="simple">
+  <thead><tr><th>Niteleyici</th><th>Nerede çalışır</th><th>Kim çağırır</th></tr></thead>
+  <tbody>
+    <tr><td><code>__device__ float DeviceFunc()</code></td><td>Device</td><td>Device</td></tr>
+    <tr><td><code>__global__ void Kernel()</code></td><td>Device</td><td>Host</td></tr>
+    <tr><td><code>__host__ float HostFunc()</code></td><td>Host</td><td>Host</td></tr>
+  </tbody>
+</table>
+<p>Niteleyici yazılmazsa fonksiyon <code>__host__</code> sayılır. <code>__global__</code> kernel demektir, <code>void</code> döner.</p>
+<div class="two-col">
+<pre class="code" data-title="Tek bloklu ilk versiyon (slayt 23)">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[ty * width + i] * Nd[i * width + tx];
+    Pd[ty * width + tx] = sum;
+}
+// dim3 blockDim(width, width); dim3 gridDim(1, 1);
+</pre>
+<div>
+  <p><strong>Döngüler nerede?</strong> Dıştaki <code>i</code> ve <code>j</code> döngüleri gitti: yerlerini <code>ty</code> (satır) ve <code>tx</code> (sütun) aldı. İç çarpım döngüsü kaldı.</p>
+  <p><strong>Sorunu:</strong> sadece bir blok kullanıyor, yani matris en fazla blok başına thread sınırı kadar elemanlı olabilir (eski GPU'larda 512 → 16×16; yenilerde 1024 → 32×32). Daha fazla blok kullansak bile aynı <code>threadIdx</code>'e sahip farklı bloklardaki thread'ler <strong>aynı</strong> <code>Pd</code> elemanını hesaplardı, çünkü <code>blockIdx</code> kullanılmıyor.</p>
+</div>
+</div>
+
+<h2>Thread blokları ve indeksleme</h2>
+<ul>
+  <li>Bir kernel başlatılınca paralel thread'lerden oluşan bir <strong>grid</strong> olarak çalışır (binlerce-milyonlarca hafif thread).</li>
+  <li>İki seviyeli hiyerarşi: grid → bir veya daha fazla <strong>thread bloğu</strong>; grid'deki tüm blokların thread sayısı aynıdır. Her bloğun <code>blockIdx</code> koordinatı var (compute 1.x'te 2D, 2.0+ 3D).</li>
+  <li>Her blok en fazla 512 (compute 1.x) / <strong>1024</strong> (2.0+) thread'lik 3D bir dizi; thread'in blok içindeki koordinatı <code>threadIdx</code>.</li>
+  <li>1D örnek (slayt 31–33): N blok, her biri M thread → toplam N·M thread. Blok 0'ın 3. thread'i: <code>0·M + 3</code>; Blok 5'in 3. thread'i: <code>5·M + 3</code>. Genel: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
+  <li>Girdi ve çıktı eşlemesi farklı olabilir: veriyi bir eşlemeyle okuyup başka bir eşlemeyle işleyip üçüncü bir eşlemeyle yazabilirsiniz (farklı girdi/çıktı oranları, shared memory hazırlığı, sınır koşulları).</li>
+</ul>
+<pre class="code" data-title="Bloklu matmul (slayt 39): her thread P'nin bir elemanı">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
+    int col = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[row * width + i] * Nd[i * width + col];
+    Pd[row * width + col] = sum;
+}
+</pre>
+<p>Burada <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Kendi konfigürasyonunuzla deneyin: <a href="lab.html">laboratuvar</a>.</p>
+<div class="callout discuss">
+  <p><strong>Slayt 40'ın soruları.</strong> (1) Blokların çalışma sırasını zorlayabilir miyiz? <strong>Hayır.</strong> (2) Küçük ID'li bloğun büyük ID'liden önce başlayacağını varsayabilir miyiz? <strong>Hayır.</strong> (3) Bunun ölçeklenebilirlikle ilgisi? Bloklar bağımsız olduğu için çalışma zamanı onları istediği SM'ye, istediği sırada (round-robin) dağıtabilir; aynı program 2 SM'li GPU'da da 80 SM'li GPU'da da çalışır.</p>
+</div>
+<p>Dikkate alınması gereken sınırlar: blok başına en fazla thread, SM başına en fazla blok, <strong>SM başına en fazla thread</strong>. Genelde SM'lerde mümkün olduğunca çok thread'in yerleşik olması (occupancy) hedeflenir.</p>
+
+<h2>Senkronizasyon: <code>__syncthreads()</code></h2>
+<ul>
+  <li>Aynı bloktaki thread'ler faaliyetlerini bariyer senkronizasyonuyla koordine eder. Çağıran her thread, bloktaki tüm thread'ler o noktaya gelene kadar orada tutulur. Böylece bir sonraki faza geçmeden herkes önceki fazı bitirmiş olur. Tipik örnek: shared memory'yi doldurmak.</li>
+  <li>Gerçek hayat: işe aynı arabayla giden dört kişi. Masalarında paralel çalışırlar; dönüşte herkes arabaya gelene kadar beklenir (bariyer).</li>
+  <li><strong>Bloktaki tüm thread'ler tarafından çalıştırılmalı.</strong> <code>if/else</code> içinde kullanmak tanımsız davranış; tek istisna koşulun bloktaki tüm thread'ler için aynı sonucu vermesi.</li>
+  <li>Gerçekte thread'leri değil, <strong>warp'ları</strong> senkronize eder.</li>
+  <li>Bekleme süreleri uzamasın diye çalışma zamanı bir bloğun <strong>tüm</strong> thread'lerini aynı SM'ye birlikte atar.</li>
+  <li>Bloklar arası senkronizasyon CUDA 9 öncesi neredeyse imkânsızdı (<code>__threadfence()</code> ile hileler: thread'i önceki shared/global yazmaları diğerlerine görünür olana kadar durdurur). CUDA 9 (Pascal) ile <strong>cooperative groups</strong>.</li>
+</ul>
+
+<h2>Blok atama, warp'lar, latency hiding</h2>
+<ul>
+  <li>Kernel başlayınca çalışma zamanı grid'i oluşturur; thread'ler SM'lere <strong>blok blok</strong> atanır. GT200: 30 SM, SM başına en fazla 8 blok → aynı anda 240 blok; biten bloğun yerine listeden yenisi gelir.</li>
+  <li>SM başına izlenebilen thread sayısı da sınırlı: GT200'de SM başına 1024 thread (ör. 4 × 256 veya 8 × 128) → 30 · 1024 = 30.720 yerleşik thread.</li>
+  <li><strong>Warp:</strong> ardışık <code>threadIdx</code>'li 32 thread; SM'de zamanlama birimi. Thread 0–31 ilk warp, 32–63 ikinci… Eşleme deterministik. 256 thread'lik blok = 8 warp; SM'de 3 blok = 24 warp.</li>
+  <li>"CUDA kodu yazmak için warp'ı bilmeniz gerekmez; <strong>yüksek performanslı</strong> CUDA kodu yazmak için gerekir."</li>
+  <li><strong>Latency hiding:</strong> bir warp uzun gecikmeli bir işlemin (global bellek erişimi, pipeline'lı FP aritmetiği, dallanma) sonucunu beklerken seçilmez; hazır olan başka bir warp çalıştırılır. Seçim boş zaman eklemez: <strong>sıfır maliyetli thread zamanlaması</strong>. Yeterince warp varsa donanım her an çalıştıracak bir warp bulur.</li>
+  <li>Bu yüzden GPU'lar büyük önbelleklere ve dallanma tahminine CPU'lar kadar alan ayırmaz; o alanı FP birimlerine verir.</li>
+</ul>
+<div class="callout example">
+  <p><strong>GT200 için matmul blok boyutu</strong> (1024 thread/SM, 8 blok/SM, 512 thread/blok):</p>
+  <ul>
+    <li><strong>8×8</strong> = 64 thread → SM'yi doldurmak için 16 blok gerekir ama sınır 8 → 8·64 = 512 thread: kaynaklar yarı boş, gecikmeyi gizleyecek warp az.</li>
+    <li><strong>16×16</strong> = 256 thread → 1024/256 = 4 blok (8 sınırının altında) → tam kapasite ✓.</li>
+    <li><strong>32×32</strong> = 1024 thread → blok başına 512 sınırını aşar ✗.</li>
+  </ul>
+  <p>Sonuç: 16×16. (Henüz shared memory yok; olunca hesap karmaşıklaşır.)</p>
+</div>
+
+<h2>Bellek erişim verimi: CGMA</h2>
+<ul>
+  <li>Basit kernel donanımın potansiyelinin küçük bir kısmına ulaşır: thread'ler <strong>örtüşen girdi verisini</strong> tekrar tekrar global bellekten okur.</li>
+  <li>Global bellek = DRAM: yüzlerce saat çevrimi gecikme, sınırlı bant genişliği. Latency hiding iyidir ama herkes sürekli global belleğe gidiyorsa yetmez.</li>
+  <li><strong>CGMA</strong> (compute to global memory access): bir bölgede global bellek erişimi başına yapılan FP işlem sayısı. Matmul iç döngüsünde her turda 2 global okuma, 1 çarpma + 1 toplama → <strong>CGMA = 1</strong>.</li>
+</ul>
+<div class="formula-box">G80: 86,4 GB/s global bant genişliği
+  86,4 / 4 B = 21,6 milyar float/s yüklenebilir
+  CGMA = 1  →  en fazla 21,6 GFLOPS
+  Tepe 367 GFLOPS  →  21,6 / 367 ≈ %6
+Daha yüksek performans için CGMA artırılmalı.</div>
+
+<h2>CUDA bellek türleri</h2>
+<table class="simple">
+  <thead><tr><th>Bildirim</th><th>Bellek</th><th>Kapsam</th><th>Ömür</th><th>Hız / not</th></tr></thead>
+  <tbody>
+    <tr><td>Otomatik skaler değişken (<code>int i;</code>)</td><td>Register</td><td>Thread</td><td>Kernel/thread</td><td>Çok hızlı, on-chip. Sınırlı: aşılırsa spill.</td></tr>
+    <tr><td>Otomatik dizi (<code>float a[N];</code>)</td><td>Local (global'de)</td><td>Thread</td><td>Kernel/thread</td><td>Global kadar yavaş (sabit indeksliyse register'a konabilir).</td></tr>
+    <tr><td><code>__shared__ float s[N];</code></td><td>Shared</td><td>Blok</td><td>Kernel/blok</td><td>Çok hızlı, on-chip, blok içi işbirliği.</td></tr>
+    <tr><td><code>__device__ float g;</code> / <code>cudaMalloc</code></td><td>Global</td><td>Grid (+host API)</td><td>Uygulama</td><td>Büyük, yavaş (DRAM, 400–600 çevrim).</td></tr>
+    <tr><td><code>__constant__ float c[N];</code> (fonksiyon dışında)</td><td>Constant</td><td>Tüm grid'ler</td><td>Uygulama</td><td>Global'de ama önbellekli; herkes aynı adresi okursa çok hızlı. Toplam ~64 KB. Kernel'den salt okunur.</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Global, local ve constant bellek host tarafından API çağrılarıyla yazılıp okunabilir. Register ve shared on-chip'tir.</li>
+  <li>Toplam register'lar çalışan thread'lere bölünür. Derlenen kodun thread başına register'ı sınırı aşarsa <strong>register spill</strong>: fazlası local memory'ye, yani thread başına global bellek erişimine gider; çok yavaş.</li>
+  <li><code>__shared__</code> değişkeninin kapsamı blok: bloktaki tüm thread'ler aynı versiyonu görür; kernel bitince içeriği yok olur. Bir yürütme fazında yoğun kullanılan global veri parçasını tutmak için. Algoritmayı küçük global bölgelere odaklanan fazlar oluşturacak şekilde değiştirmek gerekebilir.</li>
+  <li><code>__constant__</code> bildirimi fonksiyonların dışında olmalı; kapsamı tüm grid'ler, ömrü tüm uygulama. Genelde kernel'e girdi değerleri vermek için.</li>
+</ul>
+
+<h2>Tiling ile shared memory</h2>
+<p>Temel ödünleşim: global bellek büyük ama yavaş, shared bellek küçük ama hızlı. Strateji: veriyi her biri shared belleğe sığan <strong>karolara (tile)</strong> böl; karolar üzerindeki hesaplar birbirinden bağımsız yapılabilmeli. (Her veri yapısı her kernel için karolara bölünemez.)</p>
+
+<h3>Örtüşen erişimler</h3>
+<p>Slayttaki küçük örnek: dört 2×2 blokla P hesaplanıyor. Blok (0,0)'ın dört thread'i Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>'i hesaplar. Her thread Md'den 4, Nd'den 4 eleman okur ve thread(0,0) ile thread(1,0) Md'nin 0. satırının tamamını <strong>ikisi de</strong> okur. Blok (0,0) çalışırken her Md ve Nd elemanı tam iki kez okunur: thread'ler işbirliği yapıp her elemanı bir kez yüklerse global trafik yarıya iner.</p>
+<p>Genel: N×N bloklarla olası azalma <strong>N kat</strong>. 16×16 → global trafik 1/16.</p>
+<div class="formula-box">16×16 blok, shared memory YOK:  16·16 thread × (width + width) okuma = 16·16·2·width
+16×16 blok, shared memory VAR:  her eleman bir kez okunur      = 16·width·2
+Oran: (16·16·2·width) / (16·width·2) = 16</div>
+<div class="callout discuss">
+  <p><strong>Slayt 86 ve 88: "16×8 ne olur?", "1024×1024 matris, 32×8 blok?"</strong> BX×BY'lik bir blok P'nin BY satır × BX sütunluk karosunu hesaplar. Shared memory olmadan blok <code>BX·BY·2·width</code> okuma yapar; karolarla M'den <code>BY·width</code>, N'den <code>BX·width</code> okur. Azalma = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10,7×</strong>. 32×8: 512/40 = <strong>12,8×</strong> (matris boyutundan bağımsız). Kare T×T için bu T'ye eşittir.</p>
+</div>
+
+<h3>Tiled kernel</h3>
+<p>Thread'ler Md ve Nd elemanlarını <strong>işbirliğiyle</strong> shared belleğe yükler, sonra iç çarpımda bunları kullanır. Shared bellek küçük olduğu için Md ve Nd, shared'a sığan karolara bölünür ve iç çarpım <strong>fazlara</strong> ayrılır: faz <code>m</code>'de her thread M karosundan ve N karosundan birer eleman yükler.</p>
+<pre class="code" data-title="Slayt 90">
+__global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int Row = by * TILE_WIDTH + ty;     // bu thread'in P satırı
+    int Col = bx * TILE_WIDTH + tx;     // bu thread'in P sütunu
+    float Pvalue = 0;
+    for (int m = 0; m < width / TILE_WIDTH; ++m) {           // faz döngüsü
+        Mds[ty][tx] = Md[Row * width + (m * TILE_WIDTH + tx)];   // M[Row][m*T + tx]
+        Nds[ty][tx] = Nd[(m * TILE_WIDTH + ty) * width + Col];   // N[m*T + ty][Col]
+        __syncthreads();                                      // (1) karolar dolsun
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();                                      // (2) herkes kullanmayı bitirsin
+    }
+    Pd[Row * width + Col] = Pvalue;
+}
+</pre>
+<ul>
+  <li><strong>M yükleme:</strong> satır <code>Row</code> sabit (thread'in satırı), sütun <code>m*T + tx</code>: faz m'deki karonun <code>tx</code>. sütunu. Warp'ta <code>tx</code> ardışık → coalesced.</li>
+  <li><strong>N yükleme:</strong> satır <code>m*T + ty</code>, sütun <code>Col</code>: faz m'deki karonun <code>ty</code>. satırı. Yine <code>tx</code> (Col'un içinde) en sağda → coalesced.</li>
+  <li><strong>Hesap:</strong> <code>Mds[ty][k]</code> = P satırının k. elemanı, <code>Nds[k][tx]</code> = P sütununun k. elemanı. Toplam <code>width/T</code> faz × <code>T</code> terim = <code>width</code> terim, CPU versiyonuyla aynı.</li>
+  <li><strong>Neden iki bariyer?</strong> (1) Yazmalardan sonra: diğer thread'lerin yüklediği <code>Mds[ty][k]</code>, <code>Nds[k][tx]</code> okunacak; karo dolmadan okunmamalı. (2) Hesaptan sonra: bir sonraki faz <code>Mds/Nds</code>'nin üzerine yazacak; hızlı bir thread diğerleri hâlâ okurken yazmamalı.</li>
+  <li>Thread başına global okuma: naive <code>2·width</code>, tiled <code>2·width/T</code> → T kat az. Bu kod <code>width</code>'in <code>TILE_WIDTH</code>'in katı olduğunu varsayar.</li>
+</ul>
+<div class="wgt-mount" data-widget="tiling"></div>
+<p>Kare olmayan blokla (ör. <code>dim3(8,32)</code>) aynı fikir: <a href="exam-midterm2.html#ayni-konfigurasyonla-tiled-shared-memory-versiyon">2. vize rehberindeki çözüm</a>.</p>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMalloc((void**)&amp;Md, size)</code> çağrısında neden <code>&amp;Md</code> veriliyor?</p>
+  <ol>
+    <li data-why="Md bir host pointer'ı değil; cihaz adresini tutacak bir değişken.">Md host belleğinde ayrılacağı için.</li>
+    <li data-why="size zaten bayt cinsinden; &amp; ile ilgisi yok.">Boyutu bayt cinsinden vermek için.</li>
+    <li data-why="Doğru: fonksiyon ayırdığı cihaz adresini bu pointer değişkenine yazar.">Fonksiyon ayırdığı adresi Md değişkenine yazabilsin diye.</li>
+    <li data-why="cudaMalloc sadece ayırır; kopyalama cudaMemcpy'nin işi.">Veriyi Md'ye kopyalamak için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>256 thread'lik bloklarla bir SM'de 3 blok varsa SM'de kaç warp vardır?</p>
+  <ol>
+    <li data-why="Bu tek bir bloğun warp sayısı.">8</li>
+    <li data-why="256/32 = 8 warp/blok × 3 = 24.">24</li>
+    <li data-why="768 thread sayısı, warp değil.">768</li>
+    <li data-why="Warp 32 thread'tir; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Naive matmul'ün CGMA oranı neden 1'dir?</p>
+  <ol>
+    <li data-why="Shared memory naive kernelde kullanılmıyor.">Her shared bellek erişimine bir FP işlem düşer.</li>
+    <li data-why="Thread başına toplam 2·width okuma var; oran tur başına hesaplanır.">Her thread bir eleman okur.</li>
+    <li data-why="CGMA FP işlem / global erişim; register'larla ilgisi yok.">Her thread bir register kullanır.</li>
+    <li data-why="Doğru: döngü turunda 2 global okuma (M ve N) ve 2 FP işlem (çarpma + toplama).">Her turda 2 global okuma ve 2 FP işlem (çarpma, toplama) yapılır.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Tiled kernel'deki <strong>ikinci</strong> <code>__syncthreads()</code> kaldırılırsa ne olabilir?</p>
+  <ol>
+    <li data-why="Doğru: hızlı bir thread bir sonraki fazın verisini Mds/Nds'ye yazarken yavaş bir thread hâlâ eski fazın değerlerini okuyor olabilir.">Bir thread bir sonraki fazın karosunu yüklerken başka bir thread hâlâ önceki fazın değerlerini okuyor olabilir.</li>
+    <li data-why="Derleyici bariyer eksikliğini yakalamaz.">Derleme hatası olur.</li>
+    <li data-why="Global yazma döngüden sonra; sorun shared bellekte.">Pd'ye yazma coalesced olmaz.</li>
+    <li data-why="Yarış koşulu tanımsız sonuç verir; her zaman doğru çıkma garantisi yok.">Hiçbir şey olmaz; ikinci bariyer gereksizdir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>__constant__</code> değişkenler için hangisi doğru?</p>
+  <ol>
+    <li data-why="Constant bellek on-chip değil; global bellekte, önbellekli.">On-chip ayrı bir bellekte tutulur, önbelleğe gerek yoktur.</li>
+    <li data-why="Bildirim fonksiyon gövdesinin dışında olmalı.">Kernel içinde bildirilir.</li>
+    <li data-why="Doğru: kapsam tüm grid'ler, ömür uygulama boyu, global bellekte ama önbellekli.">Tüm grid'ler aynı versiyonu görür; global bellekte saklanır ama önbelleklenir.</li>
+    <li data-why="Kernel'den salt okunur; host cudaMemcpyToSymbol ile yazar.">Kernel'ler içine yazabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

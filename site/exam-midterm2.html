@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2. ara sınav çalışma rehberi · Paralel Hesaplama</title>
+<meta name="description" content="BİL 455/533 2. ara sınav: shared memory, __syncthreads, row/col indeksleri, coalescing, tiled matris çarpımı (<<<(3,3),(8,32)>>>), naive transpose, loop unrolling; çözümlü sorular ve deneme seti.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="exam-midterm2">
+<main><div class="content">
+
+<h1>2. ara sınav çalışma rehberi</h1>
+<p class="lead">Hocanın duyurusuna ve derste söylenenlere göre önceliklendirilmiş özet: ne sorulacak, nasıl sorulacak, nasıl çözülür. Her bölümde çözümlü sınav tipi sorular var; sonda bir deneme seti.</p>
+
+<div class="exam-card">
+  <div><strong>11 Kasım 2026 Çarşamba, 15:30–17:30 · Derslik 306</strong></div>
+  <div class="countdown-big" id="countdown"></div>
+  <ul>
+    <li><strong>Kapsam:</strong> dönem başından 10 Kasım Salı dersinin sonuna kadar her şey. Pratikte: <strong>Lecture 6'nın sonuna kadar</strong>, ağırlık CUDA'da (Lecture 4–6).</li>
+    <li><strong>Kopya kâğıdı:</strong> 1 adet A4, iki yüz, <strong>el yazısı</strong> (fotokopi/çıktı olmaz), sınavdan önce kontrol edilir. Plan: <a href="cheatsheet.html">kopya kâğıdı önerisi</a>.</li>
+    <li><strong>Hesap makinesi yok</strong> (akıllı saat, telefon, kulaklık da yasak): 768/256, 16·16·4, 86,4/4 gibi hesapları elle yapmaya alışın.</li>
+    <li><strong>Süre: 2 saat</strong> (15:30–17:30). En fazla 15 dakika geç girilebilir.</li>
+  </ul>
+</div>
+
+<h2>Kapsam ve öncelik</h2>
+<p>Hocanın duyurusunda açıkça yazanlar <span class="prio p1">1</span> ile işaretli. "Bilmeniz gerekiyor" dediği üç şey: <strong>shared memory nasıl kullanılır</strong>, <strong><code>__syncthreads()</code> nasıl kullanılır</strong>, <strong>coalescing</strong>. Derste ayrıca "row/column soruları: hangi indeks nereyi gösteriyor, bu kod nerelere dokunuyor" denildi.</p>
+<table class="simple">
+  <thead><tr><th>Öncelik</th><th>Konu</th><th>Kaynak</th><th>Sayfa</th></tr></thead>
+  <tbody>
+    <tr><td><span class="prio p1">1</span></td><td>Shared memory kullanımı (<code>__shared__</code>, tiling, işbirliğiyle yükleme)</td><td>L5 (slayt 76–91)</td><td><a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td><code>__syncthreads()</code>: neden, nerede, nerede <em>olmaz</em></td><td>L4, L5 (slayt 42–46, 91)</td><td><a href="#soru-tipi-3-syncthreads">aşağıda</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Row/column indeksleri, bir kodun dokunduğu elemanlar</td><td>L4, L5</td><td><a href="lab.html">Lab</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Global bellek coalescing (32/64/128 B transaction'lar, hizalama, 2D erişim)</td><td>L6 (slayt 43–55) + ders</td><td><a href="coalescing.html">Coalescing</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Tiled matris çarpımı ve thread eşlemesi (ör. <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>)</td><td>L5 + geçmiş yıl sorusu</td><td><a href="#soru-tipi-1-hangi-indeks-nereyi-gosteriyor">aşağıda</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Naive matris transpose (ve shared memory ile transpose)</td><td>Ders (hocanın örneği)</td><td><a href="coalescing.html#matris-transpose">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>For loop unrolling</td><td>Ders</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Bellek türleri; CGMA; register/shared limitleri ve blok boyutu seçimi</td><td>L5, L6</td><td><a href="#soru-tipi-5-sayisal-sorular">aşağıda</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Warp, latency hiding, blokların SM'lere atanması, ölçeklenebilirlik</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant bellek</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>1. vize konuları: Amdahl/Gustafson, PCAM, thread/mutex/semafor/atomik</td><td>L1–L3</td><td><a href="l1-intro.html">L1</a>, <a href="l2-design.html">L2</a>, <a href="l3-threads.html">L3</a></td></tr>
+  </tbody>
+</table>
+
+<div class="callout beyond">
+  <p><strong>Shared memory bank optimization (bank conflict'ler) bu sınavda yok</strong>, finalde olacak (duyuru + derste "banking bank yok, finalde olacak"). L6'nın 59–64. slaytları ve transpose'taki <code>[TILE][TILE+1]</code> padding hilesi bu yüzden sitede "2. vizede yok" diye işaretli.</p>
+  <p><strong>Texture memory de bu sınavda yok</strong> (texture object, CUDA array, adresleme/filtreleme modları, <code>texRotate.cu</code>). L6'daki texture bölümü de "2. vizede yok" olarak işaretli.</p>
+</div>
+
+<div class="callout class">
+  <p>Slaytlarda olmayan ama derste geçen ve sorulabilecek şeyler: <strong>naive matrix transpose</strong> (hoca "yarın örnek matris transpose" demişti), <strong>for loop unrolling</strong>, coalescing'in tahtada anlatılan ayrıntıları, derleme zinciri <code>.cu → PTX → ptxas → SASS</code>, ve "önce hesap yapmadan sadece kopyala" tavsiyesi. Sitede bunlar <span class="badge-class">derste</span> etiketiyle ayrıldı; geri kalan her şey slaytlardan.</p>
+</div>
+
+<h2>Ezberlenecek indeks formülleri</h2>
+<div class="formula-box">// 2D grid + 2D blok: her thread bir (row, col) elemanı
+int col = blockIdx.x * blockDim.x + threadIdx.x;   // x → sütun (ardışık bellek)
+int row = blockIdx.y * blockDim.y + threadIdx.y;   // y → satır
+A[row * width + col]                               // row-major: satır * genişlik + sütun
+
+// bloktaki lineer thread numarası (warp'ı bu belirler: warp = id / 32)
+1D: id = threadIdx.x
+2D: id = threadIdx.y * blockDim.x + threadIdx.x
+3D: id = threadIdx.z * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x
+
+// grid'i kapsayacak blok sayısı (yukarı yuvarlama) + sınır kontrolü
+dim3 block(16, 16);
+dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
+<div class="callout key">
+  <p><code>dim3(a, b)</code>'de <strong>önce x sonra y</strong> gelir. <code>dim3(8, 32)</code>: <code>blockDim.x = 8</code> (8 sütun), <code>blockDim.y = 32</code> (32 satır). x ekseni sütunlar, y ekseni satırlardır; warp'lar <code>threadIdx.x</code> en hızlı değişecek şekilde oluşturulur.</p>
+</div>
+
+<h2>Soru tipi 1: Hangi indeks nereyi gösteriyor?</h2>
+<p>Geçmiş yıl sorusu: <strong>"<code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> ile tiled matris çarpımı eşlemesi"</strong>. Aşağıdaki çözüm bu tipteki her soruyu kapsayacak şekilde adım adım gidiyor.</p>
+
+<h3>Çözümlü örnek: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
+<pre class="code" data-title="Kernel (her thread P'nin bir elemanı)">
+__global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
+{
+    int row = blockIdx.y * blockDim.y + threadIdx.y;   // 0..95
+    int col = blockIdx.x * blockDim.x + threadIdx.x;   // 0..23
+    float sum = 0;
+    for (int k = 0; k < K; ++k)
+        sum += M[row * K + k] * N[k * Pcols + col];
+    P[row * Pcols + col] = sum;
+}
+// MatMul<<<dim3(3,3), dim3(8,32)>>>(Md, Nd, Pd, K, 24);
+</pre>
+<ol>
+  <li><strong>Kaç thread, kaç warp?</strong> Blok başına 8·32 = 256 thread (≤ 1024 ✓), 3·3 = 9 blok → 2304 thread. Blok başına 256/32 = 8 warp → toplam 72 warp.</li>
+  <li><strong>İndeks aralıkları:</strong> <code>blockIdx.x, blockIdx.y ∈ {0,1,2}</code>, <code>threadIdx.x ∈ 0..7</code>, <code>threadIdx.y ∈ 0..31</code>.</li>
+  <li><strong>Kapsanan P bölgesi:</strong> sütun = 3·8 = <strong>24</strong>, satır = 3·32 = <strong>96</strong>. Yani P 96×24 ise birebir oturur (M 96×K, N K×24). Matris daha küçükse <code>if (row &lt; H &amp;&amp; col &lt; W)</code> şart; daha büyükse grid büyütülmeli.</li>
+  <li><strong>Belli bir thread:</strong> <code>blockIdx = (2,1)</code>, <code>threadIdx = (5,10)</code> → <code>row = 1·32 + 10 = 42</code>, <code>col = 2·8 + 5 = 21</code>. <code>P[42·24 + 21] = P[1029]</code>'u yazar; M'nin 42. satırını (<code>M[42·K + k]</code>), N'nin 21. sütununu (<code>N[k·24 + 21]</code>) okur.</li>
+  <li><strong>Hangi blok hangi bölge?</strong> <code>blockIdx = (bx, by)</code> bloğu satır <code>32·by … 32·by+31</code>, sütun <code>8·bx … 8·bx+7</code>. Örneğin <code>(2,1)</code>: satır 32–63, sütun 16–23.</li>
+  <li><strong>Warp'lar:</strong> bloktaki lineer id <code>ty·8 + tx</code>. Warp 0 = id 0–31 = <code>ty = 0..3</code> (her biri 8 thread). Yani <strong>bir warp P'nin 4 satır × 8 sütunluk bir parçası</strong>. Warp <code>w</code>: <code>ty = 4w … 4w+3</code>.</li>
+  <li><strong>Coalescing (k sabitken bir warp'ın bir load'u):</strong>
+    <ul>
+      <li><code>N[k·24 + col]</code>: aynı satırdaki 8 thread 8 ardışık float okur (32 B); warp'taki 4 satır <em>aynı</em> adresleri okur → 1 adet 32 B segment. İyi.</li>
+      <li><code>M[row·K + k]</code>: aynı satırdaki 8 thread aynı adresi okur; 4 satır 4 farklı adres (aralarında K float) → 4 segment, her birinden 4 bayt kullanılır. Kötü (ama önbellek/yayın yardımcı olur).</li>
+      <li><code>P[row·24 + col]</code> yazma: 4 satır × 8 ardışık float → 4 ayrı 32 B segment. 128 B'lık tek bir transaction yerine 4 parça; slayt kuralı: <strong>blok genişliği ve dizi genişliği warp boyunun (32) katı olsun</strong>. <code>blockDim.x = 8</code> bu yüzden ideal değil.</li>
+    </ul></li>
+</ol>
+<div class="wgt-mount" data-widget="mapping" data-gx="3" data-gy="3" data-bx="8" data-by="32"></div>
+
+<h3>Aynı konfigürasyonla tiled (shared memory) versiyon</h3>
+<p>Slayttaki tiled kernel <code>TILE_WIDTH × TILE_WIDTH</code> kare blok varsayar (<code>Mds[ty][tx]</code>, <code>Nds[ty][tx]</code>, her thread her matristen 1 eleman). 8×32 blokta bu doğrudan çalışmaz; P karosu <strong>32 satır × 8 sütun</strong>. Faz genişliğini (k yönü) <code>TK = 8</code> seçersek:</p>
+<pre class="code" data-title="8×32 blok için tiled matmul (P: 96×24, M: 96×K, N: K×24)">
+#define BX 8    // blockDim.x  = P karosunun sütun sayısı
+#define BY 32   // blockDim.y  = P karosunun satır sayısı
+#define TK 8    // her fazda k yönünde alınan genişlik
+
+__global__ void MatMulTiled(const float* M, const float* N, float* P, int K, int Pcols)
+{
+    __shared__ float Mds[BY][TK];   // 32×8 = 256 eleman: her thread 1 tane yükler
+    __shared__ float Nds[TK][BX];   //  8×8 =  64 eleman: sadece ty < 8 olanlar yükler
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int row = blockIdx.y * BY + ty;
+    int col = blockIdx.x * BX + tx;
+    float sum = 0;
+    for (int m = 0; m < K / TK; ++m) {
+        Mds[ty][tx] = M[row * K + (m * TK + tx)];
+        if (ty < TK)
+            Nds[ty][tx] = N[(m * TK + ty) * Pcols + col];
+        __syncthreads();                  // karolar tamamen dolsun (if'in DIŞINDA!)
+        for (int k = 0; k < TK; ++k)
+            sum += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();                  // herkes bitirmeden bir sonraki faz üzerine yazmasın
+    }
+    P[row * Pcols + col] = sum;
+}
+</pre>
+<ul>
+  <li>Shared bellek/blok: (32·8 + 8·8)·4 B = 1280 B.</li>
+  <li>Global okuma: bir blok M'den 32×K, N'den K×8 eleman okur = 40K; naive versiyonda 256 thread × 2K = 512K. Azalma 512/40 = <strong>12,8×</strong>. Genel formül (BX×BY blok): <code>2·BX·BY / (BX + BY)</code>; kare T×T için bu <code>T</code>'ye iner (slayttaki "16×16 → 16 kat").</li>
+  <li>Alternatif: <code>TK = 32</code> ile <code>Mds[32][32]</code> (her thread 4 eleman yükler) ve <code>Nds[32][8]</code> (her thread 1). Faz sayısı azalır, shared bellek artar. Sınavda hangisini seçerseniz seçin <strong>kim neyi yüklüyor</strong> ve <strong>iki <code>__syncthreads()</code></strong> açıkça yazılmalı.</li>
+</ul>
+
+<h3>"Bu kod nerelere dokunuyor?" alıştırmaları</h3>
+<p>Her birinde önce kendiniz cevaplayın, sonra çözümü açın.</p>
+<p><strong>(a)</strong> <code>A</code> 8×8 row-major, <code>k&lt;&lt;&lt;2, 4&gt;&gt;&gt;(A, 8)</code>:</p>
+<pre class="code">
+__global__ void k(float* A, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;   // 0..7
+    A[i * N] = 0;
+}
+</pre>
+<div class="hint"><p><code>i = 0..7</code>, adres <code>8i</code>: A[0], A[8], …, A[56]. Bu <strong>0. sütun</strong>. Ardışık thread'ler 8 float (32 B) aralıklı adreslere yazar → her thread ayrı bir 32 B segment: coalesced <strong>değil</strong>. <code>A[i]</code> yazsaydık 0. satır olurdu ve coalesced olurdu.</p></div>
+
+<p><strong>(b)</strong> <code>B</code> 16×16 (width = 16), <code>k2&lt;&lt;&lt;dim3(2,2), dim3(8,8)&gt;&gt;&gt;</code>:</p>
+<pre class="code">
+__global__ void k2(int* B, int width) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    B[x * width + y] = threadIdx.x;      // dikkat: x satır gibi kullanılmış!
+}
+</pre>
+<div class="hint"><p>Bütün 16×16 matris kapsanır (2·8 = 16 her yönde), ama <strong>transpoze edilmiş</strong> şekilde: thread <code>(x, y)</code> satır <code>x</code>, sütun <code>y</code>'ye yazar. <code>blockIdx=(1,0), threadIdx=(3,5)</code> → <code>x = 11, y = 5</code> → <code>B[11·16 + 5] = B[181]</code>'e 3 yazar. Bir warp'ta <code>threadIdx.x</code> ardışık değişir → adresler 16 eleman (64 B) aralıklı → coalesced değil. Düzeltme: <code>B[y * width + x]</code>. Değer olarak her elemana kendi <em>satır</em> içindeki <code>threadIdx.x</code> = <code>x % 8</code> yazılır; yani B'nin satır <code>r</code>'sindeki her eleman <code>r % 8</code> olur.</p></div>
+
+<p><strong>(c)</strong> <code>&lt;&lt;&lt;4, 256&gt;&gt;&gt;</code> ile çağrılan bir kernelde <code>blockIdx.x = 2</code>, <code>threadIdx.x = 37</code> olan thread hangi warp'ta, global id'si ne, <code>a[2*i]</code> okursa ne olur?</p>
+<div class="hint"><p>Global id <code>i = 2·256 + 37 = 549</code>. Bloğunun <strong>1. warp</strong>'ı (37/32 = 1, warp'lar blok içinde numaralanır; bloklar warp paylaşmaz). <code>a[2*i]</code>: ardışık thread'ler 8 B aralıklı → warp 32 float'ı 256 B'lık bir alana yayar → 128 B'lık 2 satır (ya da 32 B'lık 8 segment) taşınır, yarısı kullanılır: %50 verim.</p></div>
+
+<h2>Soru tipi 2: Shared memory kullanımı</h2>
+<div class="two-col">
+  <div>
+    <ul>
+      <li><code>__shared__ float s[N];</code> kernel içinde tanımlanır; <strong>blok başına bir kopya</strong>, bloktaki tüm thread'ler aynısını görür, ömrü kernel/blok kadar.</li>
+      <li>On-chip, çok hızlı (register'dan sonra en hızlısı); küçük (G80'de SM başına 16 KB).</li>
+      <li>Kullanım deseni: (1) global'den shared'a <strong>işbirliğiyle yükle</strong> (her thread birkaç eleman), (2) <code>__syncthreads()</code>, (3) shared'dan tekrar tekrar oku/hesapla, (4) gerekirse <code>__syncthreads()</code>, (5) sonucu global'e yaz.</li>
+      <li>Amaç: global bellek trafiğini azaltmak (CGMA'yı artırmak) ve thread'lerin veri paylaşması. "Shared memory = user-controlled cache."</li>
+      <li>Başka blok bir bloğun shared belleğini <strong>göremez</strong>; bloklar arası iletişim global bellekle olur.</li>
+    </ul>
+  </div>
+  <div>
+<pre class="code" data-title="En basit örnek: blok içinde diziyi ters çevir">
+#define B 256
+__global__ void reverseBlock(int* d)
+{
+    __shared__ int s[B];
+    int t = threadIdx.x;
+    int base = blockIdx.x * B;
+    s[t] = d[base + t];          // 1) yükle
+    __syncthreads();             // 2) herkes yükledi mi?
+    d[base + t] = s[B - 1 - t];  // 3) BAŞKA thread'in
+}                                //    yüklediğini oku
+// reverseBlock<<<n / B, B>>>(d);
+</pre>
+  </div>
+</div>
+<div class="callout gotcha">
+  <p>Yukarıdaki <code>__syncthreads()</code> kaldırılırsa thread <code>t</code>, <code>s[B-1-t]</code>'yi başka bir warp'taki thread henüz yazmadan okuyabilir: <strong>race condition</strong>, sonuç belirsiz. Bir thread shared bellekten <em>başka bir thread'in yazdığı</em> veriyi okuyacaksa arada mutlaka bariyer olmalı.</p>
+</div>
+<div class="callout class">
+  <p><strong>"Önce işlem yapmadan sadece kopyala."</strong> Shared memory'ye, yazacağınız bölgenin dışından da veri (ör. konvolüsyonda kenar/halo bölgesi) gerekiyorsa: önce kernel'i sadece "global → shared → global" kopyası yapacak şekilde yazın ve <strong>çıktının girdiyle aynı olduğunu</strong> doğrulayın. İndeksler doğruysa hesaplamayı sonra ekleyin. Sınavda da shared'a yükleme indekslerini ayrı ayrı kontrol edin.</p>
+</div>
+<p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5 sayfası</a>. Kısa hâli:</p>
+<pre class="code" data-title="Slayt 90: tiled matmul (TILE_WIDTH × TILE_WIDTH blok)">
+__global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int Row = by * TILE_WIDTH + ty;
+    int Col = bx * TILE_WIDTH + tx;
+    float Pvalue = 0;
+    for (int m = 0; m < width / TILE_WIDTH; ++m) {
+        Mds[ty][tx] = Md[Row * width + (m * TILE_WIDTH + tx)];   // M: satır Row, faz m'nin tx. sütunu
+        Nds[ty][tx] = Nd[(m * TILE_WIDTH + ty) * width + Col];   // N: faz m'nin ty. satırı, sütun Col
+        __syncthreads();
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();
+    }
+    Pd[Row * width + Col] = Pvalue;
+}
+</pre>
+<div class="wgt-mount" data-widget="tiling"></div>
+
+<h2>Soru tipi 3: <code>__syncthreads()</code></h2>
+<ul>
+  <li><strong>Blok içi bariyer:</strong> çağıran her thread, bloktaki <em>tüm</em> thread'ler o noktaya gelene kadar bekler. Farklı bloklar arasında senkronizasyon <strong>sağlamaz</strong> (bloklar arası: kernel'i bölmek / CUDA 9+ cooperative groups).</li>
+  <li><strong>Bloktaki tüm thread'ler tarafından çalıştırılmalı.</strong> <code>if</code>/<code>else</code> içinde kullanmak tanımsız davranış (deadlock/yanlış sonuç); tek istisna koşulun bloktaki <em>tüm</em> thread'ler için aynı sonucu vermesi.</li>
+  <li>Hafiftir; aynı bloğun thread'leri aynı SM'ye birlikte atandığı için bekleme süreleri kısa kalır.</li>
+  <li>Slayt notu: aslında thread'leri değil <strong>warp'ları</strong> senkronize eder.</li>
+  <li>Tiled matmul'deki iki bariyer: <strong>1.</strong> yazmalardan sonra: kimse karo dolmadan okumasın (read-after-write). <strong>2.</strong> hesaptan sonra: kimse diğerleri bitirmeden bir sonraki fazın verisini üzerine yazmasın (write-after-read).</li>
+</ul>
+<div class="two-col">
+<pre class="code" data-title="✗ Yanlış: bariyer koşulun içinde">
+if (threadIdx.x < 16) {
+    s[threadIdx.x] = in[threadIdx.x];
+    __syncthreads();   // tid ≥ 16 buraya hiç gelmez
+}
+out[threadIdx.x] = s[threadIdx.x % 16];
+</pre>
+<pre class="code" data-title="✓ Doğru: yükleme koşullu, bariyer herkes için">
+if (threadIdx.x < 16)
+    s[threadIdx.x] = in[threadIdx.x];
+__syncthreads();
+out[threadIdx.x] = s[threadIdx.x % 16];
+</pre>
+</div>
+<div class="callout gotcha">
+  <p>Erken <code>return</code> da aynı tuzaktır: <code>if (row &gt;= n) return;</code> yazıp sonra <code>__syncthreads()</code> çağırırsanız bazı thread'ler bariyere hiç ulaşmaz. Sınır kontrolünü yükleme/yazma satırlarına koyun (dışarıdakiler shared'a 0 yazsın), bariyerleri herkes çalıştırsın.</p>
+</div>
+
+<h2>Soru tipi 4: Coalescing</h2>
+<ul>
+  <li>Global bellek <strong>32, 64 veya 128 baytlık</strong> transaction'larla okunur; sadece <strong>boyutuna hizalı</strong> segmentler okunabilir. "11 bayt okumak" yoktur, 32 bayt okursunuz; 33 bayt = iki 32 B erişim.</li>
+  <li>Bir warp bir global bellek komutu çalıştırınca 32 thread'in erişimleri bir veya daha fazla transaction'da <strong>birleştirilir</strong> (coalesce). Kaç transaction gerekeceğini (1) thread başına kelime boyu ve (2) adreslerin thread'lere dağılımı belirler.</li>
+  <li><strong>Slayt 47 hesabı:</strong> 32 thread rastgele adreslerden 4 B okursa 32 × 32 B = 1024 B taşınır; ardışık ve 128 B hizalı okursa 32 × 4 = 128 B, tek transaction. 1024/128 = <strong>8 kat</strong> fazla veri → bant genişliği /8.</li>
+  <li>Kelime boyu 1, 2, 4, 8 veya 16 B ve <strong>doğal hizalı</strong> (adres boyutun katı) olmalı; değilse birden fazla komuta bölünür. Struct'lar için <code>__align__(8)</code>, <code>__align__(16)</code>.</li>
+  <li><strong>2D kural:</strong> thread <code>(tx, ty)</code> <code>BaseAddress + width·ty + tx</code>'e erişiyorsa tam coalescing için <strong>hem blok genişliği hem dizi genişliği 32'nin katı</strong> olmalı → <code>cudaMallocPitch</code> ile satırları doldurun (padding).</li>
+  <li>Ardışık thread'ler (<code>threadIdx.x</code>) ardışık adreslere gitmeli: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
+</ul>
+<div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
+<p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing.html#matris-transpose">Coalescing sayfası</a>. Özet:</p>
+<div class="two-col">
+<pre class="code" data-title="Naive transpose: okuma ✓, yazma ✗">
+// in: height×width, out: width×height
+int x = blockIdx.x * TILE + threadIdx.x;  // sütun
+int y = blockIdx.y * TILE + threadIdx.y;  // satır
+if (x < width && y < height)
+    out[x * height + y] = in[y * width + x];
+// warp'ta x ardışık: in ardışık okunur,
+// out'a 'height' aralıkla yazılır
+</pre>
+<pre class="code" data-title="Shared memory ile: ikisi de ✓">
+__shared__ float tile[TILE][TILE];
+int x = blockIdx.x * TILE + threadIdx.x;
+int y = blockIdx.y * TILE + threadIdx.y;
+tile[threadIdx.y][threadIdx.x] = in[y * width + x];
+__syncthreads();
+x = blockIdx.y * TILE + threadIdx.x;   // bloklar yer değiştirir
+y = blockIdx.x * TILE + threadIdx.y;
+out[y * height + x] = tile[threadIdx.x][threadIdx.y];
+</pre>
+</div>
+
+<h2>Soru tipi 5: Sayısal sorular</h2>
+<p>Hesap makinesi olmadığı için sayılar slaytlardaki gibi "güzel" seçilir. Bunları kopya kâğıdına yazın.</p>
+<table class="simple">
+  <thead><tr><th>Soru</th><th>Hesap</th></tr></thead>
+  <tbody>
+    <tr><td>G80: thread başına kaç register?</td><td>SM başına 8K = 8192 register, 768 thread → 8192/768 ≈ 10,7 → <strong>10</strong> register. Fazlası <strong>register spill</strong> → local memory (= global, yavaş).</td></tr>
+    <tr><td>G80: blok başına shared bellek sınırı?</td><td>16 KB/SM, en fazla 8 blok/SM → 8 bloğun hepsi için blok başına ≤ <strong>2 KB</strong>.</td></tr>
+    <tr><td>16×16 tile matmul, G80</td><td>Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/blok → shared'a göre 8 blok sığar; ama 768/256 = <strong>3 blok</strong> (thread sınırı) → sadece 3·2 = 6 KB kullanılır. Sınırlayan: thread sayısı.</td></tr>
+    <tr><td>GT200 (1024 thread/SM, 8 blok/SM, 512 thread/blok): 8×8, 16×16, 32×32?</td><td>8×8 = 64 → 8 blok × 64 = 512 thread (yarı dolu). 16×16 = 256 → 4 blok = 1024 ✓ <strong>en iyi</strong>. 32×32 = 1024 > 512 thread/blok ✗.</td></tr>
+    <tr><td>Warp sayısı</td><td>256 thread/blok → 8 warp; SM'de 3 blok → 24 warp.</td></tr>
+    <tr><td>CGMA (naive matmul)</td><td>Döngüde 2 global okuma, 2 FLOP (çarp + topla) → CGMA = 1. G80: 86,4 GB/s / 4 B = 21,6 G float/s → en fazla <strong>21,6 GFLOPS</strong>, tepe 367 GFLOPS'un ~%6'sı.</td></tr>
+    <tr><td>Tiling ile global okuma azalması</td><td>T×T blok: <code>(T·T·2·width) / (T·width·2) = T</code>. 16×16 → <strong>16×</strong>. Dikdörtgen BX×BY: <code>2·BX·BY/(BX+BY)</code>; 32×8 → 512/40 = 12,8×.</td></tr>
+    <tr><td>Pitch (256 B hizalama)</td><td>width 5/50/250 B → pitch 256; 500 → 512; 700 → 768.</td></tr>
+    <tr><td>Thread ID (slayt 33)</td><td>Blok <code>b</code>, thread <code>t</code>, blok başına M thread: <code>b·M + t</code> (Block 5'in 3. thread'i: 5M + 3).</td></tr>
+  </tbody>
+</table>
+
+<h2>Deneme seti</h2>
+<div class="quiz" data-answer="3">
+  <p><code>k&lt;&lt;&lt;dim3(4,2), dim3(16,8)&gt;&gt;&gt;</code> çağrısında <code>col = blockIdx.x*blockDim.x + threadIdx.x</code>, <code>row = blockIdx.y*blockDim.y + threadIdx.y</code>. Kapsanan bölge nedir?</p>
+  <ol>
+    <li data-why="Satır ve sütun karıştırılmış: x yönü sütunları verir.">64 satır × 16 sütun</li>
+    <li data-why="Bu blok sayısı × blok sayısı; thread'leri saymıyor.">4 satır × 2 sütun</li>
+    <li data-why="Sütun = 4·16 = 64, satır = 2·8 = 16.">16 satır × 64 sütun</li>
+    <li data-why="Bu sadece bir bloğun kapladığı alan (8 satır × 16 sütun) bile değil.">16 satır × 16 sütun</li>
+  </ol>
+  <div class="explain">x ekseni (gridDim.x·blockDim.x) sütunları, y ekseni satırları verir.</div>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Blok <code>dim3(8, 32)</code>. <code>threadIdx = (3, 9)</code> olan thread kaçıncı warp'tadır?</p>
+  <ol>
+    <li data-why="threadIdx.y'yi doğrudan warp numarası saymışsınız.">9</li>
+    <li data-why="Lineer id = 9·8 + 3 = 75, 75/32 = 2 (tam bölme).">2</li>
+    <li data-why="threadIdx.x'e göre gruplama yok; warp'lar lineer id ile oluşur.">0</li>
+    <li data-why="75 / 32 = 2,34 → aşağı yuvarlanır, 3 değil.">3</li>
+  </ol>
+  <div class="explain">Warp = (ty·blockDim.x + tx) / 32. 8 sütunlu blokta bir warp 4 satırdır: warp 2 = ty 8..11.</div>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Aşağıdakilerden hangisi <code>__syncthreads()</code> için <strong>yanlıştır</strong>?</p>
+  <ol>
+    <li data-why="Doğru: bloktaki tüm thread'ler bariyere gelene kadar bekler.">Çağıran thread, bloktaki tüm thread'ler oraya gelene kadar bekler.</li>
+    <li data-why="Doğru: tüm thread'ler aynı yolu izlemiyorsa tanımsız davranış.">Sadece bazı thread'lerin girdiği bir <code>if</code> içinde kullanmak tanımsız davranıştır.</li>
+    <li data-why="Doğru: tiled matmul'de ikinci bariyerin görevi bu.">Bir sonraki fazda shared belleğin üzerine erken yazılmasını önlemek için de kullanılır.</li>
+    <li data-why="Yanlış: sadece aynı bloğun thread'lerini bekletir; bloklar bağımsız ve sırasızdır.">Grid'deki tüm blokları senkronize eder.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>32 thread'lik bir warp, 128 B hizalı bir <code>float</code> dizisinden <code>a[threadIdx.x + 1]</code> okuyor. Kaç tane 128 B'lık satıra dokunulur?</p>
+  <ol>
+    <li data-why="Adresler 4…131: 0–127 ve 128–255 satırlarına taşar.">2</li>
+    <li data-why="Bir eleman kaydığı için son thread sonraki satıra geçer.">1</li>
+    <li data-why="Erişimler ardışık; her thread ayrı satır açmaz.">32</li>
+    <li data-why="128 B satırlardan sadece ikisi kullanılır.">4</li>
+  </ol>
+  <div class="explain">Hizasız (misaligned) erişim: 128 B istenir ama 256 B taşınır (32 B segmentlerle bakarsak 5 segment = 160 B). Bu yüzden başlangıç adresinin hizası önemli.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Naive transpose <code>out[x*height + y] = in[y*width + x]</code> (<code>x</code> = <code>threadIdx.x</code> yönü) için hangisi doğru?</p>
+  <ol>
+    <li data-why="Yazmalar 'height' aralıklı: coalesced değil.">Okuma da yazma da coalesced.</li>
+    <li data-why="Tam tersi: okuma ardışık, yazma aralıklı.">Okuma coalesced değil, yazma coalesced.</li>
+    <li data-why="Doğru: in'i satır boyunca okur, out'a sütun boyunca yazar.">Okuma coalesced, yazma coalesced değil; shared memory karosuyla ikisi de coalesced yapılabilir.</li>
+    <li data-why="Transpose'ta bank conflict ayrı bir konu (ve bu sınavda yok); coalescing'i belirleyen global adresler.">Sorun global bellekte değil, sadece bank conflict'lerde.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Tiled matmul'de (TILE_WIDTH = 16) bir thread kaç kez global bellekten okur? (Width = 1024)</p>
+  <ol>
+    <li data-why="Bu naive kernelin sayısı: 2·Width.">2048</li>
+    <li data-why="Her fazda 1 M + 1 N elemanı, Width/16 = 64 faz → 128.">128</li>
+    <li data-why="Faz sayısı 64; her fazda iki okuma var.">64</li>
+    <li data-why="Shared bellekten okunan sayı (her faz 2·16) global okumalarla karıştırılmış.">32</li>
+  </ol>
+  <div class="explain">2·Width/T = 2048/16 = 128: global trafik T = 16 kat azalır.</div>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Bir kernel register'ı thread başına izin verilenden fazla kullanırsa ne olur?</p>
+  <ol>
+    <li data-why="Doğru: kernel çalışır ama fazla değişkenler local memory'ye taşar (register spill).">Çalışır, fazlalık local memory'ye (global bellek) taşar, performans düşer.</li>
+    <li data-why="Derleme hatası olmaz; --ptxas-options=-v ile register sayısını görebilirsiniz.">Derlenmez.</li>
+    <li data-why="Shared belleğe değil, local memory'ye (cihaz belleği) taşar.">Fazlalık shared belleğe taşar.</li>
+    <li data-why="Sonuç doğru kalır, sadece yavaşlar.">Sonuç yanlış çıkar.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Hangisi constant bellek için en iyi erişim desenidir?</p>
+  <ol>
+    <li data-why="Farklı adresler isteğin seri parçalara bölünmesine yol açar.">Her thread farklı bir adres okur.</li>
+    <li data-why="Constant bellek kernel içinden yazılamaz (read-only).">Her thread kendi adresine yazar.</li>
+    <li data-why="Bu global bellek için ideal (coalesced) desen; constant cache'te 32 ayrı istek olur.">Ardışık thread'ler ardışık adresleri okur.</li>
+    <li data-why="Doğru: bir adres → tek istek, warp'a yayın (broadcast).">Warp'taki tüm thread'ler aynı adresi okur.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Loop unrolling için hangisi <strong>yanlıştır</strong>?</p>
+  <ol>
+    <li data-why="Doğru: sayaç artırma, karşılaştırma ve dallanma komutları azalır.">Döngü kontrol komutlarını (sayaç, karşılaştırma, dallanma) azaltır.</li>
+    <li data-why="Doğru: bağımsız komutlar yan yana gelir (ILP).">Komut düzeyi paralelliği artırabilir.</li>
+    <li data-why="Yanlış: genelde register kullanımı ARTAR (daha çok canlı değişken); aşırısı spill'e yol açar.">Register kullanımını her zaman azaltır.</li>
+    <li data-why="Doğru: #pragma unroll derleme zamanında sabit döngü sayısıyla en iyi çalışır.">CUDA'da <code>#pragma unroll</code> ile derleyiciye yaptırılabilir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>__global__</code> ile işaretli bir fonksiyon için hangisi doğru?</p>
+  <ol>
+    <li data-why="Bu __device__ fonksiyonun tanımı.">Cihazda çalışır, sadece cihazdan çağrılır.</li>
+    <li data-why="Kernel: cihazda çalışır, host'tan <<<…>>> ile çağrılır (void döner).">Cihazda çalışır, host'tan çağrılır.</li>
+    <li data-why="Bu __host__ (varsayılan).">Host'ta çalışır, host'tan çağrılır.</li>
+    <li data-why="__host__ __device__ birlikte yazılınca iki versiyon derlenir; __global__ böyle değil.">Hem host'ta hem cihazda çalışır.</li>
+  </ol>
+</div>
+
+<h2>Son gece kontrol listesi</h2>
+<ul class="check-list">
+  <li><code>dim3(x, y)</code> → x sütun, y satır; <code>row*width + col</code>.</li>
+  <li>Verilen bir <code>&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> için: toplam thread, warp/blok, kapsanan bölge, belli bir thread'in (row, col)'u, bir warp'ın hangi thread'lerden oluştuğu.</li>
+  <li>Tiled matmul kodunu ezbere yazabilmek; <code>Mds[ty][tx]</code> ve <code>Nds[ty][tx]</code> satırlarındaki indekslerin anlamı; iki bariyerin nedeni.</li>
+  <li>Kare olmayan blokta (8×32) tiled versiyonu kurabilmek.</li>
+  <li>Bir erişim deseni için dokunulan 32/128 B segment sayısı ve verim.</li>
+  <li>Naive transpose neden yavaş, shared memory ile nasıl düzelir.</li>
+  <li>Loop unrolling: ne kazandırır, maliyeti.</li>
+  <li>Bellek türleri tablosu (kapsam, ömür, hız, kim yazar): <a href="l5-cuda-kernels.html#cuda-bellek-turleri">L5</a>.</li>
+  <li>G80/GT200 sayısal örnekleri ve CGMA.</li>
+</ul>
+
+</div></main>
+<script>
+// countdown to 11 Nov 2026 15:30 (UTC+3)
+(function () {
+  var el = document.getElementById("countdown"); if (!el) return;
+  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:30:00+03:00").getTime();
+  function tick() {
+    var now = Date.now(), d = t0 - now;
+    if (now > t1) { el.textContent = "Sınav bitti."; return; }
+    if (d <= 0) { el.textContent = "Sınav şu an devam ediyor."; return; }
+    var h = Math.floor(d / 3600000), m = Math.floor(d % 3600000 / 60000);
+    el.textContent = "Sınava " + h + " sa " + m + " dk kaldı";
+  }
+  tick(); setInterval(tick, 30000);
+})();
+</script>
+</body>
+</html>

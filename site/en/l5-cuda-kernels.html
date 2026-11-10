@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kernels, indexing, shared memory · Parallel Computing</title>
+<meta name="description" content="Lecture 5: vector/matrix addition, matrix multiplication, cudaMalloc/cudaMemcpy/cudaFree, kernels and function qualifiers, blockIdx/threadIdx, __syncthreads, warps and latency hiding, CGMA, memory types, tiled matmul.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="l5-cuda-kernels">
+<main><div class="content">
+
+<h1>Kernels, indexing, shared memory</h1>
+<p class="lead">Where do nested <code>for</code> loops go on a GPU? How does each thread find its own data? And why does reading the same data from global memory over and over doom a kernel to 6% efficiency?</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Turn a CPU loop into a kernel: the host side (allocate, copy, launch, copy back, free) and the device side.</li>
+    <li>Compute rows/columns from <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>.</li>
+    <li>The rules of <code>__syncthreads()</code>; warps and latency hiding.</li>
+    <li>Compute CGMA and show why tiling cuts global traffic T times; write the tiled matmul kernel.</li>
+  </ul>
+</div>
+
+<h2>Data parallelism: from loop to kernel</h2>
+<p>Data parallelism: the same operation performed on independent data elements simultaneously (vector addition, convolution, matrix-vector and matrix-matrix multiplication). Rule of thumb: <strong>when you see nested <code>for</code> loops with regular indexing, there is a good chance of parallelisation.</strong></p>
+<div class="two-col">
+<pre class="code" data-title="C">
+for (int i = 0; i < N; i++)
+    C[i] = A[i] + B[i];
+</pre>
+<pre class="code" data-title="CUDA: the loop is gone, i = thread number">
+__global__ void VecAdd(float* A, float* B, float* C) {
+    int i = threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+// VecAdd<<<1, N>>>(A, B, C);   // 1 block, N threads
+</pre>
+</div>
+<div class="two-col">
+<pre class="code" data-title="C: matrix addition">
+for (int i = 0; i < N; i++)
+    for (int j = 0; j < N; j++)
+        C[i*N + j] = A[i*N + j] + B[i*N + j];
+</pre>
+<pre class="code" data-title="CUDA: 2D block, linear index">
+__global__ void MatAdd(float* A, float* B, float* C) {
+    const int i = threadIdx.y * blockDim.x + threadIdx.x;
+    C[i] = A[i] + B[i];
+}
+// dim3 threadsPerBlock(N, N);
+// MatAdd<<<1, threadsPerBlock>>>(A, B, C);
+</pre>
+</div>
+
+<h3>Matrix multiplication: the CPU version</h3>
+<pre class="code">
+void MatrixMultiplication(float* M, float* N, float* P, int width) {
+    for (int i = 0; i < width; ++i)
+        for (int j = 0; j < width; ++j) {
+            float sum = 0;
+            for (int k = 0; k < width; ++k)
+                sum += M[i*width + k] * N[k*width + j];
+            P[i*width + j] = sum;
+        }
+}
+</pre>
+<p>Start from the output: <strong>one output element = one dot product = one <code>for</code> loop</strong>, and neighbouring output elements are independent. So each thread can compute one <code>P[i][j]</code>; the two outer loops become threads, the inner <code>k</code> loop stays inside the thread.</p>
+
+<h2>The host side: allocate, copy, launch</h2>
+<p>The GPU is a <strong>coprocessor</strong>: we offload parallel work to it, copy the result back and continue. The kernel is the actual GPU code; the rest is set-up, executed by the host (CPU).</p>
+<pre class="code" data-title="Five steps">
+void cuMatrixMultiplication(float* M, float* N, float* P, int width)
+{
+    int size = width * width * sizeof(float);
+    float *Md, *Nd, *Pd;
+    // 1. allocate device memory
+    cudaMalloc((void**)&Md, size);
+    cudaMalloc((void**)&Nd, size);
+    cudaMalloc((void**)&Pd, size);
+    // 2. copy the inputs to the device
+    cudaMemcpy(Md, M, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(Nd, N, size, cudaMemcpyHostToDevice);
+    // 3. launch the kernel
+    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 dimGrid(width / TILE_WIDTH, width / TILE_WIDTH);
+    MatMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, width);
+    // 4. copy the result back to the host
+    cudaMemcpy(P, Pd, size, cudaMemcpyDeviceToHost);
+    // 5. free device memory
+    cudaFree(Md); cudaFree(Nd); cudaFree(Pd);
+}
+</pre>
+<ul>
+  <li><code>cudaMalloc(void** devPtr, size_t size)</code>: the first parameter is <strong>the address of the pointer variable</strong> (the function writes the allocated address there), cast to <code>(void**)</code> because the function is type-agnostic. The second parameter is the size in <strong>bytes</strong> (like C's <code>malloc</code>).</li>
+  <li><code>cudaFree(void* devPtr)</code>: frees what <code>cudaMalloc</code> allocated.</li>
+  <li><code>cudaMemcpy(dst, src, bytes, kind)</code>: kind is <code>cudaMemcpyHostToHost / HostToDevice / DeviceToDevice / DeviceToHost</code>. It is <strong>synchronous</strong> (blocking, does not return until done); asynchronous versions exist.</li>
+  <li>A kernel launch, in contrast, is <strong>asynchronous</strong>: when timing, wait for it with <code>cudaDeviceSynchronize()</code> (L6).</li>
+</ul>
+<div class="callout gotcha">
+  <p>The slide's <code>float* Md, Nd, Pd;</code> line makes only <code>Md</code> a pointer in C (<code>Nd</code>, <code>Pd</code> become plain <code>float</code>s). The correct form is <code>float *Md, *Nd, *Pd;</code>. Watch out when writing code in the exam.</p>
+</div>
+
+<h2>Kernels and function qualifiers</h2>
+<p>A kernel specifies the code executed by all threads. <strong>SIMT</strong> (Single Instruction Multiple Threads): threads see the same instruction, but its parameters come from each thread's own registers, so different threads can do different work. <code>threadIdx</code> lets a thread distinguish itself and direct itself to its part of the data (predefined variables read from hardware registers).</p>
+<table class="simple">
+  <thead><tr><th>Qualifier</th><th>Executed on</th><th>Callable from</th></tr></thead>
+  <tbody>
+    <tr><td><code>__device__ float DeviceFunc()</code></td><td>Device</td><td>Device</td></tr>
+    <tr><td><code>__global__ void Kernel()</code></td><td>Device</td><td>Host</td></tr>
+    <tr><td><code>__host__ float HostFunc()</code></td><td>Host</td><td>Host</td></tr>
+  </tbody>
+</table>
+<p>Without a qualifier the function defaults to <code>__host__</code>. <code>__global__</code> means a kernel, returning <code>void</code>.</p>
+<div class="two-col">
+<pre class="code" data-title="The first, single-block version (slide 23)">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[ty * width + i] * Nd[i * width + tx];
+    Pd[ty * width + tx] = sum;
+}
+// dim3 blockDim(width, width); dim3 gridDim(1, 1);
+</pre>
+<div>
+  <p><strong>Where are the loops?</strong> The outer <code>i</code> and <code>j</code> loops are gone: <code>ty</code> (row) and <code>tx</code> (column) replaced them. The dot-product loop remains.</p>
+  <p><strong>Its problem:</strong> it uses only one block, so the matrix can have at most as many elements as the threads-per-block limit (512 on old GPUs → 16×16; 1024 on newer ones → 32×32). Even with more blocks, threads in different blocks with the same <code>threadIdx</code> would compute the <strong>same</strong> <code>Pd</code> element, because <code>blockIdx</code> is not used.</p>
+</div>
+</div>
+
+<h2>Thread blocks and indexing</h2>
+<ul>
+  <li>When a kernel is launched it executes as a <strong>grid</strong> of parallel threads (thousands to millions of lightweight threads).</li>
+  <li>Two-level hierarchy: grid → one or more <strong>thread blocks</strong>; all blocks of a grid have the same number of threads. Each block has a <code>blockIdx</code> coordinate (2D on compute 1.x, 3D on 2.0+).</li>
+  <li>Each block is a 3D array of up to 512 (compute 1.x) / <strong>1024</strong> (2.0+) threads; a thread's coordinate within the block is <code>threadIdx</code>.</li>
+  <li>1D example (slides 31–33): N blocks of M threads → N·M threads. Thread 3 of block 0: <code>0·M + 3</code>; thread 3 of block 5: <code>5·M + 3</code>. In general: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
+  <li>Input and output mappings can differ: read data with one mapping, process with another, write with a third (different input/output data rates, shared memory preparation, boundary conditions).</li>
+</ul>
+<pre class="code" data-title="Matmul with blocks (slide 39): each thread one element of P">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
+    int col = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[row * width + i] * Nd[i * width + col];
+    Pd[row * width + col] = sum;
+}
+</pre>
+<p>Here <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Try your own configuration: <a href="lab.html">lab</a>.</p>
+<div class="callout discuss">
+  <p><strong>The questions of slide 40.</strong> (1) Can we enforce an execution order on blocks? <strong>No.</strong> (2) Can we assume a block with a smaller ID starts before one with a larger ID? <strong>No.</strong> (3) How does this relate to scalability? Because blocks are independent, the runtime can distribute them to any SM in any order (round-robin); the same program runs on a 2-SM GPU and on an 80-SM GPU.</p>
+</div>
+<p>Limits to take into account: maximum threads per block, maximum blocks per SM, <strong>maximum threads per SM</strong>. Generally aim for as many resident threads on the SMs as possible (occupancy).</p>
+
+<h2>Synchronisation: <code>__syncthreads()</code></h2>
+<ul>
+  <li>Threads in the same block coordinate their activities with barrier synchronisation. Every calling thread is held at that point until all threads of the block reach it. This ensures everyone has finished one phase before anyone moves on. Typical example: filling shared memory.</li>
+  <li>Real life: four people carpooling to work. They work in parallel at their desks; when leaving, everybody waits until all four are back at the car (barrier).</li>
+  <li><strong>It must be executed by all threads of the block.</strong> Using it in <code>if/else</code> is undefined behaviour; the only exception is when the condition evaluates the same for all threads of the block.</li>
+  <li>It actually synchronises <strong>warps</strong>, not threads.</li>
+  <li>To keep waiting times short, the runtime assigns <strong>all</strong> threads of a block to the same SM together.</li>
+  <li>Synchronising across blocks was almost impossible before CUDA 9 (hacks with <code>__threadfence()</code>, which halts a thread until its previous shared/global writes are visible to others). With CUDA 9 (Pascal): <strong>cooperative groups</strong>.</li>
+</ul>
+
+<h2>Block assignment, warps, latency hiding</h2>
+<ul>
+  <li>When a kernel starts, the runtime creates the grid; threads are assigned to SMs <strong>block by block</strong>. GT200: 30 SMs, at most 8 blocks per SM → 240 blocks at once; a finished block is replaced by a new one from the list.</li>
+  <li>The number of threads an SM can track is limited too: 1024 per SM on the GT200 (e.g. 4 × 256 or 8 × 128) → 30 · 1024 = 30,720 resident threads.</li>
+  <li><strong>Warp:</strong> 32 threads with consecutive <code>threadIdx</code>; the unit of scheduling on an SM. Threads 0–31 are the first warp, 32–63 the second… The mapping is deterministic. A 256-thread block = 8 warps; 3 blocks on an SM = 24 warps.</li>
+  <li>"You don't need to know about warps to write CUDA code; you DO need to know about them to write <strong>high-performance</strong> CUDA code."</li>
+  <li><strong>Latency hiding:</strong> a warp waiting for the result of a long-latency operation (global memory access, pipelined FP arithmetic, branches) is not selected; another ready warp runs instead. The selection adds no idle time: <strong>zero-overhead thread scheduling</strong>. With enough warps the hardware always finds one to run.</li>
+  <li>That is why GPUs do not devote as much area to large caches and branch prediction as CPUs; they give that area to FP units.</li>
+</ul>
+<div class="callout example">
+  <p><strong>Matmul block size for the GT200</strong> (1024 threads/SM, 8 blocks/SM, 512 threads/block):</p>
+  <ul>
+    <li><strong>8×8</strong> = 64 threads → filling the SM would need 16 blocks but the limit is 8 → 8·64 = 512 threads: resources half idle, few warps to hide latency.</li>
+    <li><strong>16×16</strong> = 256 threads → 1024/256 = 4 blocks (under the limit of 8) → full capacity ✓.</li>
+    <li><strong>32×32</strong> = 1024 threads → exceeds the limit of 512 per block ✗.</li>
+  </ul>
+  <p>Result: 16×16. (No shared memory yet; with it the calculation gets more complicated.)</p>
+</div>
+
+<h2>Memory access efficiency: CGMA</h2>
+<ul>
+  <li>The simple kernel reaches only a small fraction of the hardware's potential: threads repeatedly load <strong>overlapping input data</strong> from global memory.</li>
+  <li>Global memory = DRAM: hundreds of clock cycles of latency, limited bandwidth. Latency hiding helps, but not if everyone accesses global memory all the time.</li>
+  <li><strong>CGMA</strong> (compute to global memory access): the number of FP operations per global memory access in a region. The matmul inner loop does 2 global reads and 1 multiply + 1 add per iteration → <strong>CGMA = 1</strong>.</li>
+</ul>
+<div class="formula-box">G80: 86.4 GB/s global bandwidth
+  86.4 / 4 B = 21.6 billion floats/s can be loaded
+  CGMA = 1  →  at most 21.6 GFLOPS
+  Peak 367 GFLOPS  →  21.6 / 367 ≈ 6%
+CGMA must be raised for higher performance.</div>
+
+<h2>CUDA memory types</h2>
+<table class="simple">
+  <thead><tr><th>Declaration</th><th>Memory</th><th>Scope</th><th>Lifetime</th><th>Speed / note</th></tr></thead>
+  <tbody>
+    <tr><td>Automatic scalar variable (<code>int i;</code>)</td><td>Register</td><td>Thread</td><td>Kernel/thread</td><td>Very fast, on-chip. Limited: spills if exceeded.</td></tr>
+    <tr><td>Automatic array (<code>float a[N];</code>)</td><td>Local (in global)</td><td>Thread</td><td>Kernel/thread</td><td>As slow as global (may go to registers if indexed with constants).</td></tr>
+    <tr><td><code>__shared__ float s[N];</code></td><td>Shared</td><td>Block</td><td>Kernel/block</td><td>Very fast, on-chip, cooperation within a block.</td></tr>
+    <tr><td><code>__device__ float g;</code> / <code>cudaMalloc</code></td><td>Global</td><td>Grid (+host API)</td><td>Application</td><td>Large, slow (DRAM, 400–600 cycles).</td></tr>
+    <tr><td><code>__constant__ float c[N];</code> (outside functions)</td><td>Constant</td><td>All grids</td><td>Application</td><td>In global memory but cached; very fast when all read the same address. ~64 KB total. Read-only from kernels.</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Global, local and constant memory can be written and read by the host via API calls. Registers and shared memory are on-chip.</li>
+  <li>The total registers are divided among the running threads. If the compiled code's registers per thread exceed the limit: <strong>register spill</strong>, the excess goes to local memory, i.e. per-thread global memory access; very slow.</li>
+  <li>The scope of a <code>__shared__</code> variable is the block: all threads of the block see the same version; its contents vanish when the kernel ends. For holding the portion of global data heavily used in an execution phase. Algorithms may need adjusting to create phases that focus on small portions of global memory.</li>
+  <li>A <code>__constant__</code> declaration must be outside any function body; its scope is all grids, its lifetime the whole application. Often used for input values to kernels.</li>
+</ul>
+
+<h2>Tiling with shared memory</h2>
+<p>The basic trade-off: global memory is large but slow, shared memory small but fast. Strategy: partition the data into <strong>tiles</strong> that each fit in shared memory; the computations on tiles must be doable independently. (Not every data structure can be tiled for every kernel.)</p>
+
+<h3>Overlapping accesses</h3>
+<p>The small example in the slides: P computed by four 2×2 blocks. The four threads of block (0,0) compute Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>. Each thread reads 4 elements of Md and 4 of Nd, and thread(0,0) and thread(1,0) <strong>both</strong> read all of row 0 of Md. During block (0,0) every Md and Nd element is read exactly twice: if the threads cooperate to load each element once, global traffic halves.</p>
+<p>In general: with N×N blocks the possible reduction is <strong>N times</strong>. 16×16 → global traffic 1/16.</p>
+<div class="formula-box">16×16 block, NO shared memory:  16·16 threads × (width + width) reads = 16·16·2·width
+16×16 block, WITH shared memory: each element read once          = 16·width·2
+Ratio: (16·16·2·width) / (16·width·2) = 16</div>
+<div class="callout discuss">
+  <p><strong>Slides 86 and 88: "What about 16×8?", "1024×1024 matrices, 32×8 blocks?"</strong> A BX×BY block computes a BY-row × BX-column tile of P. Without shared memory the block does <code>BX·BY·2·width</code> reads; with tiles it reads <code>BY·width</code> from M and <code>BX·width</code> from N. Reduction = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10.7×</strong>. 32×8: 512/40 = <strong>12.8×</strong> (independent of the matrix size). For a square T×T it equals T.</p>
+</div>
+
+<h3>The tiled kernel</h3>
+<p>Threads <strong>cooperatively</strong> load Md and Nd elements into shared memory, then use them in their dot products. Since shared memory is small, Md and Nd are divided into tiles that fit, and the dot product is split into <strong>phases</strong>: in phase <code>m</code> each thread loads one element from the M tile and one from the N tile.</p>
+<pre class="code" data-title="Slide 90">
+__global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int Row = by * TILE_WIDTH + ty;     // this thread's row of P
+    int Col = bx * TILE_WIDTH + tx;     // this thread's column of P
+    float Pvalue = 0;
+    for (int m = 0; m < width / TILE_WIDTH; ++m) {           // phase loop
+        Mds[ty][tx] = Md[Row * width + (m * TILE_WIDTH + tx)];   // M[Row][m*T + tx]
+        Nds[ty][tx] = Nd[(m * TILE_WIDTH + ty) * width + Col];   // N[m*T + ty][Col]
+        __syncthreads();                                      // (1) tiles filled
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();                                      // (2) everyone done using them
+    }
+    Pd[Row * width + Col] = Pvalue;
+}
+</pre>
+<ul>
+  <li><strong>Loading M:</strong> row <code>Row</code> fixed (the thread's row), column <code>m*T + tx</code>: column <code>tx</code> of the tile in phase m. <code>tx</code> is consecutive within a warp → coalesced.</li>
+  <li><strong>Loading N:</strong> row <code>m*T + ty</code>, column <code>Col</code>: row <code>ty</code> of the tile in phase m. Again <code>tx</code> (inside Col) is on the right → coalesced.</li>
+  <li><strong>Computing:</strong> <code>Mds[ty][k]</code> = element k of the P row, <code>Nds[k][tx]</code> = element k of the P column. In total <code>width/T</code> phases × <code>T</code> terms = <code>width</code> terms, as in the CPU version.</li>
+  <li><strong>Why two barriers?</strong> (1) After the writes: <code>Mds[ty][k]</code>, <code>Nds[k][tx]</code> loaded by other threads will be read; not before the tile is full. (2) After the computation: the next phase overwrites <code>Mds/Nds</code>; a fast thread must not write while others are still reading.</li>
+  <li>Global reads per thread: naive <code>2·width</code>, tiled <code>2·width/T</code> → T times fewer. This code assumes <code>width</code> is a multiple of <code>TILE_WIDTH</code>.</li>
+</ul>
+<div class="wgt-mount" data-widget="tiling"></div>
+<p>The same idea with a non-square block (e.g. <code>dim3(8,32)</code>): <a href="exam-midterm2.html#the-tiled-shared-memory-version-with-the-same-configuration">the solution in the midterm 2 guide</a>.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>Why is <code>&amp;Md</code> passed in <code>cudaMalloc((void**)&amp;Md, size)</code>?</p>
+  <ol>
+    <li data-why="Md is not a host buffer; it is a variable that will hold a device address.">Because Md will be allocated in host memory.</li>
+    <li data-why="size is already in bytes; unrelated to &amp;.">To give the size in bytes.</li>
+    <li data-why="True: the function writes the device address it allocated into this pointer variable.">So that the function can write the allocated address into the variable Md.</li>
+    <li data-why="cudaMalloc only allocates; copying is cudaMemcpy's job.">To copy data into Md.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>With 256-thread blocks and 3 blocks on an SM, how many warps are on the SM?</p>
+  <ol>
+    <li data-why="That is the warp count of a single block.">8</li>
+    <li data-why="256/32 = 8 warps/block × 3 = 24.">24</li>
+    <li data-why="768 is the number of threads, not warps.">768</li>
+    <li data-why="A warp is 32 threads; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Why is the CGMA ratio of naive matmul 1?</p>
+  <ol>
+    <li data-why="The naive kernel does not use shared memory.">There is one FP operation per shared memory access.</li>
+    <li data-why="Each thread does 2·width reads in total; the ratio is per iteration.">Each thread reads one element.</li>
+    <li data-why="CGMA is FP operations / global accesses; registers are unrelated.">Each thread uses one register.</li>
+    <li data-why="True: per loop iteration 2 global reads (M and N) and 2 FP operations (multiply + add).">Each iteration does 2 global reads and 2 FP operations (multiply, add).</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What can happen if the <strong>second</strong> <code>__syncthreads()</code> in the tiled kernel is removed?</p>
+  <ol>
+    <li data-why="True: a fast thread may write the next phase's data into Mds/Nds while a slow thread is still reading the old phase's values.">A thread may load the next phase's tile while another thread is still reading the previous phase's values.</li>
+    <li data-why="The compiler does not catch a missing barrier.">A compile error.</li>
+    <li data-why="The global write is after the loop; the problem is in shared memory.">The write to Pd is no longer coalesced.</li>
+    <li data-why="A race gives undefined results; there is no guarantee it is always right.">Nothing; the second barrier is unnecessary.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is true for <code>__constant__</code> variables?</p>
+  <ol>
+    <li data-why="Constant memory is not on-chip; it is in global memory, cached.">They live in a separate on-chip memory, no cache needed.</li>
+    <li data-why="The declaration must be outside function bodies.">They are declared inside the kernel.</li>
+    <li data-why="True: scope all grids, lifetime the application, stored in global memory but cached.">All grids see the same version; stored in global memory but cached.</li>
+    <li data-why="Read-only from kernels; the host writes with cudaMemcpyToSymbol.">Kernels can write to them.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

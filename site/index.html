@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paralel Hesaplama · BİL 455/533 çalışma sitesi</title>
+<meta name="description" content="BİL 455/533 Paralel Hesaplama (TOBB ETÜ, 2026 Güz) için iki dilli çalışma sitesi: 2. ara sınav (CUDA, shared memory, __syncthreads, coalescing, tiled matmul, transpose) önceliğiyle Lecture 1–6.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/index.js"></script>
+</head>
+<body data-page="index">
+<main><div class="content">
+
+<section class="hero">
+  <div>
+    <div class="kicker"><span>BİL 455/533 Paralel Hesaplama · TOBB ETÜ · 2026 Güz · Toygar Akgün</span></div>
+    <h1>Paralel Hesaplama</h1>
+    <p class="question">Binlerce thread'i aynı anda nasıl çalıştırırız ve belleği nasıl besleriz?</p>
+    <p class="lead">Ders slaytları (Lecture 1–6), alıştırmalar ve ders notları tek yerde. Öncelik yarınki <strong>2. ara sınav</strong>: CUDA, shared memory, <code>__syncthreads()</code>, indeksler ve coalescing.</p>
+    <div class="btn-row" style="margin-top:1rem">
+      <a class="btn primary" href="exam-midterm2.html">2. vize rehberi →</a>
+      <a class="btn" href="lab.html">İndeks laboratuvarı</a>
+      <a class="btn" href="coalescing.html">Coalescing ve transpose</a>
+    </div>
+  </div>
+  <div class="exam-card" style="margin:0">
+    <div class="card-kicker">2. ara sınav</div>
+    <div><strong>11 Kasım 2026 Çarşamba · 15:30–17:30 · Derslik 306</strong></div>
+    <div class="countdown-big" id="countdown"></div>
+    <ul>
+      <li>Kapsam: dönem başından 10 Kasım dersine kadar (Lecture 1–6), ağırlık CUDA.</li>
+      <li>Duyuruda: shared memory kullanımı, <code>__syncthreads()</code>, coalescing.</li>
+      <li><strong>Yok:</strong> shared memory bank optimizasyonu ve texture memory.</li>
+      <li>Süre 2 saat.</li>
+      <li>1 A4 el yazısı kopya kâğıdı (iki yüz). Hesap makinesi yok.</li>
+    </ul>
+  </div>
+</section>
+
+<h2>Plan</h2>
+<p>Sınava bir gün kala önerilen sıra: rehber → laboratuvar → coalescing/transpose → L5 (tiled matmul) → kopya kâğıdı. L1–L3 de kapsamda ama ağırlık CUDA'da.</p>
+<div class="cards" id="parts"></div>
+
+<h2>Konular nasıl bağlanıyor?</h2>
+<ol>
+  <li><strong>Neden paralel? (L1)</strong> Frekans artışı güç duvarına (power wall) çarptı; performans artık çok çekirdekten ve GPU'dan geliyor. Kazancın sınırını Amdahl ve Gustafson yasaları anlatır.</li>
+  <li><strong>Nasıl tasarlanır? (L2)</strong> PCAM: problemi parçala, iletişimi belirle, parçaları birleştir, işlemcilere eşle. Ayrıştırma desenleri (geometrik, pipeline, …) ve program yapıları (SPMD, master-worker, map-reduce, fork/join).</li>
+  <li><strong>CPU'da paylaşımlı bellek (L3)</strong> C++11 thread'leri; veri yarışlarını mutex, semafor, atomik ve monitörlerle önlemek.</li>
+  <li><strong>GPU'da veri paralelliği (L4–L5)</strong> Her veri elemanına bir thread: grid → blok → thread, <code>blockIdx/threadIdx</code> ile indeksleme, warp'lar, blok içi senkronizasyon ve shared memory ile tiling.</li>
+  <li><strong>Belleği beslemek (L6)</strong> Hesap ucuz, bellek pahalı: register/shared sınırları, coalescing, pitch, constant bellek (texture bu vizede yok). Transpose örneği bunların hepsini bir araya getirir.</li>
+</ol>
+
+<h2>Sitenin kullanımı</h2>
+<div class="two-col">
+  <div>
+    <ul>
+      <li>Sağdaki <strong>içindekiler</strong> okuduğunuz bölümü gösterir; dar ekranda üstte bir çubuk olarak açılır.</li>
+      <li>Sağ üstteki <strong>EN/TR</strong> düğmesi aynı sayfanın diğer dildeki hâline, aynı bölüme gider.</li>
+      <li>Sınama sorularında yanlış seçeneğe tıklayınca nedeni yazar; "Cevabı göster" tüm seçeneklerin açıklamasını açar.</li>
+      <li>Çözümlü sorularda önce kendiniz çözün, sonra <strong>Çözümü göster</strong>.</li>
+    </ul>
+  </div>
+  <div>
+    <div class="callout key"><p>Akılda kalması gereken kural.</p></div>
+    <div class="callout gotcha"><p>Sınavda sık yapılan hata.</p></div>
+    <div class="callout class"><p>Derste anlatılan, slaytlarda olmayan içerik.</p></div>
+    <div class="callout beyond"><p>2. vize kapsamı dışında (bank conflict'ler, texture memory).</p></div>
+  </div>
+</div>
+
+<h2>Kaynaklar</h2>
+<ul>
+  <li>Ders slaytları: Lecture 1 (giriş), 2 (tasarım), 3 (thread'ler), 4 (CUDA'ya giriş), 5 (CUDA programlama), 6 (CUDA programlama arayüzü ve bellek).</li>
+  <li>Alıştırmalar: Exercise 1–2 (C++ thread'leriyle histogram, integral dizi/görüntü, 2D konvolüsyon, matris çarpımı), Exercise 3–4 (aynılarının CUDA versiyonları). Örnek kodlar: semafor senkronizasyonu, texture ile görüntü döndürme (<code>texRotate.cu</code>).</li>
+  <li>NVIDIA, <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-programming-guide/" target="_blank" rel="noopener">CUDA C++ Programming Guide</a> ve <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-best-practices-guide/" target="_blank" rel="noopener">Best Practices Guide</a> (slaytların önerdiği).</li>
+  <li>M. Harris, <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">An Efficient Matrix Transpose in CUDA C/C++</a> (transpose örneği).</li>
+</ul>
+
+</div></main>
+</body>
+</html>

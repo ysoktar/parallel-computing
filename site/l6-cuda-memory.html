@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Derleme ve bellek türleri · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 6: runtime ve driver API, nvcc ile derleme (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), başlatma ve zaman ölçümü, register/shared sınırları, local, shared, constant ve texture bellek.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l6-cuda-memory">
+<main><div class="content">
+
+<h1>Derleme ve bellek türleri</h1>
+<p class="lead">Bir <code>.cu</code> dosyası GPU'da çalışan koda nasıl dönüşür, hangi GPU'larda çalışır? Ve her bellek türü (register, local, shared, global, constant, texture) ne zaman, nasıl kullanılır? Lecture 6'nın coalescing kısmı <a href="coalescing.html">ayrı sayfada</a>.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Runtime API ile driver API'yi ayırt etmek; PTX, cubin ve JIT derlemeyi açıklamak.</li>
+    <li>Bir <code>-gencode</code> satırından hangi GPU'ya hangi kodun yükleneceğini söylemek.</li>
+    <li>Register ve shared bellek sınırlarından SM başına blok/thread sayısını hesaplamak.</li>
+    <li>Local ve constant belleğin ne olduğunu ve en iyi erişim desenlerini söylemek (texture bu vizede yok).</li>
+  </ul>
+</div>
+
+<h2>Programlama arayüzü: runtime ve driver API</h2>
+<ul>
+  <li>CUDA C++ = C++'a küçük bir uzantı kümesi + bir runtime kütüphanesi. Bu uzantıları içeren her kaynak dosya <strong>nvcc</strong> (NVIDIA CUDA Compiler) ile derlenmeli.</li>
+  <li><strong>Runtime API</strong> (<code>cuda</code> ile başlar, ör. <code>cudaMalloc()</code>): host'ta çalışan, cihaz belleği ayırma/serbest bırakma, host-cihaz kopyalama, çoklu cihaz yönetimi gibi fonksiyonlar. Daha alt seviyedeki <strong>driver API</strong>'nin (<code>cu</code> ile başlar, ör. <code>cuMemAlloc()</code>) üzerine kuruludur.</li>
+  <li>Driver API ek kontrol verir: <strong>CUDA context</strong> (cihaz için host process'in karşılığı) ve <strong>CUDA module</strong> (cihaz için dinamik yüklenen kütüphanenin karşılığı). Kernel başlatmak daha zahmetlidir (konfigürasyon ve parametreler açık fonksiyon çağrılarıyla), ama modüller gerektiğinde yüklenip boşaltılabilir; dilden bağımsızdır (sadece cubin nesneleriyle çalışır).</li>
+  <li>Runtime API başlatma, context ve modül yönetimini örtük yapar → daha kısa kod, daha az kontrol. Çoğu uygulama runtime API kullanır; gerekirse ikisi birlikte kullanılabilir.</li>
+  <li><strong>Primary context:</strong> runtime, process başına cihaz başına bir tane oluşturur (referans sayımlı), process'teki tüm runtime kullanıcıları paylaşır. <code>cudaDeviceSynchronize()</code> ile senkronize, <code>cudaDeviceReset()</code> ile yok edilir. Tuzak: aynı process'teki eklentilerden biri <code>cudaDeviceReset()</code> çağırırsa diğerlerinin context'i habersizce yok olur.</li>
+  <li>Bir context kendi adres uzayına sahiptir: farklı context'lerdeki aynı pointer değeri farklı bellek konumlarını gösterir.</li>
+</ul>
+
+<h2>nvcc ile derleme</h2>
+<ul>
+  <li>Kerneller CUDA komut seti mimarisi <strong>PTX</strong> (Parallel Thread Execution) ile de yazılabilir (Assembly'ye benzer); genelde C++ daha verimli. Her iki durumda da kerneller nvcc ile ikili koda derlenmeli.</li>
+  <li><strong>Offline derleme:</strong> nvcc host ve device kodunu ayırır; device kodunu PTX'e ve/veya ikili <strong>cubin</strong>'e derler; host kodundaki <code>&lt;&lt;&lt;…&gt;&gt;&gt;</code> sözdizimini kernel'i yükleyip başlatan runtime çağrılarıyla değiştirir. Değiştirilmiş host kodu C++ olarak ya da host derleyicisi çağrılarak nesne kodu olarak çıkar.</li>
+  <li><strong>JIT (just-in-time) derleme:</strong> uygulamanın çalışma zamanında yüklediği PTX, sürücü tarafından ikili koda derlenir. Yükleme süresini uzatır ama yeni sürücülerdeki derleyici iyileştirmelerinden faydalanır ve derlendiği zaman <strong>var olmayan GPU'larda çalışmanın tek yoludur</strong>. Sonuç <strong>compute cache</strong>'te saklanır, sürücü güncellenince geçersiz olur. Alternatif: NVRTC (çalışma zamanında C++ → PTX).</li>
+</ul>
+<div class="callout class">
+  <p><strong>Derleme zinciri</strong> (tahtada): <code>.cu</code> (C/C++) → nvcc ön ucu → <strong>PTX</strong> (sanal ISA, metin) → <strong>ptxas</strong> → <strong>SASS</strong> (gerçek makine kodu, belirli bir <code>sm_XY</code> için; cubin içinde). PTX taşınabilir ara dildir, SASS mimariye özeldir. Ara dosyaları görmek: <code>nvcc -keep</code> veya <code>-ptx</code>; SASS'i görmek: <code>cuobjdump -sass</code>; register sayısı: <code>--ptxas-options=-v</code>.</p>
+</div>
+
+<h3>Uyumluluk</h3>
+<ul>
+  <li><strong>İkili (cubin) uyumluluk:</strong> cubin mimariye özeldir; <code>-code=sm_80</code> compute capability 8.0 için kod üretir. X.y için üretilen cubin sadece X.z (z ≥ y) cihazlarda çalışır: <strong>aynı major içinde ileriye</strong> uyumlu; geriye veya major'lar arası değil. (Sadece masaüstü; Tegra'da yok.)</li>
+  <li><strong>PTX uyumluluğu:</strong> bazı PTX komutları sadece yüksek compute capability'lerde var (ör. warp shuffle 5.0+). <code>-arch</code> C++ → PTX derlemede varsayılan compute capability'yi belirtir (maksimum performans için her zaman verin). Belli bir compute capability için üretilen PTX, ona <strong>eşit veya büyük</strong> her ikili koda derlenebilir. Ama eski PTX'ten derlenen ikili yeni donanım özelliklerini kullanamaz (ör. Pascal 6.0 PTX'inden Volta 7.0 ikilisi Tensor Core kullanmaz).</li>
+  <li><strong>Uygulama uyumluluğu:</strong> gelecekteki (henüz ikili üretilemeyen) mimarilerde çalışmak için uygulama JIT ile derlenecek <strong>PTX</strong> içermeli.</li>
+</ul>
+<pre class="code" data-title="-gencode örneği (slayt 19–20)">
+nvcc x.cu -gencode arch=compute_50,code=sm_50
+          -gencode arch=compute_60,code=sm_60
+          -gencode arch=compute_70,code=\"compute_70,sm_70\"
+</pre>
+<table class="simple">
+  <thead><tr><th>Cihaz</th><th>Çalışan kod</th></tr></thead>
+  <tbody>
+    <tr><td>5.0, 5.2</td><td>5.0 ikilisi</td></tr>
+    <tr><td>6.0, 6.1</td><td>6.0 ikilisi</td></tr>
+    <tr><td>7.0, 7.5</td><td>7.0 ikilisi</td></tr>
+    <tr><td>8.0, 8.6</td><td>7.0 PTX'i, çalışma zamanında JIT ile derlenir</td></tr>
+  </tbody>
+</table>
+<p>Mimariye özel kod yolları için <code>__CUDA_ARCH__</code> makrosu: sadece device kodunda tanımlı; <code>-arch=compute_80</code> ile 800'e eşit.</p>
+
+<h2>Başlatma ve zaman ölçümü</h2>
+<ul>
+  <li>CUDA 12.0'dan beri <code>cudaInitDevice()</code> ve <code>cudaSetDevice()</code> runtime'ı ve cihazın primary context'ini başlatır. Bunlar çağrılmazsa runtime cihaz 0'ı kullanır ve ilk API çağrısında kendini başlatır (o çağrı yavaş olur, hata kodu da o çağrıdan gelir). 12.0 öncesi: başlatmayı ayırmak için <code>cudaFree(0)</code>.</li>
+  <li>Context oluşturulurken gerekirse device kodu JIT ile derlenip cihaz belleğine yüklenir.</li>
+  <li><strong>GPU yardımcı işlemcidir;</strong> işletim sistemini CPU başlatır, "şovu CPU yönetir".</li>
+  <li>Süre ölçerken: (1) GPU önceden başlatılmış olmalı (soğuk çalıştırma olmasın), (2) kod bitmiş olmalı. <strong>Kernel başlatmaları asenkrondur</strong>: kernel'den sonra, süreyi almadan önce <code>cudaDeviceSynchronize()</code>. (Yoksa "mucizevi derecede kısa" süreler ölçersiniz.) Örnek: <code>texRotate.cu</code> 100 tekrarın her birinde kernel + <code>cudaDeviceSynchronize()</code> süresini ölçüp ortalamasını alır.</li>
+</ul>
+
+<h2>Bellek sınırları ve etkileri</h2>
+<ul>
+  <li>Register sınırı, yüksek performansla (spill olmadan) çalışabilecek thread sayısını doğrudan etkiler.</li>
+  <li>Shared bellek sınırı, SM'de yerleşebilecek blok sayısını doğrudan (thread sayısını dolaylı) etkiler.</li>
+  <li>Özet: thread başına ne kadar çok bellek gerekirse SM'de (ve tüm işlemcide) o kadar az thread yerleşebilir.</li>
+</ul>
+<div class="callout example">
+  <p><strong>G80:</strong> 16 SM, SM başına 8K = 8192 register → toplam 128K = 131.072. Çok gibi görünür ama SM başına 768 thread'i doldurmak için thread başına sadece 8192/768 ≈ <strong>10 register</strong>.</p>
+  <p><strong>Register spill:</strong> derlenen kod (maks. register / thread sayısı)'ndan fazla register kullanırsa kernel yine çalışır ama fazlası <strong>local memory</strong>'ye (= global bellek, thread'e özel) taşar → performans düşer. Register sayısını görmek: <code>--ptxas-options=-v</code>.</p>
+  <p><strong>Shared:</strong> G80'de SM başına 16 KB, en fazla 8 blok → maksimuma ulaşmak için blok başına ≤ 2 KB. 2 KB'tan fazla kullanılırsa SM'deki blok sayısı toplam 16 KB'ı aşmayacak kadar olur.</p>
+  <p><strong>Matmul:</strong> 16×16 tile → Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/blok → 8 blok sığar (zaten G80 sınırı). Ama asıl sınır SM başına 768 thread: 768 / 256 = <strong>3 blok</strong> → shared'ın sadece 3·2 = 6 KB'ı kullanılır. Bu sınırların hepsi cihaza bağlıdır.</p>
+</div>
+<p>Mimari listesi (2023 itibarıyla ~20 tür): Tesla (1.0, 1.1), Fermi (2.0, 3.0), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Bellek davranışları cihaza bağlı: her zaman kullandığınız cihazın özelliklerini bilin.</p>
+
+<h2>Global bellek</h2>
+<p>Verimli erişim için dört ana nokta (slayt 35):</p>
+<ol>
+  <li>Erişimleri <strong>coalesce</strong> edin.</li>
+  <li>Bayt hizalamasına dikkat edin (<strong>pitch</strong>'li erişimler).</li>
+  <li>Büyük gruplar hâlinde okuyup yazın.</li>
+  <li><strong>Shared memory</strong> kullanın.</li>
+</ol>
+<p>Ayrıntılar, segment hesapları, pitch ve transpose: <a href="coalescing.html">Coalescing sayfası</a>. Kısaca: <code>cudaMalloc</code> adresleri en az 256 bayta hizalıdır; ama 2D bir dizide bir sonraki satırın başı genişliğe bağlıdır, bu yüzden <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code> satırları doldurup pitch döndürür. Adreslenebilir belleğe (global, local, shared, constant, texture) erişen bir komut, adreslerin warp'taki dağılımına göre birkaç kez yeniden verilmek (re-issue) zorunda kalabilir.</p>
+<pre class="code" data-title="3D pitch'li erişim (slayt 41)">
+cudaExtent extent = make_cudaExtent(width * sizeof(float), height, depth);
+cudaPitchedPtr devPitchedPtr;
+cudaMalloc3D(&devPitchedPtr, extent);
+
+__global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, int depth) {
+    char* devPtr = (char*)devPitchedPtr.ptr;
+    size_t pitch = devPitchedPtr.pitch;
+    size_t slicePitch = pitch * height;
+    for (int z = 0; z < depth; ++z) {
+        char* slice = devPtr + z * slicePitch;
+        for (int y = 0; y < height; ++y) {
+            float* row = (float*)(slice + y * pitch);
+            for (int x = 0; x < width; ++x) { float element = row[x]; }
+        }
+    }
+}
+</pre>
+
+<h2>Local memory</h2>
+<ul>
+  <li>Sadece bazı otomatik değişkenler local memory'ye gider: <strong>(1)</strong> sabit indekslendiği belirlenemeyen diziler, <strong>(2)</strong> çok register yiyecek büyük struct/diziler, <strong>(3)</strong> kernel mevcut register'dan fazlasını kullanıyorsa herhangi bir değişken (<strong>register spilling</strong>).</li>
+  <li>PTX'te (<code>-ptx</code> veya <code>-keep</code>) <code>.local</code> ile bildirilip <code>ld.local</code>/<code>st.local</code> ile erişilir. Sonraki derleme aşamaları yine de karar değiştirebilir: <code>cuobjdump</code> ile cubin'e bakın; <code>--ptxas-options=-v</code> toplam local kullanımını (<code>lmem</code>) raporlar. Bazı matematik fonksiyonları da local memory kullanabilir.</li>
+  <li>Cihaz belleğinde durur: global kadar yüksek gecikme, düşük bant genişliği, aynı coalescing kuralları. Ama ardışık 32-bit kelimeler ardışık thread ID'lerine düşecek şekilde düzenlenmiştir: warp'taki tüm thread'ler <strong>aynı göreli adrese</strong> (aynı dizi indeksi, aynı struct üyesi) erişirse tam coalesced. 5.x ve sonrası: L2'de önbelleklenir.</li>
+</ul>
+
+<h2>Shared memory</h2>
+<ul>
+  <li>On-chip; local/global'den çok daha yüksek bant genişliği, çok daha düşük gecikme.</li>
+  <li>Kullanımı senkronizasyonla birlikte gelir (<code>__syncthreads()</code>). Kullanılan miktar SM başına blok sayısını doğrudan etkiler.</li>
+  <li>Global bellek erişiminin aksine, shared erişimi gecikmeyi gizlemek için başka bir hazır warp'ın çalışmasına yol açmaz.</li>
+  <li>Kullanımı ve tiled matmul: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a>.</li>
+</ul>
+<section class="is-beyond">
+<h3>Bank'lar ve bank conflict'ler <span class="badge-beyond">finalde</span></h3>
+<div class="callout beyond">
+  <p>Duyuru: "Shared memory bank optimization bu sınava dahil değil." Bilgi için kısa özet:</p>
+  <ul>
+    <li>Yüksek bant genişliği için shared bellek eşit boyutlu, aynı anda erişilebilen <strong>32 bank</strong>'a bölünür; ardışık 4 baytlık (yeni mimarilerde 8 bayt) parçalar ardışık bank'lara atanır.</li>
+    <li>n farklı bank'a düşen n adres aynı anda servis edilir. İki adres aynı bank'a düşerse <strong>bank conflict</strong>: istek çakışmasız parçalara bölünüp seri yapılır (n-yollu conflict → throughput / n).</li>
+    <li>Stride 1 ve stride 3 (tek sayı) çakışmasız; stride 2 iki-yollu conflict. Aynı kelimeyi okuyan thread'ler çakışma yaratmaz (broadcast).</li>
+    <li>Çözüm: padding (ör. <code>tile[32][33]</code>).</li>
+  </ul>
+</div>
+</section>
+
+<h2>L2 önbellek kontrolü</h2>
+<p>Bir kernel global bellekteki bir bölgeye tekrar tekrar erişiyorsa bu erişimler <strong>persisting</strong>, bir kez erişiyorsa <strong>streaming</strong>'dir. CUDA 11.0 ve compute capability 8.0+ ile L2'nin bir kısmı persisting erişimlere ayrılabilir; normal/streaming erişimler o kısmı ancak boşsa kullanır.</p>
+
+<h2>Constant memory</h2>
+<ul>
+  <li>Cihaz belleğinde (global) durur, salt okunur <strong>constant cache</strong>'te önbelleklenir.</li>
+  <li>Bir istek, içindeki <strong>farklı adres sayısı kadar</strong> ayrı isteğe bölünür (throughput o oranda düşer); cache hit'te constant cache hızında, değilse cihaz belleği hızında servis edilir.</li>
+  <li><strong>En iyi senaryo: tüm thread'ler aynı adresi okur</strong> (global belleğin tersi: orada ardışık adresler iyi).</li>
+</ul>
+<pre class="code" data-title="Kullanımı">
+__constant__ float constData[256];          // fonksiyonların dışında
+float data[256];                             // host tarafındaki tampon
+cudaMemcpyToSymbol(constData, data, sizeof(data));   // kernel'den önce kopyala
+</pre>
+
+<section class="is-beyond">
+<h2 data-toc="Texture memory">Texture memory <span class="badge-beyond">2. vizede yok</span></h2>
+<div class="callout beyond"><p>Texture memory 2. vize kapsamında değil. Bu bölüm sadece bilgi ve sonrası için.</p></div>
+
+<ul>
+  <li>GPU'nun grafik için kullandığı texture donanımının bir alt kümesi. Texture <strong>salt okunur</strong>; surface yazılabilen texture gibidir.</li>
+  <li>Cihaz belleğinde durur, <strong>texture cache</strong>'te önbelleklenir: fetch sadece cache miss'te bir cihaz belleği okumasına mal olur. Cache <strong>2D uzamsal yerellik</strong> için optimize: 2D'de birbirine yakın adresleri okuyan warp en iyi performansı alır. Sabit gecikmeli akış için tasarlanmıştır: hit DRAM trafiğini azaltır, gecikmeyi değil.</li>
+  <li>Faydalar: global/constant'ın erişim desenine uymayan ama yerelliği olan okumalarda daha yüksek bant genişliği; adres hesapları kernel dışında özel birimlerde (daha az register); paketlenmiş verinin tek işlemde ayrı değişkenlere dağıtılması; 8/16-bit tamsayıların isteğe bağlı olarak [0, 1] / [-1, 1] aralığında float'a çevrilmesi; ücretsiz doğrusal filtreleme ve sınır dışı işleme.</li>
+  <li>Dezavantajlar: yazılamaz; doğrusal belleği texturing için bir <strong>CUDA array</strong>'e kopyalamak gerekir ve bu zaman alır: sonraki hesap buna değmeli.</li>
+</ul>
+<h3>Texture object</h3>
+<p>Texture'dan okumaya <strong>texture fetch</strong> denir; her fetch bir <strong>texture object</strong> alır. Texture object şunları belirtir:</p>
+<table class="simple">
+  <thead><tr><th>Özellik</th><th>Seçenekler</th></tr></thead>
+  <tbody>
+    <tr><td>Texture</td><td>Fetch edilen texture bellek parçası (<code>cudaResourceDesc</code>).</td></tr>
+    <tr><td>Boyut</td><td>1D, 2D, 3D (1/2/3 koordinat); elemanlara <strong>texel</strong> denir.</td></tr>
+    <tr><td>Texel tipi</td><td>Temel tamsayı ve kayan nokta tipleri; char/short/int/long/longlong/float/double'dan 1-, 2-, 4-bileşenli vektörler.</td></tr>
+    <tr><td>Okuma modu</td><td><code>cudaReadModeElementType</code> (dönüşüm yok) / <code>cudaReadModeNormalizedFloat</code> (8/16-bit tamsayı → işaretsizse [0, 1], işaretliyse [-1, 1]).</td></tr>
+    <tr><td>Koordinatlar</td><td>Varsayılan [0, N-1]; normalize edilmişse [0, 1-1/N] (64×32 texture: [0,63]×[0,31] yerine iki yönde de [0, 1)). Boyuttan bağımsız koordinat isteyen uygulamalar için.</td></tr>
+    <tr><td>Adresleme modu (sınır dışı)</td><td><code>cudaAddressModeClamp</code> (varsayılan; kenar pikselini tekrarla), <code>Border</code> (sıfır), <code>Wrap</code> (sar), <code>Mirror</code> (ayna). Wrap ve mirror sadece normalize koordinatlarla. Her koordinat için ayrı (3 elemanlı dizi).</td></tr>
+    <tr><td>Filtreleme</td><td><code>cudaFilterModePoint</code> (en yakın texel) / <code>cudaFilterModeLinear</code> (1D'de 2, 2D'de 4, 3D'de 8 texel'in doğrusal/bilineer/trilineer interpolasyonu; sadece float dönüşte, düşük hassasiyetli).</td></tr>
+  </tbody>
+</table>
+<p><strong>CUDA array:</strong> texture fetch için optimize edilmiş, <strong>opak</strong> (değerlere doğrudan erişilemez) 1D/2D/3D bellek düzeni; 1, 2 veya 4 bileşenli elemanlar (8/16/32-bit tamsayı, 16/32-bit float). Kernel'ler sadece texture fetch (okuma) veya surface okuma/yazma ile erişir.</p>
+<pre class="code" data-title="texRotate.cu (ders örneği): texture ile görüntü döndürme, özet">
+// Host: 1) CUDA array ayır  2) veriyi kopyala  3) resDesc  4) texDesc  5) texture object oluştur
+cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+cudaArray_t cuArray;
+cudaMallocArray(&cuArray, &ch, width, height);
+cudaMemcpy2DToArray(cuArray, 0, 0, img, width * sizeof(float), width * sizeof(float), height,
+                    cudaMemcpyHostToDevice);
+
+cudaResourceDesc resDesc = {};  resDesc.resType = cudaResourceTypeArray;  resDesc.res.array.array = cuArray;
+cudaTextureDesc texDesc = {};
+texDesc.addressMode[0] = cudaAddressModeWrap;   texDesc.addressMode[1] = cudaAddressModeWrap;
+texDesc.filterMode = cudaFilterModeLinear;      // bilineer interpolasyon bedava
+texDesc.readMode = cudaReadModeElementType;
+texDesc.normalizedCoords = 1;                   // koordinatlar [0, 1)
+cudaTextureObject_t texObj = 0;
+cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
+
+// Device: normalize koordinatı merkez etrafında θ kadar döndür, texture'dan oku
+__global__ void transformKernel(float* output, cudaTextureObject_t texObj, int width, int height, float theta) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x < width && y < height) {
+        float u = x / (float)width - 0.5f, v = y / (float)height - 0.5f;
+        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
+        float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
+        output[y * width + x] = tex2D<float>(texObj, tu, tv);
+    }
+}
+// dim3 block(16, 16); dim3 grid((width + 15) / 16, (height + 15) / 16);
+</pre>
+<p>Device tarafında okuma: doğrusal bellek texture'ları <code>tex1Dfetch()</code>, array texture'ları <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Yönetim fonksiyonları: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. Eski <em>texture reference API</em>'de tip, boyut ve okuma modu derleme zamanında sabit; normalize, filtre ve adres modu çalışma zamanında değiştirilebilir (sadece CUDA array texture'ları).</p>
+
+</section>
+
+<h2>Bellek özeti</h2>
+<table class="simple">
+  <thead><tr><th>Bellek</th><th>Kapsam</th><th>Gecikme</th><th>Not</th></tr></thead>
+  <tbody>
+    <tr><td>Register</td><td>Thread</td><td>Çok hızlı</td><td>Sınırlı; aşılırsa spill.</td></tr>
+    <tr><td>Shared</td><td>Blok</td><td>Çok hızlı</td><td>On-chip; senkronizasyon gerekir.</td></tr>
+    <tr><td>Local</td><td>Thread</td><td>400–600 çevrim</td><td>Aslında global bellek.</td></tr>
+    <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 çevrim</td><td>Her zaman L2'de önbelleklenir; coalescing şart.</td></tr>
+    <tr><td>Constant</td><td>Kernel</td><td>400–600 çevrim</td><td>Constant cache; aynı adres → yayın.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize (2. vizede yok).</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Okumaların hem birleşik L1/texture cache'te hem L2'de mi, yoksa sadece L2'de mi önbelleklendiği load komutunun niteleyicileriyle kısmen ayarlanabilir. Pointer'ları <strong><code>const</code> ve <code>__restrict__</code></strong> ile işaretlemek derleyicinin salt-okunur durumu fark etme ihtimalini artırır.</li>
+  <li>Shared memory'yi açıkça kullanmadığınız sürece verinizin önbelleğe alınacağını ya da hangi önbelleğin kullanılacağını <strong>asla varsaymayın</strong>.</li>
+</ul>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Compute capability 8.6'lı bir GPU, sadece <code>-gencode arch=compute_70,code=sm_70</code> ile derlenmiş bir uygulamayı çalıştırabilir mi?</p>
+  <ol>
+    <li data-why="cubin aynı major içinde ileriye uyumludur; 7.x → 8.x major değişiyor.">Evet, sm_70 ikilisi 8.6'da çalışır.</li>
+    <li data-why="Doğru: ikili sadece 7.z'de çalışır ve PTX gömülmediği için JIT de yapılamaz.">Hayır: ikili major sürümler arasında uyumlu değil ve gömülü PTX yok.</li>
+    <li data-why="JIT için gömülü PTX gerekir; code=sm_70 sadece ikili gömer.">Evet, sürücü sm_70 ikilisini JIT ile yeniden derler.</li>
+    <li data-why="Uyumluluk compute capability'ye göre belirlenir.">Sadece aynı sürücü sürümüyle derlendiyse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Kernel süresini ölçerken neden <code>cudaDeviceSynchronize()</code> gerekir?</p>
+  <ol>
+    <li data-why="Bellek ayırmayla ilgisi yok.">Bellek ayırmayı tamamlamak için.</li>
+    <li data-why="cudaMemcpy zaten senkron; soru kernel'i soruyor.">cudaMemcpy asenkron olduğu için.</li>
+    <li data-why="Bariyer blok içidir; host'u bekletmez.">Blokları birbirine senkronize etmek için.</li>
+    <li data-why="Doğru: başlatma hemen döner; beklemezseniz sadece başlatma süresini ölçersiniz.">Kernel başlatmaları asenkron; bitmesini beklemeden süre alınırsa çok kısa (yanlış) çıkar.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Hangisi local memory'ye konma ihtimali en yüksek değişkendir?</p>
+  <ol>
+    <li data-why="Doğru: derleyici sabit indekslendiğini belirleyemediği diziler local memory'ye gider.">Çalışma zamanında hesaplanan bir indeksle erişilen otomatik dizi.</li>
+    <li data-why="Skaler otomatik değişkenler register'a konur (spill yoksa).">Bir <code>int</code> döngü sayacı.</li>
+    <li data-why="__shared__ açıkça shared bellekte.">Bir <code>__shared__</code> dizi.</li>
+    <li data-why="__constant__ constant bellekte.">Bir <code>__constant__</code> dizi.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMallocPitch</code> ile 700 baytlık satırlar ayrıldı (256 B hizalama). <code>r</code>. satırın başına nasıl ulaşılır?</p>
+  <ol>
+    <li data-why="Satırlar 700 değil, pitch kadar (768 B) aralıklı.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch bayt cinsinden; float* aritmetiği 4 ile çarpar.">p + r * pitch</li>
+    <li data-why="Doğru: pitch = 768 B; önce char*'a çevirip bayt ekle.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="Pitch genişlikten küçük olamaz.">(float*)((char*)p + r * 512)</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

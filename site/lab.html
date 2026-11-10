@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>İndeks ve coalescing laboratuvarı · Paralel Hesaplama</title>
+<meta name="description" content="Etkileşimli araçlar: grid/blok konfigürasyonundan thread → (row, col) eşlemesi ve warp'lar, indeks antrenmanı, warp erişimlerinin coalescing analizi, tiled matmul faz görselleştirmesi.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="lab">
+<main><div class="content">
+
+<h1>İndeks ve coalescing laboratuvarı</h1>
+<p class="lead">Sınavdaki "hangi indeks nereyi gösteriyor, bu kod nerelere dokunuyor" sorularının pratiği. Araçlar tarayıcıda çalışır; CUDA'yı simüle etmez, sadece indeks aritmetiğini ve bellek segmentlerini hesaplar.</p>
+
+<h2>Thread → veri eşlemesi</h2>
+<p>Grid ve blok boyutlarını değiştirin, bir hücreye tıklayın. Kırmızı hücre seçili thread; renkli bölge onun bloğu, koyu renk onun warp'ı. Önce <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> ile başlayın, sonra <code>blockDim.x</code>'i 32 yapıp warp'ların şeklinin nasıl değiştiğine bakın.</p>
+<div class="wgt-mount" data-widget="mapping" data-gx="3" data-gy="3" data-bx="8" data-by="32"></div>
+<div class="callout look">
+  <ul>
+    <li><code>blockDim.x = 8</code>: bir warp 4 satır × 8 sütun. Bir satırdaki 8 float = 32 B; warp bellekte 4 ayrı yere dokunur.</li>
+    <li><code>blockDim.x = 32</code>: bir warp tam bir satır parçası (32 ardışık float = 128 B). Slayttaki "blok genişliği 32'nin katı olsun" kuralının nedeni bu.</li>
+    <li><code>blockDim.x = 12</code> gibi 32'yi bölmeyen değerlerde warp'lar satır ortasında başlar.</li>
+  </ul>
+</div>
+
+<h2>İndeks antrenmanı</h2>
+<p>Hesap makinesi olmadan hızlı ve hatasız yapabilene kadar tekrarlayın.</p>
+<div class="wgt-mount" data-widget="drill"></div>
+
+<h2>Warp erişimi ve coalescing</h2>
+<p>Bir warp'ın 32 thread'inin adreslerini ve dokunduğu segmentleri gösterir. Ayrıntılı açıklama: <a href="coalescing.html">Coalescing sayfası</a>.</p>
+<div class="wgt-mount" data-widget="coalesce" data-preset="col"></div>
+
+<h2>Tiled matris çarpımı</h2>
+<p>Hangi blok hangi karoyu hesaplar, faz <code>m</code>'de shared memory'ye hangi elemanlar gelir, her thread hangi elemanı yükler. Kod: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a>.</p>
+<div class="wgt-mount" data-widget="tiling"></div>
+
+<h2>CUDA kodunu gerçekten çalıştırmak</h2>
+<p>Tarayıcı CUDA çalıştıramaz (GPU'ya CUDA ile erişim yok). Kendi kernellerinizi denemek için iki ücretsiz yol:</p>
+<ul>
+  <li><strong>Google Colab</strong> (gerçek GPU): <em>Runtime → Change runtime type → T4 GPU</em>. Bir hücreye <code>%%writefile k.cu</code> yazıp altına kodu koyun; sonraki hücrede <code>!nvcc -arch=sm_75 k.cu -o k &amp;&amp; ./k</code>. <code>printf</code> ile thread başına <code>blockIdx/threadIdx/row/col</code> yazdırmak indeks sorularını kontrol etmenin en kolay yolu.</li>
+  <li><strong>Compiler Explorer</strong> (<a href="https://godbolt.org" target="_blank" rel="noopener">godbolt.org</a>, dil: CUDA C++): çalıştırmaz ama derler; bir kernelin <strong>PTX</strong> ve <strong>SASS</strong> çıktısını, <code>#pragma unroll</code>'un etkisini ve register kullanımını görmek için.</li>
+</ul>
+<pre class="code" data-title="Colab'da indeks kontrolü için küçük bir program">
+#include <cstdio>
+__global__ void who(int width) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int id  = threadIdx.y * blockDim.x + threadIdx.x;
+    if (blockIdx.x == 2 && blockIdx.y == 1 && threadIdx.x == 5 && threadIdx.y == 10)
+        printf("row=%d col=%d warp=%d P[%d]\n", row, col, id / 32, row * width + col);
+}
+int main() {
+    who<<<dim3(3, 3), dim3(8, 32)>>>(24);
+    cudaDeviceSynchronize();   // kernel asenkron: çıktıyı görmek için bekle
+}
+</pre>
+
+</div></main>
+</body>
+</html>
