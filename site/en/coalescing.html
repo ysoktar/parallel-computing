@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coalescing, transpose, unrolling · Parallel Computing</title>
+<meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="coalescing">
+<main><div class="content">
+
+<h1>Coalescing, transpose, unrolling</h1>
+<p class="lead">The 32 threads of a warp go to global memory at the same time. If their addresses are next to each other, the hardware serves them all with one large read; if they are scattered, it reads again and again for the same data. This is the most important performance topic of midterm 2.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute how many 32/128-byte segments an access pattern touches, and its efficiency.</li>
+    <li>Tell whether code is coalesced by looking at where <code>threadIdx.x</code> sits in the address.</li>
+    <li>Explain, index by index, why the naive transpose is slow and how a shared memory tile fixes it.</li>
+    <li>Say what loop unrolling gains and what it costs.</li>
+  </ul>
+</div>
+
+<h2>Global memory transactions</h2>
+<p>Lecture 6, slides 43–48:</p>
+<ul>
+  <li>For maximum performance global memory accesses must be <strong>coalesced</strong> (combined).</li>
+  <li>Global memory is accessed via <strong>32, 64 or 128-byte</strong> transactions. Every access is fitted into these chunks: there is no such thing as "reading 11 bytes", you read 32 bytes.</li>
+  <li>A region of memory is <strong>aligned to N bytes</strong> if its first address is a multiple of N. Only 32/64/128 B segments <strong>aligned to their own size</strong> can be read or written. Read 33 bytes and you end up with two 32 B accesses.</li>
+  <li>When a warp executes an instruction that accesses global memory, it <strong>combines</strong> the threads' accesses into one or more transactions. What decides how many: <strong>(1)</strong> the size of the word each thread accesses, <strong>(2)</strong> the distribution of the addresses across the threads.</li>
+  <li>The more transactions needed, the more words the threads did not ask for are moved too, and instruction throughput drops accordingly. General rule: <strong>the more scattered the addresses, the lower the throughput.</strong></li>
+</ul>
+<div class="callout example">
+  <p><strong>Slide 47: why "throughput / 8"?</strong></p>
+  <ul>
+    <li>32 threads read 4 bytes each from random addresses → a separate 32 B transaction (the minimum chunk) per thread → 32 × 32 B = <strong>1024 B</strong> read.</li>
+    <li>32 threads read 4 bytes each from consecutive addresses and the start is 128 B aligned → 32 × 4 = 128 B = <strong>a single 128 B transaction</strong>.</li>
+    <li>1024 / 128 = 8 times more data → effective bandwidth / 8.</li>
+  </ul>
+</div>
+
+<h3>Basic alignment requirement</h3>
+<ul>
+  <li>Global memory instructions read or write words of <strong>1, 2, 4, 8 or 16 bytes</strong> per thread.</li>
+  <li>An access to data in global memory compiles to a single instruction <strong>if and only if</strong> (1) the size of the type is 1, 2, 4, 8 or 16 bytes and (2) the data is <strong>naturally aligned</strong> (its address is a multiple of its size). Otherwise it is split into several instructions that cannot fully coalesce.</li>
+  <li>Built-in types such as <code>char, short, int, long, long long, float, double, float2, float4</code> satisfy this automatically. For structs the compiler is told with <code>__align__(8)</code> or <code>__align__(16)</code>:</li>
+</ul>
+<pre class="code">
+struct __align__(8)  { float x; float y; };            // 8 bytes, 8-aligned → one 8 B load
+struct __align__(16) { float x; float y; float z; };   // 12 bytes of data, rounded up to 16 → one 16 B load
+</pre>
+<ul>
+  <li>Addresses returned by <code>cudaMalloc</code> and the other allocation functions are <strong>aligned to at least 256 bytes</strong>.</li>
+  <li><strong>The multiple-array trap (slides 52–53):</strong> if you replace several <code>cudaMalloc</code> calls by one large block partitioned into arrays, each array starts at an offset from the block's start. A <code>float2</code> array following a <code>float</code> array is 4 B aligned but <strong>not guaranteed</strong> to be 8 B aligned. Reading 8/16-byte words misaligned gives <strong>wrong results</strong> (off by a few words).</li>
+</ul>
+
+<h2>Try access patterns</h2>
+<p>Pick the presets in turn: consecutive, shifted by one element, stride 2, column (the naive transpose's write), all the same address, random, 8-byte words.</p>
+<div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
+<table class="simple">
+  <thead><tr><th>Pattern (float, 32 threads)</th><th>32 B segments touched</th><th>Moved / used</th><th>Comment</th></tr></thead>
+  <tbody>
+    <tr><td><code>a[i]</code>, 128 B aligned</td><td>4 (= one 128 B line)</td><td>128 / 128 B (100%)</td><td>Ideal.</td></tr>
+    <tr><td><code>a[i + 1]</code></td><td>5 (2 in 128 B lines)</td><td>160 / 128 B (80%)</td><td>A misaligned start costs one extra segment.</td></tr>
+    <tr><td><code>a[2*i]</code></td><td>8</td><td>256 / 128 B (50%)</td><td>Half of every segment wasted.</td></tr>
+    <tr><td><code>a[i * 1024]</code> (column)</td><td>32</td><td>1024 / 128 B (12.5%)</td><td>A separate segment per thread: the naive transpose's write pattern.</td></tr>
+    <tr><td><code>a[0]</code> (all the same)</td><td>1</td><td>32 / 4 B</td><td>One transaction; actually the ideal pattern for constant memory (broadcast).</td></tr>
+    <tr><td>random</td><td>≈ 32</td><td>≈ 1024 / 128 B</td><td>The bad case of slide 47.</td></tr>
+    <tr><td><code>double a[i]</code></td><td>8 (2 lines)</td><td>256 / 256 B (100%)</td><td>With a bigger word the warp asks for 256 B; still full efficiency.</td></tr>
+  </tbody>
+</table>
+<div class="callout key">
+  <p>The quick way to see coalescing in code: check whether <code>threadIdx.x</code> (or the <code>col</code>/<code>x</code> derived from it) sits <strong>on the right, without a multiplier</strong> in the address expression. <code>A[row*width + col]</code> ✓; <code>A[col*width + row]</code> ✗ (consecutive threads are <code>width</code> elements apart); <code>A[2*col]</code> half efficiency.</p>
+</div>
+
+<h2>2D arrays and pitch</h2>
+<ul>
+  <li>Common pattern: thread <code>(tx, ty)</code> accesses <code>BaseAddress + width·ty + tx</code>. For full coalescing <strong>both the thread block's width and the array's width must be multiples of the warp size (32)</strong>.</li>
+  <li>An array whose width is not a multiple of 32 is accessed much more efficiently if it is allocated with its width rounded up to the next multiple of 32 and its rows padded. The functions that do this hardware-independently: <code>cudaMallocPitch()</code> (2D), <code>cudaMalloc3D()</code> (3D). They compute and return the right stride (pitch); <strong>this pitch must be used</strong> to access elements.</li>
+  <li>Copying: memory from <code>cudaMallocPitch</code> is copied with <code>cudaMemcpy2D</code>, from <code>cudaMalloc3D</code> with <code>cudaMemcpy3D</code>.</li>
+</ul>
+<pre class="code" data-title="Pitched 2D access (slide 40)">
+// Host
+int width = 64, height = 64;
+float* devPtr; size_t pitch;
+cudaMallocPitch(&devPtr, &pitch, width * sizeof(float), height);
+MyKernel<<<100, 512>>>(devPtr, pitch, width, height);
+
+// Device: pitch is in BYTES → cast to char* first to find the start of the row
+__global__ void MyKernel(float* devPtr, size_t pitch, int width, int height) {
+    for (int r = 0; r < height; ++r) {
+        float* row = (float*)((char*)devPtr + r * pitch);
+        for (int c = 0; c < width; ++c) { float element = row[c]; }
+    }
+}
+
+// Copying
+cudaMemcpy2D(devPtr, devPitch,            // destination and its pitch (GPU)
+             hostPtr, hostPitch,          // source and its pitch (CPU), usually Ncols*sizeof(float)
+             Ncols * sizeof(float), Nrows,// BYTES per row, number of rows
+             cudaMemcpyHostToDevice);
+</pre>
+<p>Pitch examples (256 B alignment): width 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
+
+<h2>Matrix transpose <span class="badge-class">class</span></h2>
+<p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>
+
+<h3>Set-up: 32×32 tile, 32×8 threads</h3>
+<ul>
+  <li><code>TILE_DIM = 32</code>, <code>BLOCK_ROWS = 8</code>. Each block processes one <strong>32×32 tile</strong> of the matrix but has <strong>32×8 = 256 threads</strong>.</li>
+  <li>So each thread processes <strong>4 elements</strong> of the tile (32/8): rows <code>y, y+8, y+16, y+24</code>. The loop runs over the second index (row), so consecutive threads of a warp still go to consecutive addresses. Benefit: the cost of the index calculation is shared by 4 elements.</li>
+  <li>Grid for an N×N matrix: <code>dim3(N/32, N/32)</code>, block: <code>dim3(TILE_DIM, BLOCK_ROWS) = dim3(32, 8)</code>.</li>
+</ul>
+
+<h3>1) Reference: copy</h3>
+<pre class="code" data-title="copy: the speed the transpose aims for (same accesses, no swapping)">
+const int TILE_DIM = 32;
+const int BLOCK_ROWS = 8;
+
+__global__ void copy(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;   // with TILE_DIM, not blockDim.y!
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = idata[(y + j) * width + x];
+}
+// dim3 grid(N / TILE_DIM, N / TILE_DIM), block(TILE_DIM, BLOCK_ROWS);
+</pre>
+<p>Both read and write are coalesced: one warp = 32 consecutive floats of a row = 128 B. However fast a transpose is, it cannot beat this kernel; it is the "ceiling" for measurements.</p>
+<div class="callout class">
+  <p>The same idea as the instructor's advice: <strong>first write a copy kernel that does no computation</strong>, check that the output equals the input (and its speed); then add the real operation. For the shared-memory version, too, first write <code>copySharedMem</code> (global → shared → global, same place) and verify the indices.</p>
+</div>
+
+<h3>2) Naive transpose</h3>
+<pre class="code" data-title="transposeNaive: the only difference is x and y swapped in the write index">
+__global__ void transposeNaive(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[x * width + (y + j)] = idata[(y + j) * width + x];
+}
+</pre>
+<ul>
+  <li><strong>Read</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> on the right, no multiplier → the warp reads one 128 B line ✓.</li>
+  <li><strong>Write</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> multiplied by <code>width</code> → consecutive threads are <code>width</code> elements apart. In a 1024×1024 matrix the stride is 1024 floats = <strong>4096 B</strong> → the warp's 32 writes hit 32 separate segments. <strong>Not</strong> coalesced.</li>
+  <li>The <code>a[i*1024]</code> example in the lab is exactly this write.</li>
+</ul>
+
+<h3>3) Coalesced transpose with shared memory</h3>
+<p>Idea: read the tile from global memory <strong>row by row</strong> (coalesced) into shared memory; do the swapping inside shared memory (scattered access is cheap there); then write a <strong>column</strong> of the tile as a <strong>row</strong> of the output (coalesced). The block also has to write to the transposed place.</p>
+<pre class="code" data-title="transposeCoalesced">
+__global__ void transposeCoalesced(float* odata, const float* idata)
+{
+    __shared__ float tile[TILE_DIM][TILE_DIM];
+
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        tile[threadIdx.y + j][threadIdx.x] = idata[(y + j) * width + x];   // coalesced read
+
+    __syncthreads();   // threads will write DIFFERENT elements than they read: the tile must be full
+
+    x = blockIdx.y * TILE_DIM + threadIdx.x;   // transposed block position: bx ↔ by
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = tile[threadIdx.x][threadIdx.y + j];   // coalesced write
+}
+</pre>
+<div class="callout example">
+  <p><strong>Index trace</strong> (N = 1024, grid 32×32, block 32×8): <code>blockIdx = (1, 2)</code>, <code>threadIdx = (5, 3)</code>.</p>
+  <ul>
+    <li>Load: <code>x = 1·32 + 5 = 37</code>, <code>y = 2·32 + 3 = 67</code>. For j = 0, 8, 16, 24 it reads rows 67, 75, 83, 91 / column 37 of <code>idata</code> into <code>tile[3][5], tile[11][5], tile[19][5], tile[27][5]</code>. This block loads the input tile rows 64–95, columns 32–63.</li>
+    <li>Store: <code>x = 2·32 + 5 = 69</code>, <code>y = 1·32 + 3 = 35</code>. It writes <code>tile[5][3], tile[5][11], tile[5][19], tile[5][27]</code> into rows 35, 43, 51, 59 / column 69 of <code>odata</code>. Check: <code>tile[5][3]</code> = input (row 64+5, column 32+3) = <code>idata[69][35]</code> → <code>odata[35][69]</code> ✓.</li>
+    <li>Consecutive threads of a warp (<code>threadIdx.x</code> = 0..31) go to consecutive global addresses both when reading and when writing; the scattered part (<code>tile[threadIdx.x][…]</code>, reading a column) is in shared memory.</li>
+  </ul>
+</div>
+<div class="callout gotcha">
+  <p>The <code>__syncthreads()</code> here is mandatory: the <code>tile[threadIdx.x][threadIdx.y+j]</code> a thread writes out was loaded by another thread (even another warp). In <code>copySharedMem</code>, which only copies, each thread writes what it loaded itself, so the barrier is technically unnecessary (the article includes it only for comparison); the measurements show the barrier is not the bottleneck.</p>
+</div>
+
+<h3>4) The version without bank conflicts <span class="badge-beyond">final</span></h3>
+<div class="callout beyond">
+  <p>In a 32×32 tile all elements of a column fall into the same shared memory bank; reading a column (<code>tile[threadIdx.x][…]</code>) is a 32-way bank conflict. The fix is one line: <code>__shared__ float tile[TILE_DIM][TILE_DIM + 1];</code> (each row shifts by one bank). Bank optimisation is not on this exam; knowing why it exists is enough.</p>
+</div>
+
+<h3>Measurements (NVIDIA article, GB/s)</h3>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Tesla M2050</th><th>Tesla K20c</th></tr></thead>
+  <tbody>
+    <tr><td>copy</td><td>105.2</td><td>136.0</td></tr>
+    <tr><td>copySharedMem</td><td>104.6</td><td>152.3</td></tr>
+    <tr><td>transposeNaive</td><td><strong>18.8</strong></td><td>55.3</td></tr>
+    <tr><td>transposeCoalesced</td><td>51.3</td><td>97.6</td></tr>
+    <tr><td>transposeNoBankConflicts</td><td>99.5</td><td>144.3</td></tr>
+  </tbody>
+</table>
+<p>Effective bandwidth = 2 × matrix size (one read + one write) / time. Conclusion: <strong>coalescing global memory is the most critical factor</strong>; the cost of shared memory and synchronisation is much smaller.</p>
+
+<h2>Loop unrolling <span class="badge-class">class</span></h2>
+<p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
+<div class="two-col">
+<pre class="code" data-title="Normal">
+float sum = 0;
+for (int k = 0; k < 16; ++k)
+    sum += Mds[ty][k] * Nds[k][tx];
+// 16 iterations × (multiply-add + k++ + k<16 + branch)
+</pre>
+<pre class="code" data-title="Unrolled 4 times by hand">
+float sum = 0;
+for (int k = 0; k < 16; k += 4) {
+    sum += Mds[ty][k]     * Nds[k][tx];
+    sum += Mds[ty][k + 1] * Nds[k + 1][tx];
+    sum += Mds[ty][k + 2] * Nds[k + 2][tx];
+    sum += Mds[ty][k + 3] * Nds[k + 3][tx];
+}
+// 4 iterations: loop control cut 4 times
+</pre>
+</div>
+<pre class="code" data-title="Letting the compiler do it">
+#pragma unroll                 // fully unrolls if the trip count is known at compile time
+for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH is a #define / const → constant
+    Pvalue += Mds[ty][k] * Nds[k][tx];
+
+#pragma unroll 4               // unroll 4 times
+for (int i = 0; i < n; ++i) { ... }
+
+#pragma unroll 1               // do not unroll
+</pre>
+<ul>
+  <li><strong>Gain:</strong> fewer loop-control instructions; when fully unrolled the indices become constants (<code>Mds[ty][3]</code>) and address arithmetic is done at compile time; independent loads can be issued back to back, hiding latency.</li>
+  <li><strong>Cost:</strong> the code grows; more variables are live at the same time → <strong>register usage increases</strong> → if the per-thread register limit is exceeded, register spill (local memory) or fewer threads per SM (lower occupancy).</li>
+  <li>If the trip count is constant (the transpose's <code>j</code> loop: <code>TILE_DIM/BLOCK_ROWS = 4</code> iterations; tiled matmul's <code>k</code> loop: <code>TILE_WIDTH</code> iterations) the compiler usually unrolls it anyway. If the trip count is only known at run time (<code>width/TILE_WIDTH</code>) it cannot be fully unrolled.</li>
+  <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
+</ul>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>A warp reads <code>a[3*threadIdx.x]</code> from a 128 B-aligned <code>float</code> array. How many 32 B segments are touched?</p>
+  <ol>
+    <li data-why="Consecutive would give 4; with stride 3 it spreads over 384 B.">4</li>
+    <li data-why="Addresses 0, 12, 24, …, 372: all 12 segments of the range 0–383 are touched.">12</li>
+    <li data-why="With stride 3 there are ~2.7 threads per segment; each thread is not a separate segment.">32</li>
+    <li data-why="That is the number of 128 B lines; the question asks about 32 B segments.">3</li>
+  </ol>
+  <div class="explain">Moved 12·32 = 384 B, used 128 B → efficiency 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Why are the transpose kernels' blocks 32×8 threads rather than 32×32?</p>
+  <ol>
+    <li data-why="32×32 = 1024 threads is allowed on today's GPUs; that is not the reason.">A 32×32 block cannot be launched.</li>
+    <li data-why="Unrelated to bank conflicts; padding fixes those.">To avoid bank conflicts.</li>
+    <li data-why="True: each thread processes 4 elements; the index calculation is shared, and coalescing is kept because the loop runs along rows.">So that each thread processes 4 elements of the tile and the index calculation cost is shared.</li>
+    <li data-why="The tile is still 32×32; same shared memory.">To save shared memory.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Why does <code>transposeCoalesced</code> use <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> in the store phase?</p>
+  <ol>
+    <li data-why="True: tile (bx, by) goes to position (by, bx) in the output.">Tile (bx, by) of the input must be written to the transposed position (by, bx) of the output.</li>
+    <li data-why="Padding fixes bank conflicts; this index change decides where the tile goes.">To reduce bank conflicts.</li>
+    <li data-why="threadIdx.x stays on the right, so the write is coalesced; but the question is about the block offset.">To make the read coalesced.</li>
+    <li data-why="Not a typo; without it each tile would be transposed in place and the matrix would be wrong.">A typo; it should be blockIdx.x.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true about <code>#pragma unroll</code>?</p>
+  <ol>
+    <li data-why="Unrolling does not distribute a serial loop over threads; it copies it within the same thread.">It distributes the loop iterations over different threads.</li>
+    <li data-why="Register usage usually increases.">It reduces register usage.</li>
+    <li data-why="The result does not change (same operations, same order).">It may change the result, be careful.</li>
+    <li data-why="True: with a constant trip count the body is copied completely and the control instructions disappear.">It can fully unroll a loop whose trip count is constant at compile time.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

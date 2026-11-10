@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midterm 2 study guide · Parallel Computing</title>
+<meta name="description" content="BİL 455/533 midterm 2: shared memory, __syncthreads, row/col indexing, coalescing, tiled matrix multiplication (<<<(3,3),(8,32)>>>), naive transpose, loop unrolling; worked problems and a practice set.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="exam-midterm2">
+<main><div class="content">
+
+<h1>Midterm 2 study guide</h1>
+<p class="lead">A summary prioritised by the instructor's announcement and what was said in class: what will be asked, how, and how to solve it. Every section has worked exam-style problems; a practice set closes the page.</p>
+
+<div class="exam-card">
+  <div><strong>Wednesday 11 November 2026, 15:30–17:00 · Room 306</strong></div>
+  <div class="countdown-big" id="countdown"></div>
+  <ul>
+    <li><strong>Scope:</strong> everything from the start of term to the end of the Tuesday 10 November lecture. In practice: <strong>up to the end of Lecture 6</strong>, weighted towards CUDA (Lectures 4–6).</li>
+    <li><strong>Cheat sheet:</strong> one A4 sheet, both sides, <strong>handwritten</strong> (no photocopies or printouts), checked before the exam. Plan: <a href="cheatsheet.html">cheat-sheet page</a>.</li>
+    <li><strong>No calculator</strong> (no smart watch, phone or earphones either): practise 768/256, 16·16·4, 86.4/4 and the like by hand.</li>
+    <li>You may enter at most 15 minutes late.</li>
+  </ul>
+</div>
+
+<h2>Scope and priorities</h2>
+<p>Items stated explicitly in the announcement are marked <span class="prio p1">1</span>. The three things the instructor said you must know: <strong>how shared memory is used</strong>, <strong>how <code>__syncthreads()</code> is used</strong>, and <strong>coalescing</strong>. In class it was also said that there are "row/column questions: which index points where, which locations this code touches".</p>
+<table class="simple">
+  <thead><tr><th>Priority</th><th>Topic</th><th>Source</th><th>Page</th></tr></thead>
+  <tbody>
+    <tr><td><span class="prio p1">1</span></td><td>Using shared memory (<code>__shared__</code>, tiling, cooperative loading)</td><td>L5 (slides 76–91)</td><td><a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td><code>__syncthreads()</code>: why, where, and where <em>not</em></td><td>L4, L5 (slides 42–46, 91)</td><td><a href="#problem-type-3-syncthreads">below</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Row/column indices, the elements a piece of code touches</td><td>L4, L5</td><td><a href="lab.html">Lab</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Global memory coalescing (32/64/128 B transactions, alignment, 2D access)</td><td>L6 (slides 43–55) + class</td><td><a href="coalescing.html">Coalescing</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Tiled matrix multiplication and thread mapping (e.g. <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>)</td><td>L5 + past exam question</td><td><a href="#problem-type-1-which-index-points-where">below</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Naive matrix transpose (and transpose with shared memory)</td><td>Class (the instructor's example)</td><td><a href="coalescing.html#matrix-transpose">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>For-loop unrolling</td><td>Class</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Memory types; CGMA; register/shared limits and choosing a block size</td><td>L5, L6</td><td><a href="#problem-type-5-numerical-questions">below</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Warps, latency hiding, assigning blocks to SMs, scalability</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant/texture memory</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
+    <tr><td><span class="prio p3">3</span></td><td>Midterm 1 material: Amdahl/Gustafson, PCAM, threads/mutexes/semaphores/atomics</td><td>L1–L3</td><td><a href="l1-intro.html">L1</a>, <a href="l2-design.html">L2</a>, <a href="l3-threads.html">L3</a></td></tr>
+  </tbody>
+</table>
+
+<div class="callout beyond">
+  <p><strong>Shared memory bank optimization (bank conflicts) is not on this exam</strong>; it will be on the final (announcement, and in class: "no banks, that's for the final"). Slides 59–64 of L6 and the <code>[TILE][TILE+1]</code> padding trick in the transpose are therefore marked "not on midterm 2" on this site.</p>
+</div>
+
+<div class="callout class">
+  <p>Things that are not in the slides but were covered in class and may be asked: the <strong>naive matrix transpose</strong> (the instructor said "tomorrow's example: matrix transpose"), <strong>for-loop unrolling</strong>, the details of coalescing explained on the board, the compilation chain <code>.cu → PTX → ptxas → SASS</code>, and the advice "first just copy, without computing". These carry the <span class="badge-class">class</span> label on this site; everything else comes from the slides.</p>
+</div>
+
+<h2>Index formulas to memorise</h2>
+<div class="formula-box">// 2D grid + 2D block: each thread one (row, col) element
+int col = blockIdx.x * blockDim.x + threadIdx.x;   // x → column (consecutive in memory)
+int row = blockIdx.y * blockDim.y + threadIdx.y;   // y → row
+A[row * width + col]                               // row-major: row * width + column
+
+// linear thread number in the block (this decides the warp: warp = id / 32)
+1D: id = threadIdx.x
+2D: id = threadIdx.y * blockDim.x + threadIdx.x
+3D: id = threadIdx.z * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x
+
+// number of blocks to cover the data (round up) + bounds check
+dim3 block(16, 16);
+dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
+<div class="callout key">
+  <p>In <code>dim3(a, b)</code> <strong>x comes first, then y</strong>. <code>dim3(8, 32)</code>: <code>blockDim.x = 8</code> (8 columns), <code>blockDim.y = 32</code> (32 rows). The x axis is columns, the y axis rows; warps are formed with <code>threadIdx.x</code> varying fastest.</p>
+</div>
+
+<h2>Problem type 1: Which index points where?</h2>
+<p>Past exam question: <strong>"mapping of tiled matrix multiplication with <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>"</strong>. The solution below goes step by step so that it covers every question of this type.</p>
+
+<h3>Worked example: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
+<pre class="code" data-title="Kernel (each thread one element of P)">
+__global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
+{
+    int row = blockIdx.y * blockDim.y + threadIdx.y;   // 0..95
+    int col = blockIdx.x * blockDim.x + threadIdx.x;   // 0..23
+    float sum = 0;
+    for (int k = 0; k < K; ++k)
+        sum += M[row * K + k] * N[k * Pcols + col];
+    P[row * Pcols + col] = sum;
+}
+// MatMul<<<dim3(3,3), dim3(8,32)>>>(Md, Nd, Pd, K, 24);
+</pre>
+<ol>
+  <li><strong>How many threads and warps?</strong> 8·32 = 256 threads per block (≤ 1024 ✓), 3·3 = 9 blocks → 2304 threads. 256/32 = 8 warps per block → 72 warps in total.</li>
+  <li><strong>Index ranges:</strong> <code>blockIdx.x, blockIdx.y ∈ {0,1,2}</code>, <code>threadIdx.x ∈ 0..7</code>, <code>threadIdx.y ∈ 0..31</code>.</li>
+  <li><strong>Region of P covered:</strong> columns = 3·8 = <strong>24</strong>, rows = 3·32 = <strong>96</strong>. So it fits exactly if P is 96×24 (M 96×K, N K×24). For a smaller matrix <code>if (row &lt; H &amp;&amp; col &lt; W)</code> is required; for a larger one the grid must grow.</li>
+  <li><strong>A given thread:</strong> <code>blockIdx = (2,1)</code>, <code>threadIdx = (5,10)</code> → <code>row = 1·32 + 10 = 42</code>, <code>col = 2·8 + 5 = 21</code>. It writes <code>P[42·24 + 21] = P[1029]</code>, reading row 42 of M (<code>M[42·K + k]</code>) and column 21 of N (<code>N[k·24 + 21]</code>).</li>
+  <li><strong>Which block covers which region?</strong> Block <code>(bx, by)</code> covers rows <code>32·by … 32·by+31</code>, columns <code>8·bx … 8·bx+7</code>. For example <code>(2,1)</code>: rows 32–63, columns 16–23.</li>
+  <li><strong>Warps:</strong> the linear id in the block is <code>ty·8 + tx</code>. Warp 0 = ids 0–31 = <code>ty = 0..3</code> (8 threads each). So <strong>one warp is a 4-row × 8-column piece of P</strong>. Warp <code>w</code>: <code>ty = 4w … 4w+3</code>.</li>
+  <li><strong>Coalescing (one load of one warp, for a fixed k):</strong>
+    <ul>
+      <li><code>N[k·24 + col]</code>: the 8 threads of a row read 8 consecutive floats (32 B); the 4 rows of the warp read the <em>same</em> addresses → one 32 B segment. Good.</li>
+      <li><code>M[row·K + k]</code>: the 8 threads of a row read the same address; the 4 rows read 4 different addresses (K floats apart) → 4 segments, 4 bytes used from each. Bad (though caching/broadcast helps).</li>
+      <li>Writing <code>P[row·24 + col]</code>: 4 rows × 8 consecutive floats → 4 separate 32 B segments. Four pieces instead of one 128 B transaction; the slide rule: <strong>both the block width and the array width should be multiples of the warp size (32)</strong>. That is why <code>blockDim.x = 8</code> is not ideal.</li>
+    </ul></li>
+</ol>
+<div class="wgt-mount" data-widget="mapping" data-gx="3" data-gy="3" data-bx="8" data-by="32"></div>
+
+<h3>The tiled (shared memory) version with the same configuration</h3>
+<p>The tiled kernel in the slides assumes a square <code>TILE_WIDTH × TILE_WIDTH</code> block (<code>Mds[ty][tx]</code>, <code>Nds[ty][tx]</code>, each thread loads one element of each matrix). With 8×32 blocks this does not work directly; the P tile is <strong>32 rows × 8 columns</strong>. Choosing a phase width (along k) of <code>TK = 8</code>:</p>
+<pre class="code" data-title="Tiled matmul for 8×32 blocks (P: 96×24, M: 96×K, N: K×24)">
+#define BX 8    // blockDim.x  = number of columns of the P tile
+#define BY 32   // blockDim.y  = number of rows of the P tile
+#define TK 8    // width taken along k in each phase
+
+__global__ void MatMulTiled(const float* M, const float* N, float* P, int K, int Pcols)
+{
+    __shared__ float Mds[BY][TK];   // 32×8 = 256 elements: every thread loads one
+    __shared__ float Nds[TK][BX];   //  8×8 =  64 elements: only threads with ty < 8 load
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int row = blockIdx.y * BY + ty;
+    int col = blockIdx.x * BX + tx;
+    float sum = 0;
+    for (int m = 0; m < K / TK; ++m) {
+        Mds[ty][tx] = M[row * K + (m * TK + tx)];
+        if (ty < TK)
+            Nds[ty][tx] = N[(m * TK + ty) * Pcols + col];
+        __syncthreads();                  // tiles completely filled (OUTSIDE the if!)
+        for (int k = 0; k < TK; ++k)
+            sum += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();                  // nobody overwrites for the next phase before all are done
+    }
+    P[row * Pcols + col] = sum;
+}
+</pre>
+<ul>
+  <li>Shared memory per block: (32·8 + 8·8)·4 B = 1280 B.</li>
+  <li>Global reads: one block reads 32×K elements of M and K×8 of N = 40K; the naive version reads 256 threads × 2K = 512K. Reduction 512/40 = <strong>12.8×</strong>. General formula (BX×BY block): <code>2·BX·BY / (BX + BY)</code>; for a square T×T this reduces to <code>T</code> (the slides' "16×16 → 16 times").</li>
+  <li>Alternative: <code>TK = 32</code> with <code>Mds[32][32]</code> (each thread loads 4 elements) and <code>Nds[32][8]</code> (each thread 1). Fewer phases, more shared memory. Whichever you choose in the exam, write clearly <strong>who loads what</strong> and the <strong>two <code>__syncthreads()</code></strong>.</li>
+</ul>
+
+<h3>"Which locations does this code touch?" exercises</h3>
+<p>Answer each one yourself first, then open the solution.</p>
+<p><strong>(a)</strong> <code>A</code> is 8×8 row-major, <code>k&lt;&lt;&lt;2, 4&gt;&gt;&gt;(A, 8)</code>:</p>
+<pre class="code">
+__global__ void k(float* A, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;   // 0..7
+    A[i * N] = 0;
+}
+</pre>
+<div class="hint"><p><code>i = 0..7</code>, address <code>8i</code>: A[0], A[8], …, A[56]. That is <strong>column 0</strong>. Consecutive threads write addresses 8 floats (32 B) apart → each thread a separate 32 B segment: <strong>not</strong> coalesced. Writing <code>A[i]</code> would be row 0, and coalesced.</p></div>
+
+<p><strong>(b)</strong> <code>B</code> is 16×16 (width = 16), <code>k2&lt;&lt;&lt;dim3(2,2), dim3(8,8)&gt;&gt;&gt;</code>:</p>
+<pre class="code">
+__global__ void k2(int* B, int width) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    B[x * width + y] = threadIdx.x;      // careful: x is used as the row!
+}
+</pre>
+<div class="hint"><p>The whole 16×16 matrix is covered (2·8 = 16 in each direction), but <strong>transposed</strong>: thread <code>(x, y)</code> writes row <code>x</code>, column <code>y</code>. <code>blockIdx=(1,0), threadIdx=(3,5)</code> → <code>x = 11, y = 5</code> → writes 3 into <code>B[11·16 + 5] = B[181]</code>. Within a warp <code>threadIdx.x</code> varies consecutively → addresses 16 elements (64 B) apart → not coalesced. Fix: <code>B[y * width + x]</code>. As values, each element gets <code>threadIdx.x</code> = <code>x % 8</code> of its <em>row</em>; so every element of row <code>r</code> of B becomes <code>r % 8</code>.</p></div>
+
+<p><strong>(c)</strong> In a kernel launched with <code>&lt;&lt;&lt;4, 256&gt;&gt;&gt;</code>, which warp is the thread with <code>blockIdx.x = 2</code>, <code>threadIdx.x = 37</code> in, what is its global id, and what happens if it reads <code>a[2*i]</code>?</p>
+<div class="hint"><p>Global id <code>i = 2·256 + 37 = 549</code>. It is in <strong>warp 1</strong> of its block (37/32 = 1; warps are numbered within a block, blocks do not share warps). <code>a[2*i]</code>: consecutive threads are 8 B apart → the warp spreads 32 floats over 256 B → 2 lines of 128 B (or 8 segments of 32 B) are moved, half of it used: 50% efficiency.</p></div>
+
+<h2>Problem type 2: Using shared memory</h2>
+<div class="two-col">
+  <div>
+    <ul>
+      <li><code>__shared__ float s[N];</code> is declared inside the kernel; <strong>one copy per block</strong>, all threads of the block see the same one, its lifetime is that of the kernel/block.</li>
+      <li>On-chip, very fast (the fastest after registers); small (16 KB per SM on the G80).</li>
+      <li>Pattern: (1) <strong>cooperatively load</strong> from global into shared (each thread a few elements), (2) <code>__syncthreads()</code>, (3) read/compute repeatedly from shared, (4) <code>__syncthreads()</code> if needed, (5) write the result to global.</li>
+      <li>Purpose: reduce global memory traffic (raise CGMA) and let threads share data. "Shared memory = user-controlled cache."</li>
+      <li>Another block <strong>cannot</strong> see a block's shared memory; blocks communicate through global memory.</li>
+    </ul>
+  </div>
+  <div>
+<pre class="code" data-title="The simplest example: reverse an array within a block">
+#define B 256
+__global__ void reverseBlock(int* d)
+{
+    __shared__ int s[B];
+    int t = threadIdx.x;
+    int base = blockIdx.x * B;
+    s[t] = d[base + t];          // 1) load
+    __syncthreads();             // 2) has everyone loaded?
+    d[base + t] = s[B - 1 - t];  // 3) read what ANOTHER
+}                                //    thread loaded
+// reverseBlock<<<n / B, B>>>(d);
+</pre>
+  </div>
+</div>
+<div class="callout gotcha">
+  <p>Remove the <code>__syncthreads()</code> above and thread <code>t</code> may read <code>s[B-1-t]</code> before a thread in another warp has written it: a <strong>race condition</strong>, undefined result. Whenever a thread reads shared data <em>written by another thread</em>, there must be a barrier in between.</p>
+</div>
+<div class="callout class">
+  <p><strong>"First just copy, without computing."</strong> If shared memory also needs data from outside the region you will write (e.g. the border/halo region in a convolution): first write the kernel so that it only does a "global → shared → global" copy and check that <strong>the output equals the input</strong>. Once the indices are right, add the computation. In the exam, too, check the shared-memory load indices separately.</p>
+</div>
+<p>The whole tiled matrix multiplication, with a phase-by-phase visualisation: <a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5 page</a>. In short:</p>
+<pre class="code" data-title="Slide 90: tiled matmul (TILE_WIDTH × TILE_WIDTH block)">
+__global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int Row = by * TILE_WIDTH + ty;
+    int Col = bx * TILE_WIDTH + tx;
+    float Pvalue = 0;
+    for (int m = 0; m < width / TILE_WIDTH; ++m) {
+        Mds[ty][tx] = Md[Row * width + (m * TILE_WIDTH + tx)];   // M: row Row, column tx of phase m
+        Nds[ty][tx] = Nd[(m * TILE_WIDTH + ty) * width + Col];   // N: row ty of phase m, column Col
+        __syncthreads();
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();
+    }
+    Pd[Row * width + Col] = Pvalue;
+}
+</pre>
+<div class="wgt-mount" data-widget="tiling"></div>
+
+<h2>Problem type 3: <code>__syncthreads()</code></h2>
+<ul>
+  <li><strong>Barrier within a block:</strong> every calling thread waits until <em>all</em> threads of the block reach that point. It does <strong>not</strong> synchronise different blocks (across blocks: split the kernel / CUDA 9+ cooperative groups).</li>
+  <li><strong>It must be executed by all threads of the block.</strong> Using it inside an <code>if</code>/<code>else</code> is undefined behaviour (deadlock/wrong result); the only exception is when the condition evaluates the same for <em>all</em> threads of the block.</li>
+  <li>It is lightweight; since the threads of a block are assigned to the same SM together, waiting times stay short.</li>
+  <li>Slide note: it actually synchronises <strong>warps</strong>, not threads.</li>
+  <li>The two barriers in tiled matmul: <strong>1.</strong> after the writes: nobody reads before the tile is full (read-after-write). <strong>2.</strong> after the computation: nobody overwrites with the next phase's data before the others are done (write-after-read).</li>
+</ul>
+<div class="two-col">
+<pre class="code" data-title="✗ Wrong: barrier inside the condition">
+if (threadIdx.x < 16) {
+    s[threadIdx.x] = in[threadIdx.x];
+    __syncthreads();   // tid ≥ 16 never gets here
+}
+out[threadIdx.x] = s[threadIdx.x % 16];
+</pre>
+<pre class="code" data-title="✓ Right: conditional load, barrier for everyone">
+if (threadIdx.x < 16)
+    s[threadIdx.x] = in[threadIdx.x];
+__syncthreads();
+out[threadIdx.x] = s[threadIdx.x % 16];
+</pre>
+</div>
+<div class="callout gotcha">
+  <p>An early <code>return</code> is the same trap: write <code>if (row &gt;= n) return;</code> and then call <code>__syncthreads()</code>, and some threads never reach the barrier. Put the bounds check on the load/store lines (out-of-range threads write 0 into shared memory) and let everyone execute the barriers.</p>
+</div>
+
+<h2>Problem type 4: Coalescing</h2>
+<ul>
+  <li>Global memory is read in <strong>32, 64 or 128-byte</strong> transactions; only segments <strong>aligned to their size</strong> can be read. There is no "reading 11 bytes": you read 32 bytes; 33 bytes = two 32 B accesses.</li>
+  <li>When a warp executes a global memory instruction, the accesses of its 32 threads are <strong>combined</strong> (coalesced) into one or more transactions. How many depends on (1) the word size per thread and (2) the distribution of the addresses over the threads.</li>
+  <li><strong>The slide 47 calculation:</strong> 32 threads reading 4 B from random addresses move 32 × 32 B = 1024 B; reading consecutive, 128 B-aligned addresses moves 32 × 4 = 128 B, one transaction. 1024/128 = <strong>8 times</strong> more data → bandwidth /8.</li>
+  <li>The word size should be 1, 2, 4, 8 or 16 B and <strong>naturally aligned</strong> (address a multiple of the size); otherwise it is split into several instructions. For structs: <code>__align__(8)</code>, <code>__align__(16)</code>.</li>
+  <li><strong>2D rule:</strong> if thread <code>(tx, ty)</code> accesses <code>BaseAddress + width·ty + tx</code>, full coalescing needs <strong>both the block width and the array width to be multiples of 32</strong> → pad the rows with <code>cudaMallocPitch</code>.</li>
+  <li>Consecutive threads (<code>threadIdx.x</code>) should go to consecutive addresses: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
+</ul>
+<div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
+<p>Why the naive transpose is slow and how shared memory fixes it: <a href="coalescing.html#matrix-transpose">Coalescing page</a>. Summary:</p>
+<div class="two-col">
+<pre class="code" data-title="Naive transpose: read ✓, write ✗">
+// in: height×width, out: width×height
+int x = blockIdx.x * TILE + threadIdx.x;  // column
+int y = blockIdx.y * TILE + threadIdx.y;  // row
+if (x < width && y < height)
+    out[x * height + y] = in[y * width + x];
+// x is consecutive within a warp: in is read
+// consecutively, out is written 'height' apart
+</pre>
+<pre class="code" data-title="With shared memory: both ✓">
+__shared__ float tile[TILE][TILE];
+int x = blockIdx.x * TILE + threadIdx.x;
+int y = blockIdx.y * TILE + threadIdx.y;
+tile[threadIdx.y][threadIdx.x] = in[y * width + x];
+__syncthreads();
+x = blockIdx.y * TILE + threadIdx.x;   // blocks swap places
+y = blockIdx.x * TILE + threadIdx.y;
+out[y * height + x] = tile[threadIdx.x][threadIdx.y];
+</pre>
+</div>
+
+<h2>Problem type 5: Numerical questions</h2>
+<p>Without a calculator the numbers are chosen "nice", as in the slides. Put these on your cheat sheet.</p>
+<table class="simple">
+  <thead><tr><th>Question</th><th>Calculation</th></tr></thead>
+  <tbody>
+    <tr><td>G80: registers per thread?</td><td>8K = 8192 registers per SM, 768 threads → 8192/768 ≈ 10.7 → <strong>10</strong> registers. More → <strong>register spill</strong> → local memory (= global, slow).</td></tr>
+    <tr><td>G80: shared memory limit per block?</td><td>16 KB/SM, at most 8 blocks/SM → ≤ <strong>2 KB</strong> per block for all 8 blocks.</td></tr>
+    <tr><td>16×16 tile matmul, G80</td><td>Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/block → shared memory allows 8 blocks; but 768/256 = <strong>3 blocks</strong> (thread limit) → only 3·2 = 6 KB used. The limiting factor: the thread count.</td></tr>
+    <tr><td>GT200 (1024 threads/SM, 8 blocks/SM, 512 threads/block): 8×8, 16×16, 32×32?</td><td>8×8 = 64 → 8 blocks × 64 = 512 threads (half full). 16×16 = 256 → 4 blocks = 1024 ✓ <strong>best</strong>. 32×32 = 1024 > 512 threads/block ✗.</td></tr>
+    <tr><td>Number of warps</td><td>256 threads/block → 8 warps; 3 blocks on an SM → 24 warps.</td></tr>
+    <tr><td>CGMA (naive matmul)</td><td>2 global reads, 2 FLOPs (multiply + add) per iteration → CGMA = 1. G80: 86.4 GB/s / 4 B = 21.6 G floats/s → at most <strong>21.6 GFLOPS</strong>, ~6% of the 367 GFLOPS peak.</td></tr>
+    <tr><td>Reduction of global reads by tiling</td><td>T×T block: <code>(T·T·2·width) / (T·width·2) = T</code>. 16×16 → <strong>16×</strong>. Rectangular BX×BY: <code>2·BX·BY/(BX+BY)</code>; 32×8 → 512/40 = 12.8×.</td></tr>
+    <tr><td>Pitch (256 B alignment)</td><td>width 5/50/250 B → pitch 256; 500 → 512; 700 → 768.</td></tr>
+    <tr><td>Thread ID (slide 33)</td><td>Block <code>b</code>, thread <code>t</code>, M threads per block: <code>b·M + t</code> (thread 3 of block 5: 5M + 3).</td></tr>
+  </tbody>
+</table>
+
+<h2>Practice set</h2>
+<div class="quiz" data-answer="3">
+  <p>For the launch <code>k&lt;&lt;&lt;dim3(4,2), dim3(16,8)&gt;&gt;&gt;</code> with <code>col = blockIdx.x*blockDim.x + threadIdx.x</code>, <code>row = blockIdx.y*blockDim.y + threadIdx.y</code>, what region is covered?</p>
+  <ol>
+    <li data-why="Rows and columns swapped: the x direction gives the columns.">64 rows × 16 columns</li>
+    <li data-why="That counts blocks, not threads.">4 rows × 2 columns</li>
+    <li data-why="Columns = 4·16 = 64, rows = 2·8 = 16.">16 rows × 64 columns</li>
+    <li data-why="That is not even the area of one block (8 rows × 16 columns).">16 rows × 16 columns</li>
+  </ol>
+  <div class="explain">The x axis (gridDim.x·blockDim.x) gives the columns, the y axis the rows.</div>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Block <code>dim3(8, 32)</code>. Which warp is the thread with <code>threadIdx = (3, 9)</code> in?</p>
+  <ol>
+    <li data-why="You took threadIdx.y as the warp number.">9</li>
+    <li data-why="Linear id = 9·8 + 3 = 75, 75/32 = 2 (integer division).">2</li>
+    <li data-why="There is no grouping by threadIdx.x; warps are formed from the linear id.">0</li>
+    <li data-why="75 / 32 = 2.34 → rounded down, not 3.">3</li>
+  </ol>
+  <div class="explain">Warp = (ty·blockDim.x + tx) / 32. In an 8-column block one warp is 4 rows: warp 2 = ty 8..11.</div>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which of the following is <strong>false</strong> about <code>__syncthreads()</code>?</p>
+  <ol>
+    <li data-why="True: it waits until all threads of the block reach the barrier.">The calling thread waits until all threads of the block get there.</li>
+    <li data-why="True: undefined behaviour if not all threads follow the same path.">Using it inside an <code>if</code> that only some threads enter is undefined behaviour.</li>
+    <li data-why="True: that is the job of the second barrier in tiled matmul.">It is also used to prevent shared memory from being overwritten too early in the next phase.</li>
+    <li data-why="False: it only holds threads of the same block; blocks are independent and unordered.">It synchronises all blocks of the grid.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>A 32-thread warp reads <code>a[threadIdx.x + 1]</code> from a 128 B-aligned <code>float</code> array. How many 128 B lines are touched?</p>
+  <ol>
+    <li data-why="Addresses 4…131: they spill over lines 0–127 and 128–255.">2</li>
+    <li data-why="Shifted by one element, the last thread moves into the next line.">1</li>
+    <li data-why="The accesses are consecutive; each thread does not open a separate line.">32</li>
+    <li data-why="Only two of the 128 B lines are used.">4</li>
+  </ol>
+  <div class="explain">Misaligned access: 128 B requested but 256 B moved (in 32 B segments: 5 segments = 160 B). That is why the alignment of the starting address matters.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is true for the naive transpose <code>out[x*height + y] = in[y*width + x]</code> (<code>x</code> along <code>threadIdx.x</code>)?</p>
+  <ol>
+    <li data-why="The writes are 'height' apart: not coalesced.">Both the read and the write are coalesced.</li>
+    <li data-why="The other way round: the read is consecutive, the write strided.">The read is not coalesced, the write is.</li>
+    <li data-why="True: it reads in along a row and writes out along a column.">The read is coalesced, the write is not; with a shared memory tile both can be coalesced.</li>
+    <li data-why="Bank conflicts in the transpose are a separate topic (and not on this exam); global addresses decide coalescing.">The problem is not in global memory, only in bank conflicts.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>In tiled matmul (TILE_WIDTH = 16), how many times does one thread read global memory? (Width = 1024)</p>
+  <ol>
+    <li data-why="That is the naive kernel's count: 2·Width.">2048</li>
+    <li data-why="1 M + 1 N element per phase, Width/16 = 64 phases → 128.">128</li>
+    <li data-why="There are 64 phases; each phase has two reads.">64</li>
+    <li data-why="Shared memory reads (2·16 per phase) mixed up with global reads.">32</li>
+  </ol>
+  <div class="explain">2·Width/T = 2048/16 = 128: global traffic drops T = 16 times.</div>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What happens if a kernel uses more registers per thread than allowed?</p>
+  <ol>
+    <li data-why="True: the kernel runs but the excess variables move to local memory (register spill).">It runs, the excess spills to local memory (global memory), performance drops.</li>
+    <li data-why="No compile error; --ptxas-options=-v shows the register count.">It does not compile.</li>
+    <li data-why="It spills to local memory (device memory), not shared memory.">The excess spills to shared memory.</li>
+    <li data-why="The result stays correct, only slower.">The result is wrong.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is the best access pattern for constant memory?</p>
+  <ol>
+    <li data-why="Different addresses split the request into serial parts.">Each thread reads a different address.</li>
+    <li data-why="Constant memory cannot be written from a kernel (read-only).">Each thread writes its own address.</li>
+    <li data-why="That is the ideal (coalesced) pattern for global memory; in the constant cache it becomes 32 separate requests.">Consecutive threads read consecutive addresses.</li>
+    <li data-why="True: one address → one request, broadcast to the warp.">All threads of the warp read the same address.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is <strong>false</strong> about loop unrolling?</p>
+  <ol>
+    <li data-why="True: fewer counter-increment, compare and branch instructions.">It reduces loop-control instructions (counter, compare, branch).</li>
+    <li data-why="True: independent instructions end up side by side (ILP).">It can increase instruction-level parallelism.</li>
+    <li data-why="False: register usage usually INCREASES (more live variables); too much leads to spills.">It always reduces register usage.</li>
+    <li data-why="True: #pragma unroll works best with a trip count known at compile time.">In CUDA the compiler can do it with <code>#pragma unroll</code>.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Which is true for a function marked <code>__global__</code>?</p>
+  <ol>
+    <li data-why="That describes a __device__ function.">Runs on the device, callable only from the device.</li>
+    <li data-why="A kernel: runs on the device, called from the host with <<<…>>> (returns void).">Runs on the device, called from the host.</li>
+    <li data-why="That is __host__ (the default).">Runs on the host, called from the host.</li>
+    <li data-why="__host__ __device__ together compile two versions; __global__ is not that.">Runs on both the host and the device.</li>
+  </ol>
+</div>
+
+<h2>Last-night checklist</h2>
+<ul class="check-list">
+  <li><code>dim3(x, y)</code> → x columns, y rows; <code>row*width + col</code>.</li>
+  <li>For a given <code>&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code>: total threads, warps/block, the region covered, a given thread's (row, col), which threads make up a warp.</li>
+  <li>Writing the tiled matmul kernel from memory; the meaning of the indices on the <code>Mds[ty][tx]</code> and <code>Nds[ty][tx]</code> lines; why there are two barriers.</li>
+  <li>Building the tiled version for a non-square (8×32) block.</li>
+  <li>For an access pattern: the number of 32/128 B segments touched and the efficiency.</li>
+  <li>Why the naive transpose is slow, how shared memory fixes it.</li>
+  <li>Loop unrolling: what it gains, what it costs.</li>
+  <li>The memory types table (scope, lifetime, speed, who writes): <a href="l5-cuda-kernels.html#cuda-memory-types">L5</a>.</li>
+  <li>The G80/GT200 numerical examples and CGMA.</li>
+</ul>
+
+</div></main>
+<script>
+(function () {
+  var el = document.getElementById("countdown"); if (!el) return;
+  var t0 = new Date("2026-11-11T15:30:00+03:00").getTime(), t1 = new Date("2026-11-11T17:00:00+03:00").getTime();
+  function tick() {
+    var now = Date.now(), d = t0 - now;
+    if (now > t1) { el.textContent = "The exam is over."; return; }
+    if (d <= 0) { el.textContent = "The exam is in progress."; return; }
+    var h = Math.floor(d / 3600000), m = Math.floor(d % 3600000 / 60000);
+    el.textContent = h + " h " + m + " min to the exam";
+  }
+  tick(); setInterval(tick, 30000);
+})();
+</script>
+</body>
+</html>

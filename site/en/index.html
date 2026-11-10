@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parallel Computing · BİL 455/533 study site</title>
+<meta name="description" content="A bilingual study site for BİL 455/533 Parallel Computing (TOBB ETÜ, Fall 2026): Lectures 1–6 with midterm 2 first (CUDA, shared memory, __syncthreads, coalescing, tiled matmul, transpose).">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/index.js"></script>
+</head>
+<body data-page="index">
+<main><div class="content">
+
+<section class="hero">
+  <div>
+    <div class="kicker"><span>BİL 455/533 Parallel Computing · TOBB ETÜ · Fall 2026 · Toygar Akgün</span></div>
+    <h1>Parallel Computing</h1>
+    <p class="question">How do we run thousands of threads at once, and how do we keep them fed with memory?</p>
+    <p class="lead">The lecture slides (Lectures 1–6), exercises and class notes in one place. The priority is tomorrow's <strong>midterm 2</strong>: CUDA, shared memory, <code>__syncthreads()</code>, indexing and coalescing.</p>
+    <div class="btn-row" style="margin-top:1rem">
+      <a class="btn primary" href="exam-midterm2.html">Midterm 2 guide →</a>
+      <a class="btn" href="lab.html">Index lab</a>
+      <a class="btn" href="coalescing.html">Coalescing and transpose</a>
+    </div>
+  </div>
+  <div class="exam-card" style="margin:0">
+    <div class="card-kicker">Midterm 2</div>
+    <div><strong>Wednesday 11 November 2026 · 15:30–17:00 · Room 306</strong></div>
+    <div class="countdown-big" id="countdown"></div>
+    <ul>
+      <li>Scope: from the start of term to the 10 November lecture (Lectures 1–6), weighted towards CUDA.</li>
+      <li>In the announcement: using shared memory, <code>__syncthreads()</code>, coalescing.</li>
+      <li><strong>Not included:</strong> shared memory bank optimisation (on the final).</li>
+      <li>One handwritten A4 cheat sheet (both sides). No calculator.</li>
+    </ul>
+  </div>
+</section>
+
+<h2>Plan</h2>
+<p>Suggested order with one day to go: guide → lab → coalescing/transpose → L5 (tiled matmul) → cheat sheet. L1–L3 are in scope too, but the weight is on CUDA.</p>
+<div class="cards" id="parts"></div>
+
+<h2>How the topics connect</h2>
+<ol>
+  <li><strong>Why parallel? (L1)</strong> Frequency scaling hit the power wall; performance now comes from many cores and GPUs. Amdahl's and Gustafson's laws describe the limits of the gain.</li>
+  <li><strong>How to design? (L2)</strong> PCAM: partition the problem, identify communication, agglomerate the pieces, map them to processors. Decomposition patterns (geometric, pipeline, …) and program structures (SPMD, master-worker, map-reduce, fork/join).</li>
+  <li><strong>Shared memory on the CPU (L3)</strong> C++11 threads; preventing data races with mutexes, semaphores, atomics and monitors.</li>
+  <li><strong>Data parallelism on the GPU (L4–L5)</strong> One thread per data element: grid → block → thread, indexing with <code>blockIdx/threadIdx</code>, warps, synchronisation within a block, and tiling with shared memory.</li>
+  <li><strong>Feeding the memory (L6)</strong> Arithmetic is cheap, memory is expensive: register/shared limits, coalescing, pitch, constant and texture memory. The transpose example brings all of this together.</li>
+</ol>
+
+<h2>Using the site</h2>
+<div class="two-col">
+  <div>
+    <ul>
+      <li>The <strong>table of contents</strong> on the right shows the section you are reading; on narrow screens it opens as a bar at the top.</li>
+      <li>The <strong>EN/TR</strong> button at the top right goes to the same page in the other language, at the same section.</li>
+      <li>In the quizzes a wrong option tells you why; "Show the answer" opens the explanation of every option.</li>
+      <li>In the worked problems, solve them yourself first, then <strong>Show the solution</strong>.</li>
+    </ul>
+  </div>
+  <div>
+    <div class="callout key"><p>A rule to remember.</p></div>
+    <div class="callout gotcha"><p>A common mistake in exams.</p></div>
+    <div class="callout class"><p>Content covered in class but not in the slides.</p></div>
+    <div class="callout beyond"><p>Outside the scope of midterm 2 (e.g. bank conflicts, on the final).</p></div>
+  </div>
+</div>
+
+<h2>Sources</h2>
+<ul>
+  <li>Lecture slides: Lecture 1 (introduction), 2 (design), 3 (threads), 4 (introduction to CUDA), 5 (CUDA programming), 6 (CUDA programming interface and memory).</li>
+  <li>Exercises: Exercise 1–2 (histogram, integral array/image, 2D convolution, matrix multiplication with C++ threads), Exercise 3–4 (their CUDA versions). Sample code: semaphore synchronisation, image rotation with textures (<code>texRotate.cu</code>).</li>
+  <li>NVIDIA, <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-programming-guide/" target="_blank" rel="noopener">CUDA C++ Programming Guide</a> and <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-best-practices-guide/" target="_blank" rel="noopener">Best Practices Guide</a> (recommended by the slides).</li>
+  <li>M. Harris, <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">An Efficient Matrix Transpose in CUDA C/C++</a> (the transpose example).</li>
+</ul>
+
+</div></main>
+</body>
+</html>

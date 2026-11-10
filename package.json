@@ -1,0 +1,16 @@
+{
+  "name": "parallel-computing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BİL 455/533 Paralel Hesaplama: 2. ara sınav (CUDA) için iki dilli etkileşimli çalışma sitesi",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/build.mjs && node scripts/serve.mjs dist",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

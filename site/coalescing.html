@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coalescing, transpose, unrolling · Paralel Hesaplama</title>
+<meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="coalescing">
+<main><div class="content">
+
+<h1>Coalescing, transpose, unrolling</h1>
+<p class="lead">Bir warp'ın 32 thread'i global belleğe aynı anda gider. Adresleri yan yana ise donanım hepsini tek bir büyük okumada karşılar; dağınıksa aynı veri için defalarca okuma yapar. 2. vizenin en önemli performans konusu bu.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Bir erişim deseni için kaç tane 32/128 baytlık segmente dokunulduğunu ve verimi hesaplamak.</li>
+    <li>Bir kodun coalesced olup olmadığını <code>threadIdx.x</code>'in adreste nerede durduğuna bakarak söylemek.</li>
+    <li>Naive transpose'un neden yavaş olduğunu ve shared memory karosuyla nasıl düzeltildiğini indeks indeks açıklamak.</li>
+    <li>Loop unrolling'in ne kazandırdığını ve maliyetini söylemek.</li>
+  </ul>
+</div>
+
+<h2>Global bellek transaction'ları</h2>
+<p>Lecture 6, slayt 43–48:</p>
+<ul>
+  <li>En yüksek performans için global bellek erişimleri <strong>coalesced</strong> (birleştirilmiş) olmalı.</li>
+  <li>Global bellek <strong>32, 64 veya 128 baytlık</strong> transaction'larla erişilir. Her erişim bu parçalara oturtulur: "11 bayt okumak" diye bir şey yoktur, 32 bayt okursunuz.</li>
+  <li>Bir bellek bölgesi, ilk adresi N'nin katıysa <strong>N bayta hizalıdır</strong>. Sadece <strong>kendi boyutuna hizalı</strong> 32/64/128 B segmentler okunup yazılabilir. 33 bayt okursanız iki tane 32 B erişim olur.</li>
+  <li>Bir warp global belleğe erişen bir komutu çalıştırdığında, thread'lerin erişimlerini bir veya daha fazla transaction'a <strong>birleştirir</strong>. Kaç tane olacağını belirleyen iki şey: <strong>(1)</strong> her thread'in eriştiği kelimenin boyu, <strong>(2)</strong> adreslerin thread'lere dağılımı.</li>
+  <li>Ne kadar çok transaction gerekirse, thread'lerin istemediği o kadar çok kelime de taşınır ve komut verimi o oranda düşer. Genel kural: <strong>adresler ne kadar dağınıksa throughput o kadar düşük.</strong></li>
+</ul>
+<div class="callout example">
+  <p><strong>Slayt 47: neden "throughput / 8"?</strong></p>
+  <ul>
+    <li>32 thread rastgele adreslerden 4'er bayt okur → her thread için ayrı bir 32 B transaction (en küçük parça) → 32 × 32 B = <strong>1024 B</strong> okunur.</li>
+    <li>32 thread ardışık adreslerden 4'er bayt okur ve başlangıç 128 B hizalı → 32 × 4 = 128 B = <strong>tek bir 128 B transaction</strong>.</li>
+    <li>1024 / 128 = 8 kat fazla veri → etkin bant genişliği / 8.</li>
+  </ul>
+</div>
+
+<h3>Temel hizalama şartı</h3>
+<ul>
+  <li>Global bellek komutları thread başına <strong>1, 2, 4, 8 veya 16 baytlık</strong> kelimeleri okuyup yazabilir.</li>
+  <li>Global bellekteki bir veriye erişim <strong>ancak ve ancak</strong> (1) veri tipinin boyu 1, 2, 4, 8 veya 16 bayt ve (2) veri <strong>doğal hizalı</strong> (adresi boyutunun katı) ise tek bir komuta derlenir. Değilse birden fazla komuta bölünür ve bunlar tam coalesce olamaz.</li>
+  <li><code>char, short, int, long, long long, float, double, float2, float4</code> gibi yerleşik tipler bu şartı otomatik sağlar. Struct'lar için derleyiciye <code>__align__(8)</code> veya <code>__align__(16)</code> ile zorlatılır:</li>
+</ul>
+<pre class="code">
+struct __align__(8)  { float x; float y; };            // 8 bayt, 8'e hizalı → tek 8 B load
+struct __align__(16) { float x; float y; float z; };   // 12 bayt veri, 16'ya yuvarlanır → tek 16 B load
+</pre>
+<ul>
+  <li><code>cudaMalloc</code> ve diğer ayırma fonksiyonlarının döndürdüğü adresler <strong>en az 256 bayta hizalıdır</strong>.</li>
+  <li><strong>Çoklu dizi tuzağı (slayt 52–53):</strong> birkaç <code>cudaMalloc</code> yerine tek büyük blok ayırıp içini dizilere bölerseniz, her dizinin başlangıcı bloğun başından kaydırılmış olur. Bir <code>float</code> dizisinin ardından gelen <code>float2</code> dizisi 4 B'ye hizalıdır ama 8 B'ye hizalı olması <strong>garanti değildir</strong>. 8/16 baytlık kelimeleri hizasız okumak <strong>yanlış sonuç</strong> verir (birkaç kelime kayma).</li>
+</ul>
+
+<h2>Erişim desenlerini deneyin</h2>
+<p>Hazır örnekleri sırayla seçin: ardışık, bir eleman kaydırılmış, stride 2, sütun (naive transpose'un yazması), hepsi aynı adres, rastgele, 8 baytlık kelime.</p>
+<div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
+<table class="simple">
+  <thead><tr><th>Desen (float, 32 thread)</th><th>Dokunulan 32 B segment</th><th>Taşınan / kullanılan</th><th>Yorum</th></tr></thead>
+  <tbody>
+    <tr><td><code>a[i]</code>, 128 B hizalı</td><td>4 (= tek 128 B satır)</td><td>128 / 128 B (%100)</td><td>İdeal.</td></tr>
+    <tr><td><code>a[i + 1]</code></td><td>5 (128 B satırla bakınca 2)</td><td>160 / 128 B (%80)</td><td>Hizasız başlangıç bir segment fazlaya mal olur.</td></tr>
+    <tr><td><code>a[2*i]</code></td><td>8</td><td>256 / 128 B (%50)</td><td>Her segmentin yarısı boşa.</td></tr>
+    <tr><td><code>a[i * 1024]</code> (sütun)</td><td>32</td><td>1024 / 128 B (%12,5)</td><td>Her thread ayrı segment: naive transpose'un yazma deseni.</td></tr>
+    <tr><td><code>a[0]</code> (hepsi aynı)</td><td>1</td><td>32 / 4 B</td><td>Tek transaction; aslında constant belleğin ideal deseni (yayın).</td></tr>
+    <tr><td>rastgele</td><td>≈ 32</td><td>≈ 1024 / 128 B</td><td>Slayt 47'deki kötü durum.</td></tr>
+    <tr><td><code>double a[i]</code></td><td>8 (2 satır)</td><td>256 / 256 B (%100)</td><td>Kelime büyüyünce warp 256 B ister; yine tam verim.</td></tr>
+  </tbody>
+</table>
+<div class="callout key">
+  <p>Kodda coalescing'i görmenin kısa yolu: adres ifadesinde <code>threadIdx.x</code>'in (ya da ondan türeyen <code>col</code>/<code>x</code>'in) <strong>çarpansız, en sağda</strong> durup durmadığına bakın. <code>A[row*width + col]</code> ✓; <code>A[col*width + row]</code> ✗ (ardışık thread'ler <code>width</code> eleman aralıklı); <code>A[2*col]</code> yarı verim.</p>
+</div>
+
+<h2>2D diziler ve pitch</h2>
+<ul>
+  <li>Yaygın desen: <code>(tx, ty)</code> thread'i <code>BaseAddress + width·ty + tx</code> adresine erişir. Tam coalescing için <strong>hem thread bloğunun genişliği hem de dizinin genişliği warp boyunun (32) katı</strong> olmalı.</li>
+  <li>Genişliği 32'nin katı olmayan bir dizi, en yakın 32 katına yuvarlanmış genişlikle ayrılıp satırları doldurulursa (padding) çok daha verimli erişilir. Bunu donanımdan bağımsız yapan fonksiyonlar: <code>cudaMallocPitch()</code> (2D), <code>cudaMalloc3D()</code> (3D). Doğru stride'ı (pitch) hesaplayıp döndürürler; elemanlara erişirken <strong>bu pitch kullanılmalı</strong>.</li>
+  <li>Kopyalama: <code>cudaMallocPitch</code> ile ayrılan bellek <code>cudaMemcpy2D</code>, <code>cudaMalloc3D</code> ile ayrılan <code>cudaMemcpy3D</code> ile kopyalanır.</li>
+</ul>
+<pre class="code" data-title="Pitch'li 2D erişim (slayt 40)">
+// Host
+int width = 64, height = 64;
+float* devPtr; size_t pitch;
+cudaMallocPitch(&devPtr, &pitch, width * sizeof(float), height);
+MyKernel<<<100, 512>>>(devPtr, pitch, width, height);
+
+// Device: pitch BAYT cinsinden → önce char*'a çevirip satır başını bul
+__global__ void MyKernel(float* devPtr, size_t pitch, int width, int height) {
+    for (int r = 0; r < height; ++r) {
+        float* row = (float*)((char*)devPtr + r * pitch);
+        for (int c = 0; c < width; ++c) { float element = row[c]; }
+    }
+}
+
+// Kopyalama
+cudaMemcpy2D(devPtr, devPitch,            // hedef ve pitch'i (GPU)
+             hostPtr, hostPitch,          // kaynak ve pitch'i (CPU), genelde Ncols*sizeof(float)
+             Ncols * sizeof(float), Nrows,// satır başına BAYT, satır sayısı
+             cudaMemcpyHostToDevice);
+</pre>
+<p>Pitch örnekleri (256 B hizalama): genişlik 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
+
+<h2>Matris transpose <span class="badge-class">derste</span></h2>
+<p>Hocanın derste verdiği örnek; NVIDIA'nın <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a> yazısındaki kernel serisi. Transpose hiç hesap yapmaz, sadece veri taşır: performansı tamamen bellek erişim desenine bağlıdır. Bu yüzden coalescing'i göstermek için en iyi örnek.</p>
+
+<h3>Kurulum: 32×32 karo, 32×8 thread</h3>
+<ul>
+  <li><code>TILE_DIM = 32</code>, <code>BLOCK_ROWS = 8</code>. Her blok matrisin bir <strong>32×32 karosunu</strong> işler ama <strong>32×8 = 256 thread</strong>'i vardır.</li>
+  <li>Bu yüzden her thread karo içinde <strong>4 eleman</strong> işler (32/8): satır <code>y, y+8, y+16, y+24</code>. Döngü ikinci indeks (satır) üzerinde döner, böylece bir warp'ın ardışık thread'leri hâlâ ardışık adreslere gider. Faydası: indeks hesabının maliyeti 4 elemana bölünür.</li>
+  <li>Grid: N×N matris için <code>dim3(N/32, N/32)</code>, blok: <code>dim3(TILE_DIM, BLOCK_ROWS) = dim3(32, 8)</code>.</li>
+</ul>
+
+<h3>1) Referans: copy</h3>
+<pre class="code" data-title="copy: transpose'un hedefleyeceği hız (aynı erişimler, yer değiştirme yok)">
+const int TILE_DIM = 32;
+const int BLOCK_ROWS = 8;
+
+__global__ void copy(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;   // TILE_DIM ile, blockDim.y ile değil!
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = idata[(y + j) * width + x];
+}
+// dim3 grid(N / TILE_DIM, N / TILE_DIM), block(TILE_DIM, BLOCK_ROWS);
+</pre>
+<p>Okuma da yazma da coalesced: bir warp = bir satırdaki 32 ardışık float = 128 B. Transpose ne kadar hızlı olursa olsun bu kernelden hızlı olamaz; ölçüm için "tavan".</p>
+<div class="callout class">
+  <p>Hocanın tavsiyesiyle aynı fikir: <strong>önce hesap yapmayan bir kopya kernel'i</strong> yazın, çıktının girdiye eşit olduğunu (ve hızını) görün; sonra asıl işlemi ekleyin. Shared memory'li versiyonda da önce <code>copySharedMem</code> (global → shared → global, aynı yere) yazılıp indeksler doğrulanır.</p>
+</div>
+
+<h3>2) Naive transpose</h3>
+<pre class="code" data-title="transposeNaive: tek fark, yazma indeksinde x ile y'nin yer değiştirmesi">
+__global__ void transposeNaive(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[x * width + (y + j)] = idata[(y + j) * width + x];
+}
+</pre>
+<ul>
+  <li><strong>Okuma</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> en sağda, çarpansız → warp 128 B'lık tek satır okur ✓.</li>
+  <li><strong>Yazma</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> <code>width</code> ile çarpılmış → ardışık thread'ler <code>width</code> eleman aralıklı. 1024×1024 matriste aralık 1024 float = <strong>4096 B</strong> → warp'ın 32 yazması 32 ayrı segment. Coalesced <strong>değil</strong>.</li>
+  <li>Laboratuvardaki <code>a[i*1024]</code> örneği tam olarak bu yazma.</li>
+</ul>
+
+<h3>3) Shared memory ile coalesced transpose</h3>
+<p>Fikir: karoyu global bellekten <strong>satır satır</strong> (coalesced) okuyup shared memory'ye koy; yer değiştirmeyi shared memory içinde yap (orada dağınık erişim ucuz); sonra karonun <strong>sütununu</strong> çıktıda <strong>satır</strong> olarak (coalesced) yaz. Blok da transpoze edilmiş yere yazmalı.</p>
+<pre class="code" data-title="transposeCoalesced">
+__global__ void transposeCoalesced(float* odata, const float* idata)
+{
+    __shared__ float tile[TILE_DIM][TILE_DIM];
+
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        tile[threadIdx.y + j][threadIdx.x] = idata[(y + j) * width + x];   // coalesced okuma
+
+    __syncthreads();   // thread'ler okuduklarından FARKLI elemanları yazacak: karo tamamen dolmalı
+
+    x = blockIdx.y * TILE_DIM + threadIdx.x;   // transpoze blok konumu: bx ↔ by
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = tile[threadIdx.x][threadIdx.y + j];   // coalesced yazma
+}
+</pre>
+<div class="callout example">
+  <p><strong>İndeks takibi</strong> (N = 1024, grid 32×32, blok 32×8): <code>blockIdx = (1, 2)</code>, <code>threadIdx = (5, 3)</code>.</p>
+  <ul>
+    <li>Yükleme: <code>x = 1·32 + 5 = 37</code>, <code>y = 2·32 + 3 = 67</code>. j = 0, 8, 16, 24 için <code>idata</code>'nın satır 67, 75, 83, 91 / sütun 37'sini okuyup <code>tile[3][5], tile[11][5], tile[19][5], tile[27][5]</code>'e koyar. Bu blok girdinin satır 64–95, sütun 32–63 karosunu yükler.</li>
+    <li>Yazma: <code>x = 2·32 + 5 = 69</code>, <code>y = 1·32 + 3 = 35</code>. <code>odata</code>'nın satır 35, 43, 51, 59 / sütun 69'una <code>tile[5][3], tile[5][11], tile[5][19], tile[5][27]</code>'yi yazar. Kontrol: <code>tile[5][3]</code> = girdi (satır 64+5, sütun 32+3) = <code>idata[69][35]</code> → <code>odata[35][69]</code> ✓.</li>
+    <li>Warp'taki ardışık thread'ler (<code>threadIdx.x</code> = 0..31) hem okumada hem yazmada ardışık global adreslere gider; dağınık kısım (<code>tile[threadIdx.x][…]</code>, sütun okuma) shared memory'de.</li>
+  </ul>
+</div>
+<div class="callout gotcha">
+  <p>Buradaki <code>__syncthreads()</code> zorunlu: bir thread'in yazdığı <code>tile[threadIdx.x][threadIdx.y+j]</code> başka bir thread (hatta başka bir warp) tarafından yüklendi. Sadece kopya yapan <code>copySharedMem</code>'de her thread kendi yüklediğini yazdığı için bariyer teknik olarak gereksizdir (yazıda sadece karşılaştırma için konmuş); ölçümler bariyerin darboğaz olmadığını gösterir.</p>
+</div>
+
+<h3>4) Bank conflict'siz versiyon <span class="badge-beyond">finalde</span></h3>
+<div class="callout beyond">
+  <p>32×32 karoda bir sütunun tüm elemanları aynı shared memory bank'ına düşer; sütun okumak (<code>tile[threadIdx.x][…]</code>) 32-yollu bank conflict'tir. Çözüm tek satır: <code>__shared__ float tile[TILE_DIM][TILE_DIM + 1];</code> (her satır bir bank kayar). Bank optimizasyonu bu sınavda yok; sadece neden var olduğunu bilmek yeter.</p>
+</div>
+
+<h3>Ölçümler (NVIDIA yazısı, GB/s)</h3>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Tesla M2050</th><th>Tesla K20c</th></tr></thead>
+  <tbody>
+    <tr><td>copy</td><td>105,2</td><td>136,0</td></tr>
+    <tr><td>copySharedMem</td><td>104,6</td><td>152,3</td></tr>
+    <tr><td>transposeNaive</td><td><strong>18,8</strong></td><td>55,3</td></tr>
+    <tr><td>transposeCoalesced</td><td>51,3</td><td>97,6</td></tr>
+    <tr><td>transposeNoBankConflicts</td><td>99,5</td><td>144,3</td></tr>
+  </tbody>
+</table>
+<p>Etkin bant genişliği = 2 × matris boyu (bir okuma + bir yazma) / süre. Sonuç: <strong>global bellek coalescing'i en kritik etken</strong>; shared memory'nin ve senkronizasyonun maliyeti ondan çok küçük.</p>
+
+<h2>Loop unrolling <span class="badge-class">derste</span></h2>
+<p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>
+<div class="two-col">
+<pre class="code" data-title="Normal">
+float sum = 0;
+for (int k = 0; k < 16; ++k)
+    sum += Mds[ty][k] * Nds[k][tx];
+// 16 tur × (çarp-topla + k++ + k<16 + dallanma)
+</pre>
+<pre class="code" data-title="4 kat elle açılmış">
+float sum = 0;
+for (int k = 0; k < 16; k += 4) {
+    sum += Mds[ty][k]     * Nds[k][tx];
+    sum += Mds[ty][k + 1] * Nds[k + 1][tx];
+    sum += Mds[ty][k + 2] * Nds[k + 2][tx];
+    sum += Mds[ty][k + 3] * Nds[k + 3][tx];
+}
+// 4 tur: döngü kontrolü 4 kat azaldı
+</pre>
+</div>
+<pre class="code" data-title="Derleyiciye yaptırmak">
+#pragma unroll                 // döngü sayısı derleme zamanında belliyse tamamen açar
+for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH bir #define / const → sabit
+    Pvalue += Mds[ty][k] * Nds[k][tx];
+
+#pragma unroll 4               // 4 kat aç
+for (int i = 0; i < n; ++i) { ... }
+
+#pragma unroll 1               // açma
+</pre>
+<ul>
+  <li><strong>Kazanç:</strong> daha az döngü kontrol komutu; tam açılınca indeksler sabit olur (<code>Mds[ty][3]</code> gibi) ve adres hesapları derleme zamanında yapılır; bağımsız load'lar art arda verilip gecikme gizlenir.</li>
+  <li><strong>Maliyet:</strong> kod büyür; aynı anda canlı değişken sayısı artar → <strong>register kullanımı artar</strong> → thread başına register sınırı aşılırsa register spill (local memory) ya da SM başına daha az thread (occupancy düşer).</li>
+  <li>Döngü sayısı sabitse (transpose'daki <code>j</code> döngüsü: <code>TILE_DIM/BLOCK_ROWS = 4</code> tur; tiled matmul'deki <code>k</code> döngüsü: <code>TILE_WIDTH</code> tur) derleyici genelde zaten açar. Döngü sayısı çalışma zamanında belliyse (<code>width/TILE_WIDTH</code>) tam açılamaz.</li>
+  <li>Bağlantı: L6'daki "local memory" slaytı. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
+</ul>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir warp 128 B hizalı bir <code>float</code> dizisinden <code>a[3*threadIdx.x]</code> okuyor. Kaç tane 32 B segmente dokunulur?</p>
+  <ol>
+    <li data-why="Ardışık olsaydı 4 olurdu; stride 3 ile 384 B'lık bir alana yayılır.">4</li>
+    <li data-why="Adresler 0, 12, 24, …, 372: 0–383 aralığındaki 12 segmentin hepsine dokunulur.">12</li>
+    <li data-why="Stride 3'te segment başına ~2,7 thread düşer; her thread ayrı segment değil.">32</li>
+    <li data-why="128 B satır sayısı 3; soru 32 B segmentleri soruyor.">3</li>
+  </ol>
+  <div class="explain">Taşınan 12·32 = 384 B, kullanılan 128 B → verim 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Transpose kernellerinde blok neden 32×32 değil de 32×8 thread?</p>
+  <ol>
+    <li data-why="32×32 = 1024 thread günümüz GPU'larında izinli; sebep bu değil.">32×32 blok başlatılamaz.</li>
+    <li data-why="Bank conflict'le ilgisi yok; çözümü padding.">Bank conflict'leri önlemek için.</li>
+    <li data-why="Doğru: her thread 4 eleman işler; indeks hesabı 4 elemana bölünür, döngü satır yönünde döndüğü için coalescing korunur.">Her thread karoda 4 eleman işlesin, indeks hesabının maliyeti paylaşılsın diye.</li>
+    <li data-why="Karo hâlâ 32×32; shared bellek aynı.">Shared bellekten tasarruf için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p><code>transposeCoalesced</code>'da yazma aşamasında neden <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> kullanılıyor?</p>
+  <ol>
+    <li data-why="Doğru: (bx, by) karosu çıktıda (by, bx) konumuna gider.">Girdideki (bx, by) karosu çıktıda transpoze konuma, (by, bx)'e yazılmalı.</li>
+    <li data-why="Bank conflict'i padding çözer; bu indeks değişikliği karonun yerini belirler.">Bank conflict'leri azaltmak için.</li>
+    <li data-why="threadIdx.x en sağda kaldığı için yazma coalesced; ama soru blok ofsetini soruyor.">Okumayı coalesced yapmak için.</li>
+    <li data-why="Hata değil; olmasaydı karolar kendi yerlerinde transpoze edilir, matris yanlış olurdu.">Bir yazım hatası; blockIdx.x olmalı.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p><code>#pragma unroll</code> için hangisi doğru?</p>
+  <ol>
+    <li data-why="Unrolling seri döngüyü thread'lere dağıtmaz; aynı thread içinde kopyalar.">Döngü turlarını farklı thread'lere dağıtır.</li>
+    <li data-why="Register kullanımı genelde artar.">Register kullanımını azaltır.</li>
+    <li data-why="Sonuç değişmez (aynı işlemler, aynı sırada).">Sonucu değiştirebilir, dikkat edilmeli.</li>
+    <li data-why="Doğru: sabit döngü sayısında gövde tamamen kopyalanır, kontrol komutları kalkar.">Döngü sayısı derleme zamanında sabitse döngüyü tamamen açabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>
