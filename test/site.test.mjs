@@ -49,7 +49,7 @@ test("internal links and anchors resolve", () => {
       const [, file, hash] = m;
       if (!file && !hash) continue;
       const target = file || p;
-      if (/\.(css|js|svg|png)$/.test(target)) { assert.ok(existsSync(join(site, dir, target)), `${dir}/${p}: ${target}`); continue; }
+      if (!target.endsWith(".html")) { assert.ok(existsSync(join(site, dir, target)), `${dir}/${p}: ${target}`); continue; }
       assert.ok(pages[target], `${dir}/${p}: broken link ${target}`);
       if (hash && hash.length > 1) assert.ok(anchors(pages[target]).has(decodeURIComponent(hash.slice(1))), `${dir}/${p}: missing anchor ${target}${hash}`);
     }
@@ -84,4 +84,22 @@ test("the exam date is the announced one", () => {
   assert.match(layout, /2026-11-11T15:30:00\+03:00/);
   assert.match(tr["exam-midterm2.html"], /11 Kasım 2026 Çarşamba, 15:30–17:30 · Derslik 306/);
   assert.match(en["exam-midterm2.html"], /Wednesday 11 November 2026, 15:30–17:30 · Room 306/);
+});
+
+// Runnable code blocks: every <pre class="code"> names a full program in site/code/, and (unless it is marked as
+// pseudocode with data-run-note) every line shown in the block appears in that program.
+const unescape = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+const norm = (line) => line.replace(/\/\/.*$/, "").replace(/\s+/g, " ").trim();
+test("every code block runs a program that contains it", () => {
+  for (const [dir, pages] of [[".", tr], ["en", en]]) for (const [p, src] of Object.entries(pages)) {
+    for (const m of src.matchAll(/<pre class="code"([^>]*)>([\s\S]*?)<\/pre>/g)) {
+      const file = (m[1].match(/data-run="([^"]+)"/) || [])[1];
+      assert.ok(file, `${dir}/${p}: a code block without data-run`);
+      assert.ok(existsSync(join(site, "code", file)), `${dir}/${p}: missing program ${file}`);
+      if (/data-run-note=/.test(m[1])) continue;
+      const prog = readFileSync(join(site, "code", file), "utf8").split("\n").map(norm);
+      for (const line of unescape(m[2]).split("\n").map(norm).filter(Boolean))
+        assert.ok(prog.some((l) => l.includes(line)), `${dir}/${p}: "${line}" is not in ${file}`);
+    }
+  }
 });

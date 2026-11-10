@@ -41,12 +41,14 @@
 <div class="wgt-mount" data-widget="tiling"></div>
 
 <h2>CUDA kodunu gerçekten çalıştırmak</h2>
-<p>Tarayıcı CUDA çalıştıramaz (GPU'ya CUDA ile erişim yok). Kendi kernellerinizi denemek için iki ücretsiz yol:</p>
-<ul>
-  <li><strong>Google Colab</strong> (gerçek GPU): <em>Runtime → Change runtime type → T4 GPU</em>. Bir hücreye <code>%%writefile k.cu</code> yazıp altına kodu koyun; sonraki hücrede <code>!nvcc -arch=sm_75 k.cu -o k &amp;&amp; ./k</code>. <code>printf</code> ile thread başına <code>blockIdx/threadIdx/row/col</code> yazdırmak indeks sorularını kontrol etmenin en kolay yolu.</li>
-  <li><strong>Compiler Explorer</strong> (<a href="https://godbolt.org" target="_blank" rel="noopener">godbolt.org</a>, dil: CUDA C++): çalıştırmaz ama derler; bir kernelin <strong>PTX</strong> ve <strong>SASS</strong> çıktısını, <code>#pragma unroll</code>'un etkisini ve register kullanımını görmek için.</li>
-</ul>
-<pre class="code" data-title="Colab'da indeks kontrolü için küçük bir program">
+<p>Sitedeki her kod bloğunun altında <strong>▶ Çalıştır</strong> düğmesi var. Tarayıcı derleyici çalıştıramadığı için kodu sizin bilgisayarınızdaki küçük bir yardımcı program derleyip çalıştırır: C/C++ <code>g++</code>/<code>clang++</code> ile CPU'da, CUDA <code>nvcc</code> ile GPU'da.</p>
+<ol>
+  <li><a href="tools/runner.py" download>runner.py</a> dosyasını indirin (sadece Python 3 gerekir).</li>
+  <li>Terminalde: <code>python3 runner.py</code> (Windows: <code>py runner.py</code>). Pencere açık kaldığı sürece düğmeler çalışır.</li>
+  <li><strong>✎ Düzenle · parametreler</strong>: bloğun tam programını düzenleyin, derleyici bayraklarını (ör. <code>-O3</code>, <code>-arch=sm_86</code>, <code>-gencode …</code>, <code>--ptxas-options=-v</code>) ve program argümanlarını (ör. matris boyutu) yazın.</li>
+</ol>
+<p>Çalıştırıcı sadece 127.0.0.1'i dinler ve sadece bu sitenin isteklerini kabul eder. Bilgisayarınızda derleyici yoksa: <strong>Google Colab</strong> (T4 GPU; <code>%%writefile k.cu</code> ve <code>!nvcc k.cu -o k &amp;&amp; ./k</code>) ya da derleme çıktısını (PTX/SASS) görmek için <a href="https://godbolt.org" target="_blank" rel="noopener">godbolt.org</a>.</p>
+<pre class="code" data-run="who.cu" data-title="Colab'da indeks kontrolü için küçük bir program">
 #include <cstdio>
 __global__ void who(int width) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;

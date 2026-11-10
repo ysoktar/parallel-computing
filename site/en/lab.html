@@ -41,12 +41,14 @@
 <div class="wgt-mount" data-widget="tiling"></div>
 
 <h2>Actually running CUDA code</h2>
-<p>A browser cannot run CUDA (there is no CUDA access to the GPU). Two free ways to try your own kernels:</p>
-<ul>
-  <li><strong>Google Colab</strong> (a real GPU): <em>Runtime → Change runtime type → T4 GPU</em>. Put <code>%%writefile k.cu</code> at the top of a cell followed by the code; in the next cell <code>!nvcc -arch=sm_75 k.cu -o k &amp;&amp; ./k</code>. Printing <code>blockIdx/threadIdx/row/col</code> per thread with <code>printf</code> is the easiest way to check index questions.</li>
-  <li><strong>Compiler Explorer</strong> (<a href="https://godbolt.org" target="_blank" rel="noopener">godbolt.org</a>, language: CUDA C++): does not run, but compiles; to see a kernel's <strong>PTX</strong> and <strong>SASS</strong>, the effect of <code>#pragma unroll</code>, and register usage.</li>
-</ul>
-<pre class="code" data-title="A small program for checking indices in Colab">
+<p>Every code block on the site has a <strong>▶ Run</strong> button. Since a browser cannot run a compiler, a small helper program on your computer compiles and runs the code: C/C++ with <code>g++</code>/<code>clang++</code> on the CPU, CUDA with <code>nvcc</code> on the GPU.</p>
+<ol>
+  <li>Download <a href="../tools/runner.py" download>runner.py</a> (only Python 3 is needed).</li>
+  <li>In a terminal: <code>python3 runner.py</code> (Windows: <code>py runner.py</code>). The buttons work while the window is open.</li>
+  <li><strong>✎ Edit · parameters</strong>: edit the block's full program, write compiler flags (e.g. <code>-O3</code>, <code>-arch=sm_86</code>, <code>-gencode …</code>, <code>--ptxas-options=-v</code>) and program arguments (e.g. the matrix size).</li>
+</ol>
+<p>The runner listens only on 127.0.0.1 and accepts requests only from this site. Without a compiler on your computer: <strong>Google Colab</strong> (T4 GPU; <code>%%writefile k.cu</code> and <code>!nvcc k.cu -o k &amp;&amp; ./k</code>), or <a href="https://godbolt.org" target="_blank" rel="noopener">godbolt.org</a> to see the compiled output (PTX/SASS).</p>
+<pre class="code" data-run="who.cu" data-title="A small program for checking indices in Colab">
 #include <cstdio>
 __global__ void who(int width) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;

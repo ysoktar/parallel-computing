@@ -29,11 +29,11 @@
 <h2>Data parallelism: from loop to kernel</h2>
 <p>Data parallelism: the same operation performed on independent data elements simultaneously (vector addition, convolution, matrix-vector and matrix-matrix multiplication). Rule of thumb: <strong>when you see nested <code>for</code> loops with regular indexing, there is a good chance of parallelisation.</strong></p>
 <div class="two-col">
-<pre class="code" data-title="C">
+<pre class="code" data-run="vecadd_cpu.cpp" data-title="C">
 for (int i = 0; i < N; i++)
     C[i] = A[i] + B[i];
 </pre>
-<pre class="code" data-title="CUDA: the loop is gone, i = thread number">
+<pre class="code" data-run="simple_add.cu" data-title="CUDA: the loop is gone, i = thread number">
 __global__ void VecAdd(float* A, float* B, float* C) {
     int i = threadIdx.x;
     C[i] = A[i] + B[i];
@@ -42,12 +42,12 @@ __global__ void VecAdd(float* A, float* B, float* C) {
 </pre>
 </div>
 <div class="two-col">
-<pre class="code" data-title="C: matrix addition">
+<pre class="code" data-run="matadd_cpu.cpp" data-title="C: matrix addition">
 for (int i = 0; i < N; i++)
     for (int j = 0; j < N; j++)
         C[i*N + j] = A[i*N + j] + B[i*N + j];
 </pre>
-<pre class="code" data-title="CUDA: 2D block, linear index">
+<pre class="code" data-run="simple_add.cu" data-title="CUDA: 2D block, linear index">
 __global__ void MatAdd(float* A, float* B, float* C) {
     const int i = threadIdx.y * blockDim.x + threadIdx.x;
     C[i] = A[i] + B[i];
@@ -58,7 +58,7 @@ __global__ void MatAdd(float* A, float* B, float* C) {
 </div>
 
 <h3>Matrix multiplication: the CPU version</h3>
-<pre class="code">
+<pre class="code" data-run="matmul_cpu.cpp">
 void MatrixMultiplication(float* M, float* N, float* P, int width) {
     for (int i = 0; i < width; ++i)
         for (int j = 0; j < width; ++j) {
@@ -73,7 +73,7 @@ void MatrixMultiplication(float* M, float* N, float* P, int width) {
 
 <h2>The host side: allocate, copy, launch</h2>
 <p>The GPU is a <strong>coprocessor</strong>: we offload parallel work to it, copy the result back and continue. The kernel is the actual GPU code; the rest is set-up, executed by the host (CPU).</p>
-<pre class="code" data-title="Five steps">
+<pre class="code" data-run="five_steps.cu" data-title="Five steps">
 void cuMatrixMultiplication(float* M, float* N, float* P, int width)
 {
     int size = width * width * sizeof(float);
@@ -117,7 +117,7 @@ void cuMatrixMultiplication(float* M, float* N, float* P, int width)
 </table>
 <p>Without a qualifier the function defaults to <code>__host__</code>. <code>__global__</code> means a kernel, returning <code>void</code>.</p>
 <div class="two-col">
-<pre class="code" data-title="The first, single-block version (slide 23)">
+<pre class="code" data-run="matmul_single.cu" data-title="The first, single-block version (slide 23)">
 __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     int tx = threadIdx.x;
@@ -143,7 +143,7 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
   <li>1D example (slides 31–33): N blocks of M threads → N·M threads. Thread 3 of block 0: <code>0·M + 3</code>; thread 3 of block 5: <code>5·M + 3</code>. In general: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
   <li>Input and output mappings can differ: read data with one mapping, process with another, write with a third (different input/output data rates, shared memory preparation, boundary conditions).</li>
 </ul>
-<pre class="code" data-title="Matmul with blocks (slide 39): each thread one element of P">
+<pre class="code" data-run="matmul_gpu.cu" data-title="Matmul with blocks (slide 39): each thread one element of P">
 __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
@@ -234,7 +234,7 @@ Ratio: (16·16·2·width) / (16·width·2) = 16</div>
 
 <h3>The tiled kernel</h3>
 <p>Threads <strong>cooperatively</strong> load Md and Nd elements into shared memory, then use them in their dot products. Since shared memory is small, Md and Nd are divided into tiles that fit, and the dot product is split into <strong>phases</strong>: in phase <code>m</code> each thread loads one element from the M tile and one from the N tile.</p>
-<pre class="code" data-title="Slide 90">
+<pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];

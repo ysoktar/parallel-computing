@@ -50,9 +50,9 @@
   <li>Global bellekteki bir veriye erişim <strong>ancak ve ancak</strong> (1) veri tipinin boyu 1, 2, 4, 8 veya 16 bayt ve (2) veri <strong>doğal hizalı</strong> (adresi boyutunun katı) ise tek bir komuta derlenir. Değilse birden fazla komuta bölünür ve bunlar tam coalesce olamaz.</li>
   <li><code>char, short, int, long, long long, float, double, float2, float4</code> gibi yerleşik tipler bu şartı otomatik sağlar. Struct'lar için derleyiciye <code>__align__(8)</code> veya <code>__align__(16)</code> ile zorlatılır:</li>
 </ul>
-<pre class="code">
-struct __align__(8)  { float x; float y; };            // 8 bayt, 8'e hizalı → tek 8 B load
-struct __align__(16) { float x; float y; float z; };   // 12 bayt veri, 16'ya yuvarlanır → tek 16 B load
+<pre class="code" data-run="align_struct.cu">
+struct __align__(8)  Vec2 { float x; float y; };            // 8 bayt, 8'e hizalı → tek 8 B load
+struct __align__(16) Vec3 { float x; float y; float z; };   // 12 bayt veri, 16'ya yuvarlanır → tek 16 B load
 </pre>
 <ul>
   <li><code>cudaMalloc</code> ve diğer ayırma fonksiyonlarının döndürdüğü adresler <strong>en az 256 bayta hizalıdır</strong>.</li>
@@ -84,7 +84,7 @@ struct __align__(16) { float x; float y; float z; };   // 12 bayt veri, 16'ya yu
   <li>Genişliği 32'nin katı olmayan bir dizi, en yakın 32 katına yuvarlanmış genişlikle ayrılıp satırları doldurulursa (padding) çok daha verimli erişilir. Bunu donanımdan bağımsız yapan fonksiyonlar: <code>cudaMallocPitch()</code> (2D), <code>cudaMalloc3D()</code> (3D). Doğru stride'ı (pitch) hesaplayıp döndürürler; elemanlara erişirken <strong>bu pitch kullanılmalı</strong>.</li>
   <li>Kopyalama: <code>cudaMallocPitch</code> ile ayrılan bellek <code>cudaMemcpy2D</code>, <code>cudaMalloc3D</code> ile ayrılan <code>cudaMemcpy3D</code> ile kopyalanır.</li>
 </ul>
-<pre class="code" data-title="Pitch'li 2D erişim (slayt 40)">
+<pre class="code" data-run="pitch2d.cu" data-title="Pitch'li 2D erişim (slayt 40)">
 // Host
 int width = 64, height = 64;
 float* devPtr; size_t pitch;
@@ -118,7 +118,7 @@ cudaMemcpy2D(devPtr, devPitch,            // hedef ve pitch'i (GPU)
 </ul>
 
 <h3>1) Referans: copy</h3>
-<pre class="code" data-title="copy: transpose'un hedefleyeceği hız (aynı erişimler, yer değiştirme yok)">
+<pre class="code" data-run="transpose.cu" data-title="copy: transpose'un hedefleyeceği hız (aynı erişimler, yer değiştirme yok)">
 const int TILE_DIM = 32;
 const int BLOCK_ROWS = 8;
 
@@ -138,7 +138,7 @@ __global__ void copy(float* odata, const float* idata)
 </div>
 
 <h3>2) Naive transpose</h3>
-<pre class="code" data-title="transposeNaive: tek fark, yazma indeksinde x ile y'nin yer değiştirmesi">
+<pre class="code" data-run="transpose.cu" data-title="transposeNaive: tek fark, yazma indeksinde x ile y'nin yer değiştirmesi">
 __global__ void transposeNaive(float* odata, const float* idata)
 {
     int x = blockIdx.x * TILE_DIM + threadIdx.x;
@@ -156,7 +156,7 @@ __global__ void transposeNaive(float* odata, const float* idata)
 
 <h3>3) Shared memory ile coalesced transpose</h3>
 <p>Fikir: karoyu global bellekten <strong>satır satır</strong> (coalesced) okuyup shared memory'ye koy; yer değiştirmeyi shared memory içinde yap (orada dağınık erişim ucuz); sonra karonun <strong>sütununu</strong> çıktıda <strong>satır</strong> olarak (coalesced) yaz. Blok da transpoze edilmiş yere yazmalı.</p>
-<pre class="code" data-title="transposeCoalesced">
+<pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">
 __global__ void transposeCoalesced(float* odata, const float* idata)
 {
     __shared__ float tile[TILE_DIM][TILE_DIM];
@@ -210,13 +210,13 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
 <h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">derste</span></h2>
 <p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>
 <div class="two-col">
-<pre class="code" data-title="Normal">
+<pre class="code" data-run="unroll.cu" data-title="Normal">
 float sum = 0;
 for (int k = 0; k < 16; ++k)
     sum += Mds[ty][k] * Nds[k][tx];
 // 16 tur × (çarp-topla + k++ + k<16 + dallanma)
 </pre>
-<pre class="code" data-title="4 kat elle açılmış">
+<pre class="code" data-run="unroll.cu" data-title="4 kat elle açılmış">
 float sum = 0;
 for (int k = 0; k < 16; k += 4) {
     sum += Mds[ty][k]     * Nds[k][tx];
@@ -227,15 +227,16 @@ for (int k = 0; k < 16; k += 4) {
 // 4 tur: döngü kontrolü 4 kat azaldı
 </pre>
 </div>
-<pre class="code" data-title="Derleyiciye yaptırmak">
+<pre class="code" data-run="unroll.cu" data-title="Derleyiciye yaptırmak">
 #pragma unroll                 // döngü sayısı derleme zamanında belliyse tamamen açar
 for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH bir #define / const → sabit
-    Pvalue += Mds[ty][k] * Nds[k][tx];
+    sum += Mds[ty][k] * Nds[k][tx];
 
 #pragma unroll 4               // 4 kat aç
-for (int i = 0; i < n; ++i) { ... }
+for (int i = 0; i < n; ++i) a[i] *= s;
 
 #pragma unroll 1               // açma
+for (int i = 0; i < n; ++i) a[i] += 1;
 </pre>
 <ul>
   <li><strong>Kazanç:</strong> daha az döngü kontrol komutu; tam açılınca indeksler sabit olur (<code>Mds[ty][3]</code> gibi) ve adres hesapları derleme zamanında yapılır; bağımsız load'lar art arda verilip gecikme gizlenir.</li>

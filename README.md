@@ -16,6 +16,14 @@ slaytlarını (Lecture 1–6), alıştırmaları ve ders notlarını izler; önc
 Slaytların dışında kalan (derste anlatılan) içerik "derste" etiketiyle, sınav kapsamı dışındaki içerik (shared memory bank
 conflict'leri) "finalde" etiketiyle işaretlidir.
 
+## Kodları çalıştırma
+
+Sitedeki her kod bloğu `site/code/` altındaki tam bir programa bağlıdır (blokta gösterilen kod programda satır satır
+vardır; testler bunu kontrol eder). ▶ Çalıştır düğmesi programı **sayfayı görüntüleyen bilgisayarda** derleyip
+çalıştırır: `site/tools/runner.py` (Python 3, bağımlılıksız) indirilip `python3 runner.py` ile başlatılır;
+127.0.0.1:7457'yi dinler ve sadece sitenin kendi isteklerini kabul eder. C/C++ `g++`/`clang++` ile CPU'da, CUDA `nvcc`
+ile GPU'da çalışır. ✎ Düzenle ile kaynak, derleyici bayrakları ve program argümanları değiştirilebilir.
+
 ## Geliştirme
 
 Node 20 veya üstü gerekir; bağımlılık yok.

@@ -29,11 +29,11 @@
 <h2>Veri paralelliği: döngüden kernel'e</h2>
 <p>Veri paralelliği: bağımsız veri elemanları üzerinde aynı işlemin aynı anda yapılması (vektör toplama, konvolüsyon, matris-vektör ve matris-matris çarpımı). Pratik kural: <strong>düzenli indekslenen iç içe <code>for</code> döngüleri gördüğünüzde büyük ihtimalle paralelleştirilebilir.</strong></p>
 <div class="two-col">
-<pre class="code" data-title="C">
+<pre class="code" data-run="vecadd_cpu.cpp" data-title="C">
 for (int i = 0; i < N; i++)
     C[i] = A[i] + B[i];
 </pre>
-<pre class="code" data-title="CUDA: döngü kayboldu, i = thread numarası">
+<pre class="code" data-run="simple_add.cu" data-title="CUDA: döngü kayboldu, i = thread numarası">
 __global__ void VecAdd(float* A, float* B, float* C) {
     int i = threadIdx.x;
     C[i] = A[i] + B[i];
@@ -42,12 +42,12 @@ __global__ void VecAdd(float* A, float* B, float* C) {
 </pre>
 </div>
 <div class="two-col">
-<pre class="code" data-title="C: matris toplama">
+<pre class="code" data-run="matadd_cpu.cpp" data-title="C: matris toplama">
 for (int i = 0; i < N; i++)
     for (int j = 0; j < N; j++)
         C[i*N + j] = A[i*N + j] + B[i*N + j];
 </pre>
-<pre class="code" data-title="CUDA: 2D blok, lineer indeks">
+<pre class="code" data-run="simple_add.cu" data-title="CUDA: 2D blok, lineer indeks">
 __global__ void MatAdd(float* A, float* B, float* C) {
     const int i = threadIdx.y * blockDim.x + threadIdx.x;
     C[i] = A[i] + B[i];
@@ -58,7 +58,7 @@ __global__ void MatAdd(float* A, float* B, float* C) {
 </div>
 
 <h3>Matris çarpımı: CPU versiyonu</h3>
-<pre class="code">
+<pre class="code" data-run="matmul_cpu.cpp">
 void MatrixMultiplication(float* M, float* N, float* P, int width) {
     for (int i = 0; i < width; ++i)
         for (int j = 0; j < width; ++j) {
@@ -73,7 +73,7 @@ void MatrixMultiplication(float* M, float* N, float* P, int width) {
 
 <h2>Host tarafı: ayır, kopyala, başlat</h2>
 <p>GPU bir <strong>yardımcı işlemcidir</strong> (coprocessor): paralel işi ona aktarırız (offload), sonucu geri kopyalayıp devam ederiz. Kernel asıl GPU kodu; gerisi kurulum ve host (CPU) tarafından çalıştırılır.</p>
-<pre class="code" data-title="Beş adım">
+<pre class="code" data-run="five_steps.cu" data-title="Beş adım">
 void cuMatrixMultiplication(float* M, float* N, float* P, int width)
 {
     int size = width * width * sizeof(float);
@@ -117,7 +117,7 @@ void cuMatrixMultiplication(float* M, float* N, float* P, int width)
 </table>
 <p>Niteleyici yazılmazsa fonksiyon <code>__host__</code> sayılır. <code>__global__</code> kernel demektir, <code>void</code> döner.</p>
 <div class="two-col">
-<pre class="code" data-title="Tek bloklu ilk versiyon (slayt 23)">
+<pre class="code" data-run="matmul_single.cu" data-title="Tek bloklu ilk versiyon (slayt 23)">
 __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     int tx = threadIdx.x;
@@ -143,7 +143,7 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
   <li>1D örnek (slayt 31–33): N blok, her biri M thread → toplam N·M thread. Blok 0'ın 3. thread'i: <code>0·M + 3</code>; Blok 5'in 3. thread'i: <code>5·M + 3</code>. Genel: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
   <li>Girdi ve çıktı eşlemesi farklı olabilir: veriyi bir eşlemeyle okuyup başka bir eşlemeyle işleyip üçüncü bir eşlemeyle yazabilirsiniz (farklı girdi/çıktı oranları, shared memory hazırlığı, sınır koşulları).</li>
 </ul>
-<pre class="code" data-title="Bloklu matmul (slayt 39): her thread P'nin bir elemanı">
+<pre class="code" data-run="matmul_gpu.cu" data-title="Bloklu matmul (slayt 39): her thread P'nin bir elemanı">
 __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
@@ -234,7 +234,7 @@ Oran: (16·16·2·width) / (16·width·2) = 16</div>
 
 <h3>Tiled kernel</h3>
 <p>Thread'ler Md ve Nd elemanlarını <strong>işbirliğiyle</strong> shared belleğe yükler, sonra iç çarpımda bunları kullanır. Shared bellek küçük olduğu için Md ve Nd, shared'a sığan karolara bölünür ve iç çarpım <strong>fazlara</strong> ayrılır: faz <code>m</code>'de her thread M karosundan ve N karosundan birer eleman yükler.</p>
-<pre class="code" data-title="Slayt 90">
+<pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];

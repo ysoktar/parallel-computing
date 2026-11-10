@@ -48,7 +48,7 @@
 <h3>Task parallelism</h3>
 <p>Modules on different nodes: e.g. a game loop's <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> as separate tasks, with a <code>barrier()</code> at the end of each iteration. Works without complex dependencies but <strong>does not scale</strong>: the number of nodes cannot exceed the number of tasks.</p>
 <h3>Divide-and-conquer</h3>
-<pre class="code">
+<pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Pseudocode; the runnable version: a merge sort whose two halves are sorted as separate tasks (std::async).">
 DnC(A) {
     if (A is a base case) return solution(A);
     split A into N subproblems B[N];

@@ -912,3 +912,24 @@ figure.codefig pre { margin: 0; border-radius: 0 0 8px 8px; }
 .a4 .rg.span2 { grid-column: 1 / -1; }
 .a4 .rg.tall { grid-row: span 2; }
 .a4 .rg.hot { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 6%, transparent); }
+
+/* ---------- runnable code (js/lib/runner.js) ---------- */
+.run-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 4px; max-width: 52rem; }
+.run-tag { font-size: 0.74rem; font-weight: 650; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); }
+.run-tag.cuda { border-color: var(--accent); background: var(--accent-wash); }
+.run-note { flex-basis: 100%; }
+.run-edit { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 10px; margin: 6px 0; max-width: 52rem; display: grid; gap: 8px; }
+.run-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.run-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; color: var(--text-2); font-weight: 550; }
+.run-fields input, .run-src { font-family: var(--mono); font-size: 0.82rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-2); color: var(--text); padding: 5px 8px; }
+.run-src { width: 100%; resize: vertical; line-height: 1.45; tab-size: 4; white-space: pre; overflow: auto; }
+.run-out { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--surface); padding: 8px 12px; margin: 6px 0 1rem; max-width: 52rem; font-size: 0.88rem; }
+.run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 4px; }
+.run-status.ok { color: var(--good-text); font-weight: 650; }
+.run-status.no { color: var(--critical); font-weight: 650; }
+.run-cmd { font-size: 0.76rem; }
+.run-time { color: var(--muted); font-size: 0.78rem; }
+.run-out pre { margin: 4px 0; max-height: 360px; overflow: auto; font-size: 0.8rem; }
+.run-stderr { color: var(--critical); }
+.run-help ol { margin: 4px 0; }
+.two-col .run-bar .btn { font-size: 0.74rem; }
