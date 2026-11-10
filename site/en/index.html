@@ -19,29 +19,25 @@
     <div class="kicker"><span>BİL 455/533 Parallel Computing · TOBB ETÜ · Fall 2026 · Toygar Akgün</span></div>
     <h1>Parallel Computing</h1>
     <p class="question">How do we run thousands of threads at once, and how do we keep them fed with memory?</p>
-    <p class="lead">The lecture slides (Lectures 1–6), exercises and class notes in one place. The priority is tomorrow's <strong>midterm 2</strong>: CUDA, shared memory, <code>__syncthreads()</code>, indexing and coalescing.</p>
+    <p class="lead">Lecture notes that follow the slides (Lectures 1–6) in order: multi-core systems, parallel program design, C++ threads and GPU programming with CUDA. Every page has worked examples, interactive figures and quizzes.</p>
     <div class="btn-row" style="margin-top:1rem">
-      <a class="btn primary" href="exam-midterm2.html">Midterm 2 guide →</a>
+      <a class="btn primary" href="l1-intro.html">Start with Lecture 1 →</a>
+      <a class="btn" href="l4-cuda-intro.html">Jump to CUDA (Lecture 4)</a>
       <a class="btn" href="lab.html">Index lab</a>
-      <a class="btn" href="coalescing.html">Coalescing and transpose</a>
     </div>
   </div>
-  <div class="exam-card" style="margin:0">
-    <div class="card-kicker">Midterm 2</div>
-    <div><strong>Wednesday 11 November 2026 · 15:30–17:30 · Room 306</strong></div>
-    <div class="countdown-big" id="countdown"></div>
-    <ul>
-      <li>Scope: from the start of term to the 10 November lecture (Lectures 1–6), weighted towards CUDA.</li>
-      <li>In the announcement: using shared memory, <code>__syncthreads()</code>, coalescing.</li>
-      <li><strong>Not included:</strong> shared memory bank optimisation and texture memory.</li>
-      <li>Duration: 2 hours.</li>
-      <li>One handwritten A4 cheat sheet (both sides). No calculator.</li>
-    </ul>
+  <div class="card">
+    <div class="card-kicker">Lecture order</div>
+    <ol id="lectures"></ol>
   </div>
 </section>
 
-<h2>Plan</h2>
-<p>Suggested order with one day to go: guide → lab → coalescing/transpose → L5 (tiled matmul) → cheat sheet. L1–L3 are in scope too, but the weight is on CUDA.</p>
+<h2>Pages</h2>
+<p>The pages follow the order of the course; the buttons at the end of each page lead to the next lecture. The exam pages come last.</p>
+<div class="callout note" data-label="Upcoming exam">
+  <p><strong>Midterm 2: Wednesday 11 November 2026, 15:30–17:30, Room 306.</strong> <span id="countdown"></span><br>
+  Scope Lectures 1–6 (weighted towards CUDA); shared memory bank optimisation and texture memory are not included. Preparation: <a href="exam-midterm2.html">study guide</a>, <a href="cheatsheet.html">cheat-sheet proposal</a>.</p>
+</div>
 <div class="cards" id="parts"></div>
 
 <h2>How the topics connect</h2>

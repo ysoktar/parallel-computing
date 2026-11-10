@@ -19,29 +19,25 @@
     <div class="kicker"><span>BİL 455/533 Paralel Hesaplama · TOBB ETÜ · 2026 Güz · Toygar Akgün</span></div>
     <h1>Paralel Hesaplama</h1>
     <p class="question">Binlerce thread'i aynı anda nasıl çalıştırırız ve belleği nasıl besleriz?</p>
-    <p class="lead">Ders slaytları (Lecture 1–6), alıştırmalar ve ders notları tek yerde. Öncelik yarınki <strong>2. ara sınav</strong>: CUDA, shared memory, <code>__syncthreads()</code>, indeksler ve coalescing.</p>
+    <p class="lead">Ders slaytlarını (Lecture 1–6) sırasıyla izleyen ders notları: çok çekirdekli sistemler, paralel program tasarımı, C++ thread'leri ve CUDA ile GPU programlama. Her sayfada çözümlü örnekler, etkileşimli şekiller ve sınama soruları var.</p>
     <div class="btn-row" style="margin-top:1rem">
-      <a class="btn primary" href="exam-midterm2.html">2. vize rehberi →</a>
+      <a class="btn primary" href="l1-intro.html">Lecture 1'den başla →</a>
+      <a class="btn" href="l4-cuda-intro.html">CUDA'ya geç (Lecture 4)</a>
       <a class="btn" href="lab.html">İndeks laboratuvarı</a>
-      <a class="btn" href="coalescing.html">Coalescing ve transpose</a>
     </div>
   </div>
-  <div class="exam-card" style="margin:0">
-    <div class="card-kicker">2. ara sınav</div>
-    <div><strong>11 Kasım 2026 Çarşamba · 15:30–17:30 · Derslik 306</strong></div>
-    <div class="countdown-big" id="countdown"></div>
-    <ul>
-      <li>Kapsam: dönem başından 10 Kasım dersine kadar (Lecture 1–6), ağırlık CUDA.</li>
-      <li>Duyuruda: shared memory kullanımı, <code>__syncthreads()</code>, coalescing.</li>
-      <li><strong>Yok:</strong> shared memory bank optimizasyonu ve texture memory.</li>
-      <li>Süre 2 saat.</li>
-      <li>1 A4 el yazısı kopya kâğıdı (iki yüz). Hesap makinesi yok.</li>
-    </ul>
+  <div class="card">
+    <div class="card-kicker">Ders sırası</div>
+    <ol id="lectures"></ol>
   </div>
 </section>
 
-<h2>Plan</h2>
-<p>Sınava bir gün kala önerilen sıra: rehber → laboratuvar → coalescing/transpose → L5 (tiled matmul) → kopya kâğıdı. L1–L3 de kapsamda ama ağırlık CUDA'da.</p>
+<h2>Sayfalar</h2>
+<p>Sayfalar ders sırasını izler; her sayfanın sonundaki düğmeler bir sonraki derse götürür. Sınav sayfaları en sonda.</p>
+<div class="callout note" data-label="Yaklaşan sınav">
+  <p><strong>2. ara sınav: 11 Kasım 2026 Çarşamba, 15:30–17:30, Derslik 306.</strong> <span id="countdown"></span><br>
+  Kapsam Lecture 1–6 (ağırlık CUDA); shared memory bank optimizasyonu ve texture memory dahil değil. Hazırlık: <a href="exam-midterm2.html">çalışma rehberi</a>, <a href="cheatsheet.html">kopya kâğıdı önerisi</a>.</p>
+</div>
 <div class="cards" id="parts"></div>
 
 <h2>Konular nasıl bağlanıyor?</h2>
