@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paralel hesaplamaya giriş · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 1: Moore yasası, güç duvarı, çok çekirdek, GPGPU, Flynn taksonomisi, paylaşımlı ve dağıtık bellek MIMD, CPU vs GPU, Blackwell, speedup, verim, Amdahl ve Gustafson-Barsis, gecikme ve throughput.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l1-intro">
+<main><div class="content">
+
+<h1>Paralel hesaplamaya giriş</h1>
+<p class="lead">Neden artık her şey çok çekirdekli? Paralel makineler nasıl sınıflandırılır, ve paralel bir programın ne kadar hızlanabileceğini ne sınırlar?</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Frekans artışının neden durduğunu ve çok çekirdeğe geçişi açıklamak.</li>
+    <li>Flynn taksonomisini ve paylaşımlı/dağıtık bellek MIMD farkını söylemek.</li>
+    <li>Speedup, verim, Amdahl ve Gustafson-Barsis formüllerini kullanmak.</li>
+  </ul>
+</div>
+
+<h2>Moore yasası ve güç duvarı</h2>
+<ul>
+  <li><strong>Moore yasası</strong> (Gordon Moore, 1970'ler): entegre devredeki transistör sayısı yaklaşık <strong>iki yılda bir iki katına</strong> çıkar. Frekans değil, transistör sayısı.</li>
+  <li>Frekans tek başına karşılaştırma ölçütü değil: işlemlerin çevrim sayıları farklı (x86-64'te 32-bit tamsayı toplama 1, 32-bit FP çarpma 4 çevrim).</li>
+  <li>Uzun süre transistör artışına frekans artışı eşlik etti; ama yüksek frekans = daha çok ısı. Voltaj düşürüldü (~1,29 V) ama yetmedi. <strong>2004–2005 civarında frekans 2–4 GHz'de tavan yaptı</strong> (Gelsinger'in güç duvarı).</li>
+  <li>Geriye kalan yol: yongaya daha çok mantık ve <strong>çekirdek</strong> koymak. İlk çift çekirdekli tek yonga: IBM Power 4 (2001); çoklu soketli platformların doğal devamı.</li>
+  <li><strong>GPGPU</strong>: tek GPU çekirdeği CPU çekirdeğinden zayıf ama yüzlerce/binlerce çekirdek + yüksek bant genişlikli bellek → kat kat hız. Ayrıca daha iyi <strong>GFLOP/Watt</strong>: sunucu ve bulutta bir CPU'nun ömrü boyunca harcadığı enerji fiyatını aşabilir.</li>
+  <li>Bedava değil: çok çekirdek <strong>çok thread'li, paralel kod</strong> ister; algoritmaların yeniden tasarlanması ve yeni API'ler (CUDA, OpenCL) gerekir.</li>
+</ul>
+
+<h2>Flynn taksonomisi</h2>
+<p>Michael Flynn (1966): makineler (1) aynı anda kaç veri öğesi işleyebildiklerine ve (2) aynı anda kaç farklı komut çalıştırabildiklerine göre sınıflanır.</p>
+<table class="simple">
+  <thead><tr><th>Sınıf</th><th>Açıklama</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SISD</strong></td><td>Basit sıralı makine: bir anda tek komut, tek veri.</td></tr>
+    <tr><td><strong>SIMD</strong></td><td>Her komut bir veri kümesine uygulanır; ilk örnekler vektör işlemciler.</td></tr>
+    <tr><td><strong>MISD</strong></td><td>Normalde anlamsız; hata toleransı gereken sistemlerde (askerî, havacılık) aynı veri birden çok makinede işlenip çoğunluk kararı verilir.</td></tr>
+    <tr><td><strong>MIMD</strong></td><td>En çok yönlü sınıf. GPU'lar dahil çok çekirdekli makineler.</td></tr>
+  </tbody>
+</table>
+<h3>Paylaşımlı ve dağıtık bellek MIMD</h3>
+<ul>
+  <li><strong>Paylaşımlı bellek MIMD:</strong> herkesin eriştiği ortak bellek uzayı. CPU'lar arası iletişim ucuz ama bellek ölçeklenebilirliği sınırlayan darboğaz. Çözüm: belleği CPU'lar arasında bölmek; yerel bellek hızlı, uzak bellek yavaş ama adresleme ortak: <strong>NUMA</strong> (birkaç on CPU'ya kadar). Alt türler: <strong>SMP</strong> (tüm CPU'lar eşdeğer) ve <strong>master-worker</strong> (bazı işlemciler özel yazılım için, yardımcı işlemci gibi: GPU'lu sistemler bu gruba benzer, ama çoğunda CPU ve GPU bellek uzayları ayrı).</li>
+  <li><strong>Dağıtık bellek (shared-nothing) MIMD:</strong> her işlemcinin özel belleği var, <strong>mesajlaşarak</strong> iletişim kurarlar. İletişim pahalı, ama tek bir paylaşılan ortam olmadığı için pratikte (alan ve enerji dışında) sınırsız ölçeklenir.</li>
+</ul>
+<table class="simple">
+  <thead><tr><th>Özellik</th><th>Paylaşımlı bellek</th><th>Dağıtık bellek</th></tr></thead>
+  <tbody>
+    <tr><td>Bellek modeli</td><td>Ortak adres uzayı</td><td>Her işlemcide özel yerel bellek</td></tr>
+    <tr><td>İletişim</td><td>Paylaşılan değişkenler</td><td>Mesajlaşma (MPI vb.)</td></tr>
+    <tr><td>Örnek</td><td>Çok çekirdekli CPU, SMP sunucu</td><td>HPC ve bulut kümeleri, veri merkezleri</td></tr>
+    <tr><td>Ölçeklenebilirlik</td><td>Sınırlı (onlar–yüzler çekirdek)</td><td>Çok yüksek (binler–milyonlar)</td></tr>
+    <tr><td>Programlama</td><td>Daha kolay</td><td>Daha zor (veriyi açıkça dağıtmak)</td></tr>
+    <tr><td>Darboğaz</td><td>Bellek bant genişliği, önbellek tutarlılığı</td><td>Ağ gecikmesi, iletişim maliyeti</td></tr>
+  </tbody>
+</table>
+
+<h2>Modern işlemciler: CPU ve GPU</h2>
+<div class="two-col">
+  <div><p><strong>CPU:</strong> (1) büyük, çok seviyeli önbellekler, (2) az sayıda karmaşık (pipeline'lı) ALU, (3) ana bellekten veri beklerken durmamak için karmaşık komut çözme ve tahmin donanımı. <strong>Gecikme</strong> odaklı.</p></div>
+  <div><p><strong>GPU:</strong> (1) küçük önbellekler, (2) paralel çalışan çok sayıda basit ALU (grafikte veri yeniden kullanımı az, programlar basit), (3) çekirdekleri beslemek için çok geniş, hızlı bellek yolları. <strong>Throughput</strong> odaklı.</p></div>
+</div>
+<h3>NVIDIA Blackwell</h3>
+<ul>
+  <li>Hopper ve Ada Lovelace'ın ardılı; yapay zekâ, HPC ve hızlandırılmış hesaba yönelik. Çekirdekler <strong>SM</strong>'lerde gruplanır; her SM <strong>128 CUDA çekirdeği</strong> (SIMT) ve kendi programını çalıştırabilir (bloklar farklı SM'lerde bağımsız zamanlanır).</li>
+  <li>Hiyerarşi: GPU → <strong>GPC</strong> → <strong>TPC</strong> (her biri 2 SM) → SM. SM başına: 128 CUDA çekirdeği, 1 RT çekirdeği, 4 Tensor çekirdeği, 4 SFU, 4 texture birimi, <strong>256 KB register dosyası</strong>, <strong>128 KB L1/shared</strong>, zamanlayıcılar. 64-bit FP throughput 32-bit'in yaklaşık yarısı.</li>
+  <li>B200: çift yonga (10 TB/s NV-HBI), 208 milyar transistör, 148 aktif SM = 18.944 CUDA çekirdeği, 592 Tensor çekirdeği.</li>
+</ul>
+<p>Diğer örnekler: <strong>AMD APU</strong> (CPU ve GPU aynı yongada, <strong>ortak bellek uzayı</strong> → veri aktarımı yok; HSA: gecikme odaklı LCU ve throughput odaklı TCU), Cell BE, çok çekirdekli CPU'lar (TILE-Gx8072, Intel Xeon Phi).</p>
+
+<h2>Performans ölçütleri</h2>
+<div class="formula-box">speedup    = t_seq / t_par
+efficiency = speedup / N = t_seq / (N · t_par)      (N = çekirdek sayısı)
+speedup = N  →  doğrusal (linear) speedup, %100 verim</div>
+<ul>
+  <li>Süreler programcının becerisine, derleyiciye ve bayraklarına, işletim sistemine, dosya sistemine, günün saatine bağlıdır.</li>
+  <li><strong>Altın kurallar:</strong> (1) seri ve paralel program aynı donanım/yazılımda, benzer koşullarda test edilmeli; (2) seri program, problemin bilinen <strong>en hızlı</strong> çözümü olmalı.</li>
+  <li>Speedup girdiye göre değişebilir: aynı boyutta birçok girdiyle ortalama (veya ort./maks./min.) raporlanır.</li>
+  <li>Speedup "hızlandırılabilir mi?" sorusunu, verim "kaynakları verimli kullanarak mı?" sorusunu cevaplar. Doğrusal speedup idealdir; koordinasyon (mesaj, paylaşılan kaynak) CPU zamanı yer.</li>
+</ul>
+
+<h2>Amdahl yasası</h2>
+<p>Varsayımlar: seri uygulama tek CPU'da T sürer; <strong>α</strong> (0 ≤ α ≤ 1) kısmı paralelleştirilebilir, (1 − α) seri yapılmalı; iletişim maliyeti yok, paralel kısım eşit bölünür.</p>
+<div class="formula-box">speedup = T / ((1 − α)T + αT/N) = 1 / ((1 − α) + α/N)
+N → ∞:  speedup → 1 / (1 − α)
+α = 0,9  →  speedup &lt; 10, kaç işlemci olursa olsun</div>
+<ul>
+  <li>"Karınca ordusu mu, fil sürüsü mü?" A işlemcisi B'den r = T<sub>B</sub>/T<sub>A</sub> kat hızlıysa, N<sub>B</sub> tane ucuz işlemciyle en iyi speedup <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. <code>r ≥ 1/(1−α)</code> ise speedup asla 1'i geçmez (α = %90, r = 10: tek pahalı CPU daha iyi).</li>
+  <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
+</ul>
+
+<h2>Gustafson-Barsis yasası</h2>
+<p>Paralel platform sadece seri programı hızlandırmaz, <strong>daha büyük problemleri</strong> çözebilir. Soru: paralel makinenin çözdüğü problemi seri makine ne kadar sürede çözer?</p>
+<p>Varsayımlar: paralel uygulama N CPU'da <strong>sabit</strong> T süresinde çalışır; zamanın α kısmında tüm makineler çalışır, (1 − α) kısmı seridir. T sabitken N artarsa yapılan iş artar.</p>
+<div class="formula-box">t_seq   = (1 − α)T + N·α·T
+speedup = t_seq / T = (1 − α) + N·α
+efficiency = speedup / N = (1 − α)/N + α</div>
+<p>Onun da kusuru var: iletişim maliyetini sıfır sayar. "Utanç verici derecede paralel" problemlerde bile N büyüdükçe iletişim belirleyici olur. Pratikte <strong>%90'ın üzerinde verim</strong> kayda değer bir başarıdır.</p>
+<div class="callout example">
+  <p>α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
+</div>
+
+<h2>Gecikme ve throughput</h2>
+<p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir programın %80'i paralelleştirilebiliyor. Amdahl'a göre sonsuz işlemciyle en fazla speedup?</p>
+  <ol>
+    <li data-why="Bu α'nın kendisi; formül 1/(1−α).">0,8</li>
+    <li data-why="1/(1 − 0,8) = 1/0,2 = 5.">5</li>
+    <li data-why="Gustafson'da sınır yok; Amdahl'da var.">Sınırsız</li>
+    <li data-why="1/0,8 = 1,25 seri kısımla paralel kısmı karıştırmak olur.">1,25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Hangisi dağıtık bellek MIMD için doğrudur?</p>
+  <ol>
+    <li data-why="Bu paylaşımlı bellek.">Tüm işlemciler ortak bir adres uzayını paylaşır.</li>
+    <li data-why="Programlaması daha zordur.">Programlaması paylaşımlı belleğe göre daha kolaydır.</li>
+    <li data-why="NUMA paylaşımlı bellek tasarımıdır.">NUMA bir dağıtık bellek tasarımıdır.</li>
+    <li data-why="Doğru: iletişim mesajlaşmayla; paylaşılan ortam olmadığı için çok yüksek ölçeklenir.">İletişim mesajlaşmayla olur ve çok yüksek ölçeklenebilir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>16 çekirdekte speedup 12 ölçüldü. Verim nedir?</p>
+  <ol>
+    <li data-why="12/16 = 0,75.">%75</li>
+    <li data-why="16/12 ters oran.">%133</li>
+    <li data-why="Verim speedup'ın çekirdek sayısına oranı.">%12</li>
+    <li data-why="Doğrusal speedup olsaydı %100 olurdu.">%100</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

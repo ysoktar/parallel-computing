@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paralel program tasarımı · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), ayrıştırma desenleri (task, divide-and-conquer, geometrik, özyinelemeli veri, pipeline, olay tabanlı), program yapısı desenleri (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l2-design">
+<main><div class="content">
+
+<h1>Paralel program tasarımı</h1>
+<p class="lead">Paralel programda deyimlerin sırası tek değildir; dikkatli tasarlanmazsa yanlış güncellemeler ve kilitlenen iletişimler çıkar. Hedefler: <strong>doğruluk</strong> ve <strong>performans</strong>.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>PCAM'ın dört adımını ve her adımın pratik kuralını söylemek.</li>
+    <li>Bir problem için uygun ayrıştırma desenini seçmek.</li>
+    <li>GPLS ve GSLP program yapısı desenlerini ayırt etmek.</li>
+  </ul>
+</div>
+
+<h2>Önce sor: paralel gerekli ve mümkün mü?</h2>
+<ul>
+  <li>Algoritma paralel uygulamaya izin vermeyebilir; zaman/mühendislik kaynağı olmayabilir.</li>
+  <li>Paralel yürütme tamamen yeni bir algoritma gerektirebilir. GPU'lar program yapısına o kadar çok kısıt koyar ki genelde baştan tasarım gerekir.</li>
+</ul>
+
+<h2>PCAM</h2>
+<p>Partitioning, Communication, Agglomeration, Mapping: Ian Foster'ın (1995) dört adımlı tasarım yöntemi. Kabaca: eş zamanlı yapılabilecek iş parçalarını bul, iletişim ihtiyaçlarını gözeterek işlemcilere ata.</p>
+<table class="simple">
+  <thead><tr><th>Adım</th><th>Ne yapılır</th><th>Pratik kural</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Partitioning</strong></td><td>Hesabı olabildiğince çok parçaya böl; paralelliği ortaya çıkar. <em>Functional decomposition</em> (adımlara göre) ya da <em>domain/data decomposition</em> (veriye göre).</td><td>Parça sayısı işlemci sayısının 10–100 katı.</td></tr>
+    <tr><td><strong>Communication</strong></td><td>Görevler arası bağımlılıklar ve aktarılacak veri hacmi belirlenir → <strong>görev bağımlılık grafı</strong> (düğüm = görev, kenar = iletişim hacmi).</td><td>İdeal: tamamen bağımsız görevler.</td></tr>
+    <tr><td><strong>Agglomeration</strong></td><td>İletişimi azaltmak için görevleri grupla; grup içi iletişim yok olur.</td><td>Grup sayısı işlemci sayısının ~10 katı.</td></tr>
+    <tr><td><strong>Mapping</strong></td><td>Grupları düğümlere ata: <strong>yük dengesi</strong> + yoğun iletişimli grupları aynı düğüme koyarak iletişimi azalt (paylaşımlı bellekte iletişim neredeyse bedava).</td><td>Genel hâli NP-complete → sezgisel yöntemler.</td></tr>
+  </tbody>
+</table>
+<p>Hesapları çoğaltmak (duplicate) sonuçlarını iletme ihtiyacını ortadan kaldırarak performansı artırabilir. Örnekler: matris toplama (tamamen bağımsız), 2D konvolüsyon (komşu verisi gerekir).</p>
+
+<h2>Ayrıştırma desenleri</h2>
+<p>Mattson ve diğerlerinin altı deseni; fonksiyonel ve veri ayrıştırmasına <strong>veri akışı</strong> (data flow) ayrıştırması eklenir. Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
+<h3>Task parallelism</h3>
+<p>Modüller farklı düğümlere: ör. oyun döngüsündeki <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> ayrı görevler, her turun sonunda <code>barrier()</code>. Karmaşık bağımlılık yoksa çalışır ama <strong>ölçeklenmez</strong>: düğüm sayısı görev sayısını aşamaz.</p>
+<h3>Divide-and-conquer</h3>
+<pre class="code">
+DnC(A) {
+    if (A is a base case) return solution(A);
+    split A into N subproblems B[N];
+    for (int i = 0; i < N; i++) sol[i] = DnC(B[i]);
+    return mergeSolution(sol);
+}
+</pre>
+<ul>
+  <li>Örnek: merge sort. <strong>Bağımlılık grafı, çağrı grafıyla aynı değildir.</strong> 8 elemanlı merge sort'ta en fazla eşzamanlılık 4 görev (boyutu 1 olan çağrılar iş yapmaz).</li>
+  <li>Görevler çalışma zamanında dinamik üretilir (GPU'larda uzun süre imkânsızdı). Belli bir boyuta ya da işlemci sayısına ulaşınca durulur; ebeveyn görev boş beklemek yerine alt problemlerden birini kendisi çözebilir (N − 1 yeni görev).</li>
+</ul>
+<h3>Geometrik ayrıştırma</h3>
+<p>Diziler/matrisler bir veya daha fazla boyut boyunca bölünüp görevlere atanır. Veriler arası bağımlılık yoksa <strong>embarrassingly parallel</strong>. Örnek: 5 noktalı Laplace filtresi <code>[0 1 0; 1 −4 1; 0 1 0]</code>: her çıktı için 5 değer gerekir → bölge sınırlarında komşu (halo) satırları gerekir. GPU'daki blok/karo yaklaşımı budur.</p>
+<h3>Özyinelemeli veri ayrıştırması</h3>
+<p>Ağaç, liste, graf gibi yapılar elemanlarına ayrıştırılıp düğümlere atanır; algoritma değiştirilebilir (dinamik programlamaya benzer). Örnek: kısmi toplamlar (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: önce 2'li, sonra 4'lü, 8'li grupların toplamları.</p>
+<h3>Pipeline</h3>
+<ul>
+  <li>Montaj hattı: her aşama veriye bir işlem uygular. CPU komut pipeline'ı, sinyal işleme (FFT → katsayı işleme → ters FFT), grafik pipeline'ı, Unix kabuk boruları.</li>
+  <li>Fayda ancak aşamalar <strong>farklı veriler üzerinde eş zamanlı</strong> çalışırsa. Aşama süreleri yakın olmalı: <strong>en yavaş aşama pipeline'ın hızını belirler</strong> (throughput ≤ 1 / en uzun aşama süresi).</li>
+</ul>
+<h3>Olay tabanlı koordinasyon</h3>
+<p>İletişim akışı sabit değil, görevler çalışma zamanında dinamik etkileşir; yürütme profili önceden bilinemez. Örnek: ayrık olay simülasyonu (olay = zaman damgalı mesaj).</p>
+
+<h2>Program yapısı desenleri</h2>
+<div class="two-col">
+  <div>
+    <p><strong>GPLS</strong> (Globally Parallel, Locally Sequential): birçok görev eş zamanlı, her biri kendi içinde seri.</p>
+    <ul><li>SPMD</li><li>MPMD</li><li>Master-worker</li><li>Map-reduce</li></ul>
+  </div>
+  <div>
+    <p><strong>GSLP</strong> (Globally Sequential, Locally Parallel): program seri çalışır, istenen kısımlar paralel.</p>
+    <ul><li>Fork/join</li><li>Loop parallelism</li></ul>
+  </div>
+</div>
+<table class="simple">
+  <thead><tr><th>Desen</th><th>Özü</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SPMD</strong></td><td>Tüm düğümler aynı programı çalıştırır; farklı veri ve/veya farklı yollar. Adımlar: başlatma → <strong>benzersiz ID alma</strong> (CUDA'da vektör: <code>blockIdx/threadIdx</code>) → ID'ye göre çalıştırma → kapatma ve sonuçları birleştirme. CUDA ve MPI bu desendir.</td></tr>
+    <tr><td><strong>MPMD</strong></td><td>Heterojen platform ya da bellek kısıtı varsa farklı programlar bir uygulamada birleşir.</td></tr>
+    <tr><td><strong>Master-worker</strong></td><td>Master iş dağıtır, sonuç toplar, G/Ç ve kullanıcıyla ilgilenir. Tek master darboğaz olabilir → hiyerarşik master'lar. Boşta kalan işçiye iş verdiği için <strong>örtük yük dengesi</strong>.</td></tr>
+    <tr><td><strong>Map-reduce</strong></td><td>Master-worker türevi (Google). Bağımsız verilere bir fonksiyon uygula (map), kısmi sonuçları ikinci bir fonksiyonla birleştir (reduce). Otomatik araçlar dağıtım ve yük dengesini üstlenir.</td></tr>
+    <tr><td><strong>Fork/join</strong></td><td>Görevler çalışma zamanında dinamik oluşturulur (fork), ebeveyn devam etmeden önce biter (join). Yeni thread ya da <strong>thread havuzu</strong> (oluşturma maliyetini azaltır).</td></tr>
+    <tr><td><strong>Loop parallelism</strong></td><td>Mevcut seri kodun zamanı dolduran döngülerini paralelleştir (OpenMP direktifleri). Az emek, genelde az kazanç.</td></tr>
+  </tbody>
+</table>
+<p>Platformlar desen dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p>PCAM'da yoğun iletişim kuran görevleri tek bir gruba toplamak hangi adımdır?</p>
+  <ol>
+    <li data-why="Partitioning parçalara böler, birleştirmez.">Partitioning</li>
+    <li data-why="Communication iletişim hacmini belirler.">Communication</li>
+    <li data-why="Doğru: agglomeration görevleri gruplayarak grup içi iletişimi yok eder.">Agglomeration</li>
+    <li data-why="Mapping grupları düğümlere atar.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Aşama süreleri 2, 5, 3 ms olan 3 aşamalı bir pipeline'ın kararlı durumdaki throughput'u?</p>
+  <ol>
+    <li data-why="En yavaş aşama 5 ms → 5 ms'de bir çıktı = 200 çıktı/s.">5 ms'de bir öğe</li>
+    <li data-why="Toplam 10 ms, tek öğenin gecikmesidir; throughput değil.">10 ms'de bir öğe</li>
+    <li data-why="Ortalama aşama süresi pipeline'ı belirlemez.">3,33 ms'de bir öğe</li>
+    <li data-why="En hızlı aşama değil, en yavaş aşama belirler.">2 ms'de bir öğe</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>CUDA kernel'leri hangi program yapısı desenine en çok uyar?</p>
+  <ol>
+    <li data-why="Görev sayısı sınırlı; CUDA veri paralel.">Task parallelism</li>
+    <li data-why="Her thread farklı program çalıştırmaz.">MPMD</li>
+    <li data-why="Olay tabanlı değil.">Event-based coordination</li>
+    <li data-why="Doğru: tek program (kernel), her thread kendi ID'siyle farklı veri.">SPMD</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

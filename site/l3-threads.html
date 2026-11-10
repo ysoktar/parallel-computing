@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thread'ler ve senkronizasyon · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 3: thread nedir, C++11 thread, data race ve race condition, lock/mutex/semafor, tutarlılık modelleri, deadlock/livelock/starvation, producer-consumer, atomikler, CAS ve LL/SC, bellek sıralaması, monitör ve condition variable, future/packaged_task, thread havuzu, fiber.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l3-threads">
+<main><div class="content">
+
+<h1>Thread'ler ve senkronizasyon</h1>
+<p class="lead">CPU tarafında paylaşımlı bellekle paralel programlama: C++11 thread'leri, veri yarışları ve onları önleyen araçlar. GPU'daki <code>__syncthreads()</code> ve atomik işlemlerin CPU'daki karşılıkları.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Data race ile race condition'ı ayırt etmek.</li>
+    <li>Lock, mutex, semafor, atomik ve monitörü ne zaman kullanacağını söylemek.</li>
+    <li>Deadlock, livelock ve starvation'ı tanımlayıp örneklemek.</li>
+  </ul>
+</div>
+
+<h2>Thread nedir?</h2>
+<ul>
+  <li><strong>Process:</strong> kendi adres uzayı, açık dosyaları, PID'si olan çalışan program (<code>fork()</code> process'i kopyalar: pahalı). <strong>Thread:</strong> process içinde ayrı bir yürütme akışı; kendi program sayacı, stack'i, register'ları ve durumu var, ama adres uzayını process'teki diğer thread'lerle <strong>paylaşır</strong>. "Hafif process": oluşturma ve geçiş maliyeti daha az.</li>
+  <li>Ne işe yarar: (1) performans (çok çekirdek), (2) arka plan görevleri, (3) asenkron işlem (bloklamayan çağrılar: ör. <code>cudaMemcpyAsync</code> hemen döner), (4) program yapısını iyileştirmek.</li>
+  <li>C++11 öncesi pThreads (POSIX); C++11'den beri standart <code>std::thread</code>.</li>
+</ul>
+<pre class="code" data-title="C++11 thread">
+#include <thread>
+#include <vector>
+void work(int id, int* out) { out[id] = id * id; }
+int main() {
+    int out[8];
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 8; i++) ts.emplace_back(work, i, out);   // fork
+    for (auto& t : ts) t.join();                                  // join
+}
+</pre>
+
+<h2>Veri paylaşımı ve yarışlar</h2>
+<ul>
+  <li>Sadece okuma varsa sorun yok. En az biri yazıyorsa sorun.</li>
+  <li><strong>Data race:</strong> birden çok thread aynı değişkene eş zamanlı erişir ve <strong>en az biri yazar</strong>. C/C++'ta tanımsız davranıştır; derleyici olmadığını varsayabilir.</li>
+  <li><strong>Race condition:</strong> olayların sırası yüzünden programın doğruluğunun bozulması. Her data race race condition'a yol açmaz (şans eseri doğru çıkabilir); her race condition data race'ten kaynaklanmaz (atomiklerle data race'i kaldırsanız da işlem sırası farklı sonuçlar verebilir).</li>
+  <li>x86'da hizalı 8 baytlık load/store atomiktir ama buna güvenerek kod yazmayın: daha büyük tipler var, derleyici ve donanım bellek işlemlerini yeniden sıralayabilir ya da tek okuma/yazmayı ikiye bölebilir. 8 bayt hizalamasını da <strong>asla varsaymayın</strong>.</li>
+  <li>GPU notu: birçok thread'in aynı değişkene eş zamanlı yazması GPU'da (CPU'dan çok daha) yavaş ve ciddi darboğaz; nerede saklandığına bağlı (GPU'da birçok bellek türü var).</li>
+</ul>
+
+<h2>Lock, mutex, semafor</h2>
+<table class="simple">
+  <thead><tr><th>Araç</th><th>Özellik</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Lock</strong></td><td>Korunan kod bölgesine (<strong>critical section</strong>) aynı anda tek thread. Process'ler arası paylaşılmaz; alan thread bırakmalı. Bazıları aynı thread tarafından tekrar alınabilir (recursive), aynı sayıda bırakılmalı.</td></tr>
+    <tr><td><strong>Mutex</strong></td><td>Lock ile aynı ama sistem genelinde (process'ler arası) olabilir. "Lock" denince mutex kastedilir. Mutual exclusion; tek seferde tek thread'e izin veren binary semafor gibi + <strong>sahiplik</strong>.</td></tr>
+    <tr><td><strong>Semafor</strong></td><td>Mutex gibi ama <strong>N thread</strong>'in girmesine izin verir: kritik kaynakları (CPU, G/Ç, RAM) kullanan thread sayısını sınırlar. Binary (0/1) ya da counting. Kaynak sayacı, kilit, sinyal mekanizması olarak kullanılabilir.</td></tr>
+  </tbody>
+</table>
+<pre class="code" data-title="Semafor (mantıksal) uygulaması">
+acquire() {                       release() {
+    while (1) {                       atomic { count++; return; }
+        atomic {                  }
+            if (count > 0) { count--; return; }
+        }
+    }
+}
+</pre>
+<ul>
+  <li>Donanımda atomik destek olmadan gerçek paralel programlama imkânsızdır.</li>
+  <li>Bekleyenler FIFO kuyrukta tutulursa <strong>strong</strong> semafor, değilse <strong>weak</strong> (starvation olabilir).</li>
+  <li>Binary semafor "bir olayı bekle" durumu için kullanılabilir (bir thread release, diğeri acquire).</li>
+  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII sarmalayıcılar <code>std::lock_guard</code> (kapsam bitince bırakır) ve <code>std::unique_lock</code> (ertelenmiş kilitleme, condition variable ile). Ders örnekleri: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
+  <li><strong>Lazy init / call once:</strong> bir kaynağı ilk kullanımda tek bir kez başlatmak (<code>std::call_once</code>); ör. video çözücü.</li>
+  <li><strong>Recursive lock:</strong> normal mutex'i aynı thread iki kez alırsa deadlock; recursive mutex buna izin verir.</li>
+</ul>
+
+<h2>Tutarlılık modelleri</h2>
+<ul>
+  <li>Tasarım kaygıları: önbellek <strong>tutarlılığı</strong> (coherence, aynı adres) ve bellek <strong>tutarlılık modeli</strong> (consistency, farklı adreslere işlemlerin görünme sırası).</li>
+  <li><strong>Sequential consistency:</strong> paylaşılan nesnelere olaylar tek tek bir sırada oluyormuş gibi görünmeli ve her thread için program sırasında etki etmeli. Farklı thread'lerin olayları kaydırılarak genel geçmiş nesnenin seri belirtimini sağlayabilir.</li>
+  <li>Yüksek seviyeli dillerde derleyici optimizasyonları üretilen kodu seri çeviriden çok farklı yapabilir (komut yeniden sıralama), ama sonuç sequential consistency'yi korur (tek thread açısından).</li>
+</ul>
+
+<h2>Ters gidebilecekler</h2>
+<table class="simple">
+  <thead><tr><th>Durum</th><th>Tanım</th><th>CPU kullanımı</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Deadlock</strong></td><td>İki veya daha fazla thread, ellerindeki kaynakları bırakmadan diğerinin kaynağını sonsuza kadar bekler (P1 R2'yi, P2 R1'i tutar; ikisi de diğerini ister). Kimse ilerlemez.</td><td>Düşük (uyuyorlar)</td></tr>
+    <tr><td><strong>Livelock</strong></td><td>Thread'ler bloklu değil ama birbirine tepki vermekle meşgul; ilerleme yok (dar koridorda iki kişinin aynı yöne kaçması).</td><td>Yüksek (kilit mekanizmasına harcanır)</td></tr>
+    <tr><td><strong>Starvation</strong></td><td>Devam edebilecek bir thread'in yürütmesi süresiz ertelenir; öncelikler ya da adaletsiz zamanlama (P1 ve P3 sırayla alır, P2 hiç alamaz). Deadlock yok.</td><td>Normal</td></tr>
+  </tbody>
+</table>
+
+<h2>Producer-consumer</h2>
+<p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>
+<pre class="code" data-title="Senkronizasyonlu sözde kod">
+// producer                          // consumer
+slotsAvail.acquire();                resAvail.acquire();
+l.acquire();                         l.acquire();
+buffer[in] = item;                   item = buffer[out];
+in = (in + 1) % BUFFSIZE;            out = (out + 1) % BUFFSIZE;
+l.release();                         l.release();
+resAvail.release();                  slotsAvail.release();
+</pre>
+<p>Senkronizasyon olmazsa: dolu tampona yazma (eski veri kaybolur), boş tampondan okuma, aynı <code>in/out</code> indeksini iki thread'in kullanması. Sonlandırma: paylaşılan bir değişkenle (ör. üretilecek toplam sayı) ya da tüketicilere özel "bitti" mesajı (poison pill) göndererek.</p>
+
+<h2>Atomikler</h2>
+<ul>
+  <li><code>std::atomic&lt;T&gt;</code>: işlemler bölünmez; derleyiciye bildirimdir. Atomik okuma <strong>acquire</strong>, atomik yazma <strong>release</strong> semantiğindedir (varsayılan seq_cst).</li>
+  <li>Donanım desteği: <strong>CAS</strong> (compare-and-swap/exchange): bir bellek konumunu bir değerle karşılaştırır, eşitse yeni değeri yazar, her durumda okunan değeri döndürür (x86: <code>CMPXCHG</code>). <strong>LL/SC</strong> (load-link / store-conditional): LL değeri okur; SC, o arada konuma kimse yazmadıysa yazar (ARM, PowerPC).</li>
+  <li>Atomik işlemlerle kilit oluşturmak, kilitlerin yerini almak ya da tamamlamak mümkün (lock-free veri yapıları: <code>is_lock_free()</code>, donanım destekliyor mu?). Örnek: <code>atomic&lt;bool&gt;</code> kilit olarak (spin lock). Floating-point atomikler C++20'de.</li>
+  <li>GPU'da atomik işlemler çok yavaş olabilir (histogram örneği: aynı kutuya çok yazma).</li>
+</ul>
+<pre class="code" data-title="atomic&lt;bool&gt; ile spin lock">
+std::atomic<bool> locked{false};
+void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
+void unlock() { locked.store(false); }
+</pre>
+<h3>Bellek sıralaması</h3>
+<ul>
+  <li><code>memory_order_relaxed</code>: değişiklikler diğer çekirdeklere zorla yayılmaz; thread'ler farklı değer dizileri görebilir. Çok emin değilseniz kullanmayın.</li>
+  <li><code>memory_order_acquire</code> / <code>release</code> (+ <code>acq_rel</code>, <code>consume</code>): değişiklikler thread çiftleri arasında yayılır; yazan release, okuyan acquire kullanır. Eski ARM/PowerPC için.</li>
+  <li><code>memory_order_seq_cst</code> (varsayılan): tüm thread'ler bir değişkenin değerlerini aynı sırada görür.</li>
+</ul>
+
+<h2>Monitör ve condition variable</h2>
+<ul>
+  <li>Semaforlar esnek ama doğru kullanmak zor (mantık thread'lere dağılır); atomikler daha da tehlikeli. <strong>Monitör:</strong> birden çok thread'in güvenle erişebileceği şekilde tasarlanmış nesne: metotları karşılıklı dışlamayla çalışır (bir anda tek thread içeride).</li>
+  <li><strong>Condition variable:</strong> monitör içinde bir koşulu beklemek için: <code>wait()</code> kilidi bırakıp uyur, <code>notify_one()/notify_all()</code> uyandırır. Sinyal veren thread devam ederse uyanan koşulu yeniden kontrol etmeli (<code>while</code> döngüsü).</li>
+  <li>C++11: <code>std::mutex</code> + <code>std::unique_lock</code> + <code>std::condition_variable</code>.</li>
+</ul>
+<pre class="code" data-title="C++11 monitör deseni">
+class Monitor {
+    std::mutex m; std::condition_variable cv; int count = 0;
+public:
+    void put()  { std::unique_lock<std::mutex> l(m); count++; cv.notify_one(); }
+    void take() { std::unique_lock<std::mutex> l(m);
+                  cv.wait(l, [&]{ return count > 0; });   // kilidi bırakıp bekler
+                  count--; }
+};
+</pre>
+
+<h2>Asenkron thread'ler ve thread yönetimi</h2>
+<ul>
+  <li><code>std::async</code> + <code>std::future</code>: bir fonksiyonu asenkron çalıştırıp sonucunu sonra <code>get()</code> ile al. <code>std::packaged_task</code>: çağrılabilir bir nesneyi sarar, sonucuna future ile erişilir (görev kuyrukları/thread havuzları için).</li>
+  <li><strong>Dinamik</strong> (her görev için yeni thread) vs <strong>statik</strong> thread yönetimi (<strong>thread havuzu</strong>). Havuzun artıları: görev başına başlatma maliyeti yok; thread sayısı işe göre ayarlanabilir (G/Ç ağırlıklı daha çok, CPU ağırlıklı çekirdek başına bir); binlerce görev ile iyi yük dengesi; sistem kaynağı tasarrufu. Eksileri: karmaşıklık, görevler arası bağımlılıkta deadlock riski.</li>
+  <li><strong>Fiber / kullanıcı seviyesi thread'ler</strong> (<code>boost::fibers</code>): işletim sistemi yerine kütüphane zamanlar; oluşturma/geçiş maliyeti küçük ("lightweight/green threads"), binlercesi kolayca, özel zamanlayıcı, taşınabilir. Eksi: biri bloklayan bir sistem çağrısı yaparsa hepsi bloklanır; çok çekirdekten doğrudan faydalanmaz.</li>
+</ul>
+<div class="callout key">
+  <p><strong>CPU ↔ GPU köprüsü:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel başlatma + <code>cudaDeviceSynchronize()</code>; bariyer ≈ <code>__syncthreads()</code> (ama sadece blok içi); <code>std::atomic</code> ≈ <code>atomicAdd</code>; histogram alıştırması iki dünyada da aynı yarış problemini gösterir.</p>
+</div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>İki thread aynı <code>int</code>'i sadece okuyor. Bu bir data race midir?</p>
+  <ol>
+    <li data-why="Data race için en az bir yazma gerekir.">Evet, eş zamanlı erişim her zaman data race'tir.</li>
+    <li data-why="Doğru: sadece okuma varsa sorun yok.">Hayır, en az bir thread yazmadıkça data race yoktur.</li>
+    <li data-why="Hizalama bunu değiştirmez.">Sadece değişken hizasızsa.</li>
+    <li data-why="Atomik gerekmez; yazma yok.">Sadece atomik değilse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Thread'ler ilerleyemiyor ama CPU kullanımı yüksek. Hangisi?</p>
+  <ol>
+    <li data-why="Deadlock'ta thread'ler bekler/uyur; CPU düşük.">Deadlock</li>
+    <li data-why="Starvation'da diğer thread'ler ilerler.">Starvation</li>
+    <li data-why="Doğru: livelock'ta thread'ler birbirine tepki vermekle meşgul.">Livelock</li>
+    <li data-why="Race condition yanlış sonuç demektir, ilerlememe değil.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Mutex ile semafor arasındaki temel fark?</p>
+  <ol>
+    <li data-why="Doğru: semafor sayaçla N thread'e izin verir; mutex tek thread ve sahiplik.">Semafor aynı anda N thread'in girmesine izin verebilir; mutex tek thread'e.</li>
+    <li data-why="İkisi de process'ler arası olabilir.">Semafor sadece tek process içinde çalışır.</li>
+    <li data-why="İkisi de atomik işlemlerle uygulanır.">Mutex atomik işlem gerektirmez.</li>
+    <li data-why="Mutex'te alan thread bırakmalı (sahiplik); semaforda başka thread release edebilir.">Mutex'i başka bir thread bırakabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

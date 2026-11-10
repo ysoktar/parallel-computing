@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Introduction · Parallel Computing</title>
+<meta name="description" content="Lecture 1: Moore's law, the power wall, multi-core, GPGPU, Flynn's taxonomy, shared and distributed memory MIMD, CPU vs GPU, Blackwell, speedup, efficiency, Amdahl and Gustafson-Barsis, latency and throughput.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l1-intro">
+<main><div class="content">
+
+<h1>Introduction to parallel computing</h1>
+<p class="lead">Why is everything multi-core now? How are parallel machines classified, and what limits how much a parallel program can speed up?</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Explain why frequency scaling stopped and the move to multi-core.</li>
+    <li>State Flynn's taxonomy and the difference between shared and distributed memory MIMD.</li>
+    <li>Use the speedup, efficiency, Amdahl and Gustafson-Barsis formulas.</li>
+  </ul>
+</div>
+
+<h2>Moore's law and the power wall</h2>
+<ul>
+  <li><strong>Moore's law</strong> (Gordon Moore, 1970s): the number of transistors in an integrated circuit <strong>doubles about every two years</strong>. Transistor count, not frequency.</li>
+  <li>Frequency alone is not a comparison criterion: operations take different numbers of cycles (on x86-64, 32-bit integer add 1 cycle, 32-bit FP multiply 4).</li>
+  <li>For a long time more transistors came with higher frequencies; but higher frequency = more heat. Voltages were lowered (~1.29 V) but not enough. <strong>Around 2004–2005 frequencies maxed out at 2–4 GHz</strong> (Gelsinger's power wall).</li>
+  <li>The route left: put more logic and more <strong>cores</strong> on a chip. The first dual-core single-die chip: IBM Power 4 (2001); a natural evolution of multi-socket platforms.</li>
+  <li><strong>GPGPU</strong>: a single GPU core is weaker than a CPU core, but hundreds/thousands of cores + high-bandwidth memory → orders of magnitude faster. Also better <strong>GFLOP/Watt</strong>: in servers and the cloud the energy a CPU uses over its lifetime can exceed its price.</li>
+  <li>Not free: multi-core needs <strong>multi-threaded, parallel code</strong>; algorithms must be redesigned and new APIs (CUDA, OpenCL) learnt.</li>
+</ul>
+
+<h2>Flynn's taxonomy</h2>
+<p>Michael Flynn (1966): machines are classified by (1) how many data items they process concurrently and (2) how many different instructions they execute at the same time.</p>
+<table class="simple">
+  <thead><tr><th>Class</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SISD</strong></td><td>A simple sequential machine: one instruction, one data item at a time.</td></tr>
+    <tr><td><strong>SIMD</strong></td><td>Each instruction is applied to a collection of items; vector processors were the first.</td></tr>
+    <tr><td><strong>MISD</strong></td><td>Normally makes no sense; in fault-tolerant systems (military, aerospace) the same data is processed by several machines and a majority decision is taken.</td></tr>
+    <tr><td><strong>MIMD</strong></td><td>The most versatile class. Multi-core machines, including GPUs.</td></tr>
+  </tbody>
+</table>
+<h3>Shared and distributed memory MIMD</h3>
+<ul>
+  <li><strong>Shared-memory MIMD:</strong> a universally accessible shared memory space. Communication between CPUs is cheap but memory is a bottleneck limiting scalability. Fix: partition memory among CPUs; local memory is fast, remote memory slower, addressing still universal: <strong>NUMA</strong> (up to a few tens of CPUs). Subtypes: <strong>SMP</strong> (all CPUs equivalent) and <strong>master-worker</strong> (some processors run specialised software, like coprocessors: GPU systems resemble this, though most have separate CPU and GPU memory spaces).</li>
+  <li><strong>Distributed-memory (shared-nothing) MIMD:</strong> each processor has private memory; they communicate by <strong>exchanging messages</strong>. Communication is expensive, but with no single contested medium they scale without practical limit (apart from space and energy).</li>
+</ul>
+<table class="simple">
+  <thead><tr><th>Feature</th><th>Shared memory</th><th>Distributed memory</th></tr></thead>
+  <tbody>
+    <tr><td>Memory model</td><td>Global shared address space</td><td>Private local memory per processor</td></tr>
+    <tr><td>Communication</td><td>Shared variables</td><td>Message passing (MPI etc.)</td></tr>
+    <tr><td>Examples</td><td>Multi-core CPUs, SMP servers</td><td>HPC and cloud clusters, data centres</td></tr>
+    <tr><td>Scalability</td><td>Limited (tens–hundreds of cores)</td><td>Very high (thousands–millions)</td></tr>
+    <tr><td>Programming</td><td>Easier</td><td>Harder (explicit data distribution)</td></tr>
+    <tr><td>Bottleneck</td><td>Memory bandwidth, cache coherence</td><td>Network latency, communication cost</td></tr>
+  </tbody>
+</table>
+
+<h2>Modern processors: CPU and GPU</h2>
+<div class="two-col">
+  <div><p><strong>CPU:</strong> (1) large, multilevel caches, (2) few complex (pipelined) ALUs, (3) complex instruction decoding and prediction hardware to avoid stalling while waiting for main memory. <strong>Latency</strong>-oriented.</p></div>
+  <div><p><strong>GPU:</strong> (1) small caches, (2) many simple ALUs operating in parallel (little data reuse in graphics, simple programs), (3) very wide, fast memory buses to feed the cores. <strong>Throughput</strong>-oriented.</p></div>
+</div>
+<h3>NVIDIA Blackwell</h3>
+<ul>
+  <li>Successor of Hopper and Ada Lovelace; aimed at AI, HPC and accelerated computing. Cores are grouped into <strong>SMs</strong>; each SM has <strong>128 CUDA cores</strong> (SIMT) and can run its own program (blocks are scheduled independently on different SMs).</li>
+  <li>Hierarchy: GPU → <strong>GPC</strong> → <strong>TPC</strong> (2 SMs each) → SM. Per SM: 128 CUDA cores, 1 RT core, 4 Tensor cores, 4 SFUs, 4 texture units, a <strong>256 KB register file</strong>, <strong>128 KB L1/shared</strong>, schedulers. 64-bit FP throughput is about half of 32-bit.</li>
+  <li>B200: dual die (10 TB/s NV-HBI), 208 billion transistors, 148 active SMs = 18,944 CUDA cores, 592 Tensor cores.</li>
+</ul>
+<p>Other examples: <strong>AMD APU</strong> (CPU and GPU on the same die, <strong>unified memory space</strong> → no data transfers; HSA: latency-oriented LCUs and throughput-oriented TCUs), the Cell BE, multi-core CPUs (TILE-Gx8072, Intel Xeon Phi).</p>
+
+<h2>Performance metrics</h2>
+<div class="formula-box">speedup    = t_seq / t_par
+efficiency = speedup / N = t_seq / (N · t_par)      (N = number of cores)
+speedup = N  →  linear speedup, 100% efficiency</div>
+<ul>
+  <li>Times depend on the programmer's skill, the compiler and its switches, the OS, the filesystem, the time of day.</li>
+  <li><strong>Golden rules:</strong> (1) test the sequential and parallel programs on identical hardware/software under similar conditions; (2) the sequential program should be the <strong>fastest</strong> known solution.</li>
+  <li>Speedup may vary with the input: report averages (or avg./max./min.) over many inputs of the same size.</li>
+  <li>Speedup answers "can it be accelerated?", efficiency "with a modest amount of resources?". Linear speedup is ideal; coordination (messages, shared resources) eats CPU time.</li>
+</ul>
+
+<h2>Amdahl's law</h2>
+<p>Assumptions: the sequential application takes T on one CPU; a part <strong>α</strong> (0 ≤ α ≤ 1) can be parallelised, (1 − α) must be sequential; no communication cost, the parallel part divides evenly.</p>
+<div class="formula-box">speedup = T / ((1 − α)T + αT/N) = 1 / ((1 − α) + α/N)
+N → ∞:  speedup → 1 / (1 − α)
+α = 0.9  →  speedup &lt; 10, however many processors</div>
+<ul>
+  <li>"An army of ants versus a herd of elephants": if CPU A is r = T<sub>B</sub>/T<sub>A</sub> times faster than B, the best speedup with N<sub>B</sub> cheap CPUs is <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. If <code>r ≥ 1/(1−α)</code> the speedup never exceeds 1 (α = 90%, r = 10: one expensive CPU is better).</li>
+  <li>But reality disagrees: every Top500 supercomputer is built from thousands to millions of off-the-shelf cores. Where is the flaw?</li>
+</ul>
+
+<h2>Gustafson-Barsis's law</h2>
+<p>A parallel platform does more than speed up a sequential program: it can solve <strong>bigger problems</strong>. The question: how long would a sequential machine take to solve the problem the parallel machine solves?</p>
+<p>Assumptions: the parallel application runs in a <strong>fixed</strong> time T on N CPUs; during a fraction α of the time all machines work, (1 − α) is sequential. With T fixed, increasing N increases the work done.</p>
+<div class="formula-box">t_seq   = (1 − α)T + N·α·T
+speedup = t_seq / T = (1 − α) + N·α
+efficiency = speedup / N = (1 − α)/N + α</div>
+<p>It has its flaw too: it assumes zero communication cost. Even for "embarrassingly parallel" problems communication becomes decisive as N grows. In practice <strong>efficiency above 90%</strong> is a worthwhile achievement.</p>
+<div class="callout example">
+  <p>α = 0.9, N = 10. <strong>Amdahl:</strong> 1 / (0.1 + 0.09) = 1/0.19 ≈ 5.26. <strong>Gustafson:</strong> 0.1 + 9 = 9.1. The difference is whether the problem is fixed (Amdahl, strong scaling) or grows with N (Gustafson, weak scaling).</p>
+</div>
+
+<h2>Latency and throughput</h2>
+<p>A work request arrives at t = 0. A <strong>latency-optimised processor</strong> (CPU) produces the first result quickly (low latency). A <strong>throughput-optimised processor</strong> (GPU) produces the first result later (high latency) but much more output per unit time (high throughput).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>80% of a program can be parallelised. By Amdahl, what is the maximum speedup with infinitely many processors?</p>
+  <ol>
+    <li data-why="That is α itself; the formula is 1/(1−α).">0.8</li>
+    <li data-why="1/(1 − 0.8) = 1/0.2 = 5.">5</li>
+    <li data-why="Gustafson has no bound; Amdahl does.">Unbounded</li>
+    <li data-why="1/0.8 = 1.25 mixes up the serial and parallel parts.">1.25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true for distributed-memory MIMD?</p>
+  <ol>
+    <li data-why="That is shared memory.">All processors share a common address space.</li>
+    <li data-why="It is harder to program.">It is easier to program than shared memory.</li>
+    <li data-why="NUMA is a shared-memory design.">NUMA is a distributed-memory design.</li>
+    <li data-why="True: communication by messages; with no shared medium it scales very far.">Communication is by message passing and it scales very far.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>A speedup of 12 is measured on 16 cores. What is the efficiency?</p>
+  <ol>
+    <li data-why="12/16 = 0.75.">75%</li>
+    <li data-why="16/12 is the inverse ratio.">133%</li>
+    <li data-why="Efficiency is speedup divided by the number of cores.">12%</li>
+    <li data-why="That would be linear speedup.">100%</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>
