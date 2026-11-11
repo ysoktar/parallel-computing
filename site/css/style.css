@@ -1108,3 +1108,11 @@ pre.learning-code code { display:block; min-width:max-content; padding:0; }
   .learning-matrix-wrap { max-width:none; }
   .learning-source-label { font-size:.79rem; }
 }
+
+
+/* Source code line wrapping for narrow teaching panels */
+pre.learning-code { white-space:pre-wrap; overflow-x:hidden; }
+pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
+.learning-code-line { white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; width:100%; align-items:flex-start; }
+.learning-code-src { min-width:0; width:100%; overflow-wrap:anywhere; white-space:pre-wrap; }
+.learning-code-src span { white-space:inherit; }
