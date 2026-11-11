@@ -1,0 +1,39 @@
+name: Free Chromium visual audit
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Build site
+        run: npm run build
+      - name: Install free browser
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start the local site
+        run: |
+          PORT=8000 node scripts/serve.mjs dist > /tmp/parallel-site.log 2>&1 &
+          for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8000/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/parallel-site.log
+          exit 1
+      - name: Take desktop and mobile screenshots and inspect interactions
+        run: node scripts/visual-audit.mjs
+      - name: Save screenshots, inspection logs and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parallel-computing-visual-audit
+          path: visual-audit/
+          retention-days: 14
