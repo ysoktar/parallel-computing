@@ -307,6 +307,12 @@ if(root){
    window.location.reload();
  },"danger");
  root.append(toolbar,jump,note,all,clear);
+ // Same static anchor IDs survive the move into the rendered question list.
+ // On direct links from the cheat sheet, scroll once the question is mounted.
+ const targetId=decodeURIComponent(window.location.hash.slice(1));
+ if(QUESTIONS.some(q=>"question-"+q.id===targetId)){
+   window.requestAnimationFrame(()=>document.getElementById(targetId)?.scrollIntoView({block:"start"}));
+ }
  function updateClock(){
    const mins=String(Math.floor(clock/60)).padStart(2,"0"),secs=String(clock%60).padStart(2,"0");
    write(timerText,tr("Kalan süre: ","Time remaining: ")+mins+":"+secs);
