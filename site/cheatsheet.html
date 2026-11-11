@@ -127,12 +127,12 @@ cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
 <h3>8. Transpose: adresin yönü</h3>
 <pre class="copy-sheet-code">// A and B: N×N, row-major
 naive: B[col*N+row] = A[row*N+col];
-read: adjacent col → coalesced
-write: adjacent col → stride N (poor)
-shared: tile[ty][tx]=A[row*N+col];
+read: adjacent col → contiguous
+write: adjacent col → stride N
+shared (T=32, block=32×32):
+tile[ty][tx] = A[(by*T+ty)*N + bx*T+tx];
 __syncthreads();
-B[transposed_row*N+transposed_col]
-     = tile[tx][ty]; // remap tile/blocks</pre>
+B[(bx*T+ty)*N + (by*T+tx)] = tile[tx][ty];</pre>
 <p>Shared tile okumayı ve yazmayı yakın adresli yapabilir; tile[y][x] vs tile[x][y] farkına bak.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="9">
