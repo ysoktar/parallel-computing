@@ -48,16 +48,19 @@ warp=32 thread ; block&lt;=1024 thread</pre>
 </section>
 <section class="copy-sheet-card" data-copy-card="2">
 <h3>2. CUDA host iskeleti</h3>
-<pre class="copy-sheet-code">float *dA, *dB;
-cudaMalloc((void**)&amp;dA, bytes);
-cudaMalloc((void**)&amp;dB, bytes);
-cudaMemcpy(dA,hA,bytes,cudaMemcpyHostToDevice);
+<pre class="copy-sheet-code">float *dA, *dB; // GPU pointers
+size_t bytes=W*H*sizeof(float); // allocation
+cudaMalloc((void**)&amp;dA,bytes);
+cudaMalloc((void**)&amp;dB,bytes);
+cudaMemcpy(dA,hA,bytes,
+           cudaMemcpyHostToDevice);
 k&lt;&lt;&lt;grid,block&gt;&gt;&gt;(dA,dB,W);
-cudaGetLastError(); cudaDeviceSynchronize();
-cudaMemcpy(hB,dB,bytes,cudaMemcpyDeviceToHost);
-cudaFree(dA); cudaFree(dB);
-__global__: host→device, __device__: device→device</pre>
-<p>Kernel launch asenkron. H2D / D2H ve bayt sayısına dikkat.</p>
+cudaGetLastError();
+cudaDeviceSynchronize();
+cudaMemcpy(hB,dB,bytes,
+           cudaMemcpyDeviceToHost);
+cudaFree(dA); cudaFree(dB);</pre>
+<p>dA/dB=GPU işaretçileri, hA/hB=CPU dizileri; bytes=toplam dizi boyutu (W sütun × H satır × 4 B). k=kernel adı; grid=blok sayısı, block=bloktaki thread boyutu. H2D/D2H ters kopya yönleri.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="3">
 <h3>3. Tiled matmul: W×W, T×T, W % T = 0</h3>
@@ -105,23 +108,22 @@ s[t]=in[i]; __syncthreads();
 out[i]=s[B-1-t]; // reverse within block
 // reuse tile before loading next phase</pre>
 <p>Bariyer olmadan başka thread'in yazdığı değeri okumak race yaratabilir. Bloklar bağımsız.</p>
-</section></div>
+</section><section class="copy-sheet-card wide" data-copy-card="7">
+<h3>7. Global bellek / coalescing / pitch</h3>
+<pre class="copy-sheet-code">32 lane × float(4 B) = 128 B yararlı veri
+A[lane]        → 4×32 B = 128 B
+A[lane+1]      → 5×32 B = 160 B
+A[2*lane]      → 8×32 B = 256 B
+A[1024*lane]   → 32×32 B = 1024 B
+pitchBytes: bayt cinsinden satır adımı</pre>
+<p>lane=32 thread'lik warp içi sıra (0–31); W=sütun sayısı, A[row*W+col] row-major; pitchBytes, W*4'ten büyük olabilir. 32 B segment hesabı basitleştirilmiş hizalı erişim modelidir, GPU cache-line boyutu değildir.</p>
+</section>
+</div>
 <footer class="copy-sheet-foot">1/2 · Koordinatları hesapla, sonra kodu izle.</footer>
 </article>
 <article class="copy-sheet-page" data-sheet="back" aria-label="A4 arka yüz">
 <header class="copy-sheet-page-head"><strong>ARKA YÜZ · BELLEK + PERFORMANS</strong><span>BİL 455/533 · 2. vize</span></header>
-<div class="copy-sheet-grid"><section class="copy-sheet-card wide" data-copy-card="7">
-<h3>7. Global bellek / coalescing / pitch</h3>
-<pre class="copy-sheet-code">32 lanes × float(4 B) = 128 B requested
-aligned a[lane] → 4×32 B segments (128 B)
-a[lane+1] → 5 segments (160 B)
-a[2*lane] → 8 segments (256 B)
-a[1024*lane] → 32 segments (1024 B)
-a[0] → 1 segment (broadcast)
-byte_addr = base + (row*pitchBytes) + col*4
-cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>lane=warp içi thread sırası (0–31), float=4 B; 32 B=örnek hizalı bellek segmenti, her GPU'da cache-line boyutu demek değildir. Satır-major A[row*W+col]; row/col=matris koordinatları, W=sütun sayısı; pitchBytes=bayt cinsinden satır adımı, W*4'ten büyük olabilir. Gerçek işlemler cache'e bağlıdır.</p>
-</section>
+<div class="copy-sheet-grid">
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: adresin yönü</h3>
 <pre class="copy-sheet-code">// A and B: N×N, row-major
