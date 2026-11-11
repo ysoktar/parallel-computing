@@ -37,6 +37,7 @@ const safeEntry=(question)=>{
 };
 const cards=new Map();
 function sumUI(){
+ const progress=document.querySelector(".mock-progress");
  const s=scoreSummary(QUESTIONS,answers);
  const checked=QUESTIONS.filter(q=>answers[q.id]?.revealed).length;
  write(progress,tr("Kontrol edilen soru: ","Checked questions: ")+checked+"/"+QUESTIONS.length+
@@ -89,7 +90,7 @@ function codeLines(question,entry,rerender){
  }
  return {wrap,slots,roles};
 }
-function makeGrid(question,entry){
+function makeGrid(question,entry,onChange){
  const {rows,cols}=question.grid;
  const wrap=node("div","mock-grid-wrap");
  const guide=node("p","mock-grid-guide",tr("Satır ↓, sütun →. Hücreye tıklayarak işaretle; tekrar tıklarsan kaldırılır. ",
@@ -158,7 +159,7 @@ function makeGrid(question,entry){
      lastChosen=[r,c];entry.response=[...set];
      entry.revealed=false;entry.selfScore=null;entry.solutionVisible=false;
      write(live,tr("İşaretlenen hücre: ","Marked cells: ")+set.size);
-     repaint();sumUI();
+     repaint();onChange();sumUI();
    });
    cell.addEventListener("keydown",ev=>{
      const dirs={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
@@ -185,10 +186,10 @@ function makeQuestion(question,i){
  card.append(top,node("p","mock-prompt",EN?question.prompt_en:question.prompt));
  const feedback=h("div",{class:"mock-feedback","aria-live":"polite"});
  const resultBox=node("div","mock-solution");
- const {wrap:source,slots,roles}=codeLines(question,entry,()=>{});
+ const {wrap:source,slots,roles}=codeLines(question,entry,()=>renderFeedback());
  let grid=null,essay=null,manualSlider=null,manualLabel=null;
  if(question.type==="grid"){
-  grid=makeGrid(question,entry);
+  grid=makeGrid(question,entry,()=>renderFeedback());
   card.append(node("div","mock-workspace",source,grid.wrap));
   grid.bindCode(roles);
  }else{
