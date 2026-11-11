@@ -10,6 +10,7 @@
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
 <script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="l5-cuda-kernels">
 <main><div class="content">
@@ -160,6 +161,8 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 </div>
 <p>Dikkate alınması gereken sınırlar: blok başına en fazla thread, SM başına en fazla blok, <strong>SM başına en fazla thread</strong>. Genelde SM'lerde mümkün olduğunca çok thread'in yerleşik olması (occupancy) hedeflenir.</p>
 
+<h3>Uygula: thread kodu ve matris hücresi</h3>
+<div data-learning="cuda-index"></div>
 <h2>Senkronizasyon: <code>__syncthreads()</code></h2>
 <ul>
   <li>Aynı bloktaki thread'ler faaliyetlerini bariyer senkronizasyonuyla koordine eder. Çağıran her thread, bloktaki tüm thread'ler o noktaya gelene kadar orada tutulur. Böylece bir sonraki faza geçmeden herkes önceki fazı bitirmiş olur. Tipik örnek: shared memory'yi doldurmak.</li>
@@ -263,6 +266,8 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
   <li>Thread başına global okuma: naive <code>2·width</code>, tiled <code>2·width/T</code> → T kat az. Bu kod <code>width</code>'in <code>TILE_WIDTH</code>'in katı olduğunu varsayar.</li>
 </ul>
 <div class="wgt-mount" data-widget="tiling"></div>
+<h3>Uygula: kodla birlikte M, N ve P karo yükleri</h3>
+<div data-learning="tile"></div>
 <p>Kare olmayan blokla (ör. <code>dim3(8,32)</code>) aynı fikir: <a href="exam-midterm2.html#ayni-konfigurasyonla-tiled-shared-memory-versiyon">2. vize rehberindeki çözüm</a>.</p>
 
 <h2>Sınama</h2>

@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="coalescing">
 <main><div class="content">
@@ -78,6 +79,8 @@ struct __align__(16) Vec3 { float x; float y; float z; };   // 12 bytes of data,
   <p>The quick way to see coalescing in code: check whether <code>threadIdx.x</code> (or the <code>col</code>/<code>x</code> derived from it) sits <strong>on the right, without a multiplier</strong> in the address expression. <code>A[row*width + col]</code> ✓; <code>A[col*width + row]</code> ✗ (consecutive threads are <code>width</code> elements apart); <code>A[2*col]</code> half efficiency.</p>
 </div>
 
+<h3>Apply: link lanes, addresses and segments</h3>
+<div data-learning="coalesce-lanes"></div>
 <h2>2D arrays and pitch</h2>
 <ul>
   <li>Common pattern: thread <code>(tx, ty)</code> accesses <code>BaseAddress + width·ty + tx</code>. For full coalescing <strong>both the thread block's width and the array's width must be multiples of the warp size (32)</strong>.</li>
@@ -154,6 +157,8 @@ __global__ void transposeNaive(float* odata, const float* idata)
   <li>The <code>a[i*1024]</code> example in the lab is exactly this write.</li>
 </ul>
 
+<h3>Apply: from rows and columns in A to B</h3>
+<div data-learning="transpose"></div>
 <h3>3) Coalesced transpose with shared memory</h3>
 <p>Idea: read the tile from global memory <strong>row by row</strong> (coalesced) into shared memory; do the swapping inside shared memory (scattered access is cheap there); then write a <strong>column</strong> of the tile as a <strong>row</strong> of the output (coalesced). The block also has to write to the transposed place.</p>
 <pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">

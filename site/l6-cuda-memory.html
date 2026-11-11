@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="l6-cuda-memory">
 <main><div class="content">
@@ -117,6 +118,10 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
 }
 </pre>
 
+<h3>Uygula: pitch, satır adımı ve padding</h3>
+<div data-learning="pitch"></div>
+<h3>Uygula: warp erişimleri ve segmentler</h3>
+<div data-learning="coalesce-lanes"></div>
 <h2>Local memory</h2>
 <ul>
   <li>Sadece bazı otomatik değişkenler local memory'ye gider: <strong>(1)</strong> sabit indekslendiği belirlenemeyen diziler, <strong>(2)</strong> çok register yiyecek büyük struct/diziler, <strong>(3)</strong> kernel mevcut register'dan fazlasını kullanıyorsa herhangi bir değişken (<strong>register spilling</strong>).</li>
