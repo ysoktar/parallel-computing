@@ -43,9 +43,8 @@ id2D = threadIdx.y * blockDim.x + threadIdx.x
 warp = id2D/32 ; lane = id2D%32
 id3D = tz*bdx*bdy + ty*bdx + tx
 grid = ((W+bx-1)/bx, (H+by-1)/by)
-covered = (gx*bx) cols × (gy*by) rows
-warp=32 threads ; block&lt;=1024 threads</pre>
-<p>x sütun, y satır; bölmeler tamsayı. Sınırdaki taşan thread yazmaz.</p>
+warp=32 thread ; block&lt;=1024 thread</pre>
+<p>H=satır, W=sütun sayısı; tx=threadIdx.x, ty=threadIdx.y; bx=blockDim.x, by=blockDim.y; blockIdx=blok koordinatı, blockDim=bloktaki thread boyutları. warp=32 thread, lane=warp içi sıra (0–31). Tamsayı bölme ve sınır kontrolü.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="2">
 <h3>2. CUDA host iskeleti</h3>
@@ -73,7 +72,7 @@ for (int m=0; m&lt;W/T; ++m) {
   __syncthreads();                // tile may be overwritten
 }
 P[row*W+col]=sum;</pre>
-<p>Naive: 2W global okuma / çıktı. Tiled: 2W/T / çıktı; idealde T kat daha az. 2·T²·4 B shared/blok.</p>
+<p>W=matris genişliği, T=karo kenarı (bu örnekte blockDim.x=blockDim.y=T); tx=threadIdx.x, ty=threadIdx.y; m=phase (yüklenen karo numarası, 0'dan başlar), k=karo içi çarpım indeksi (0..T-1). Mds/Nds=shared karolar, sum=biriken sonuç. İlk bariyer yüklemeyi, ikinci yeniden kullanımı korur.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="4">
 <h3>4. Sınav hesabı: &lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</h3>
@@ -121,7 +120,7 @@ a[1024*lane] → 32 segments (1024 B)
 a[0] → 1 segment (broadcast)
 byte_addr = base + (row*pitchBytes) + col*4
 cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>32 B hizalı segment varsayımıdır; gerçek işlem GPU/cache'e bağlı. 2D row-major: A[row*W+col] ardışık x-lane için iyi. Pitch bayt cinsindendir.</p>
+<p>lane=warp içi thread sırası (0–31), float=4 B; 32 B=örnek hizalı bellek segmenti, her GPU'da cache-line boyutu demek değildir. row/col=matris koordinatları, W=sütun sayısı; pitchBytes=bayt cinsinden satır adımı, W*4'ten büyük olabilir. Gerçek işlemler cache'e bağlıdır.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: adresin yönü</h3>
@@ -133,7 +132,7 @@ shared (T=32, block=32×32):
 tile[ty][tx] = A[(by*T+ty)*N + bx*T+tx];
 __syncthreads();
 B[(bx*T+ty)*N + (by*T+tx)] = tile[tx][ty];</pre>
-<p>Shared tile okumayı ve yazmayı yakın adresli yapabilir; tile[y][x] vs tile[x][y] farkına bak.</p>
+<p>bx=blockIdx.x, by=blockIdx.y (blok koordinatları); tx=threadIdx.x, ty=threadIdx.y (blok içi thread); T=karo boyutu, N=matrisin sütun sayısı. A→B satır/sütun takas eder. Naive yazma adresi N eleman atlayabilir.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="9">
 <h3>9. Sayısal sorular / CGMA</h3>
@@ -149,14 +148,17 @@ BW-limited GFLOPS ≈ BW(GB/s)*ops/byte</pre>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="10">
 <h3>10. Bellek türleri (scope / lifetime)</h3>
-<pre class="copy-sheet-code">register   : thread / thread ; fast, limited
-local      : thread / thread ; device memory, spills
-shared     : block / block   ; on-chip, sync for exchange
-global     : device threads / allocation lifetime ; DRAM
-constant   : all blocks / context ; cached, same address fast
-cudaMalloc → global allocation ; __shared__ → one array/block
-__constant__ : cudaMemcpyToSymbol()</pre>
-<p>Local ismi hızlı anlamına gelmez; register spill global bellek sistemiyle ilgilidir.</p>
+<pre class="copy-sheet-code">register  : thread özel, SM register dosyası
+local     : thread özel; spill cihaz DRAM'inde
+shared    : blok ortak, SM içi hızlı bellek
+L1 cache  : her SM'ye ait, donanım yönetir
+L2 cache  : tüm SM'lerin ortak cache'i
+global    : GPU DRAM/VRAM, tüm thread'ler
+constant  : cihazda salt-okunur, cache'li
+CPU RAM   : host belleği; GPU VRAM'den ayrı
+L1/shared bazı GPU'larda aynı çip içi havuzu böler
+1 KiB=1024 B; float=4 B; 32 float=128 B</pre>
+<p>Kapsam ≠ fiziksel yer: local thread'e özeldir ama cihaz belleğinde olabilir; shared ile aynı değildir. Cache otomatik tutulan veri kopyasıdır, __shared__ açıkça programlanır. L1/L2 boyutları GPU modeline bağlıdır.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="11">
 <h3>11. nvcc / unrolling</h3>
@@ -189,7 +191,7 @@ data race: unsynchronised conflicting accesses, &gt;=1 write
 mutex: mutual exclusion/ownership ; semaphore: permits
 deadlock: wait forever; livelock: moving no progress
 starvation: one participant never proceeds</pre>
-<p>Amdahl sabit problem boyutu; Gustafson sabit süre/ölçeklenen iş yükü. Race C/C++'ta tanımsız davranıştır.</p>
+<p>Amdahl: f=sabit problemin paralelleştirilebilir oranı, N=işçi sayısı, S=hızlanma. Gustafson: a=paralel yürütme süresi oranı, N=işçi sayısı. Burada N matris boyutu DEĞİL. Mutex=tek sahip; semaphore=izin sayısı; race=korunmasız eşzamanlı erişim.</p>
 </section></div>
 <footer class="copy-sheet-foot">2/2 · Önce kapsam/ölçü, sonra coalescing.</footer>
 </article>
