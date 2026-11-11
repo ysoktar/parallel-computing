@@ -69,6 +69,15 @@ try {
         if(entry.sheetCards!==13)entry.scriptErrors.push("Expected 13 filled cheat-sheet sections");
         await page.locator('[data-copy-view="front"]').click();
         await front.screenshot({path:join(out,prefix+"-copy-front.png"),animations:"disabled"});
+        const frontDims=await front.evaluate(el=>{
+          const rect=el.getBoundingClientRect();
+          return {width:rect.width,height:rect.height,scrollHeight:el.scrollHeight};
+        });
+        entry.frontSheetRatio=Number((frontDims.height/frontDims.width).toFixed(3));
+        if(size.name==="desktop" && entry.frontSheetRatio > 1.48)
+          entry.scriptErrors.push("Front A4 page too tall: ratio "+entry.frontSheetRatio);
+        if(size.name==="desktop" && frontDims.scrollHeight>frontDims.height+2)
+          entry.scriptErrors.push("Front A4 content exceeds page height");
         await page.locator('[data-copy-view="back"]').click();
         await back.screenshot({path:join(out,prefix+"-copy-back.png"),animations:"disabled"});
         const dims=await back.evaluate(el=>{
