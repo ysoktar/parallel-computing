@@ -4,7 +4,7 @@ import { h, highlightC } from "./lib/ui.js";
 import { newBarrier, stepBarrier } from "./exam-model.js";
 import { t } from "./lib/i18n.js";
 import { amdahl, matrixIndex, cudaCell, haloCell, raceInit, raceStep,
-  tiledLoads, pitchedCell, transposeCell, warpSegments } from "./learning-model.js";
+  tiledLoads, pitchedCell, transposeCell, warpSegments, cuda3dIndex } from "./learning-model.js";
 
 const lang=(tr,en)=>t(tr,en);
 const elt=(tag,cls,...children)=>h(tag,{class:cls},...children);
@@ -544,8 +544,70 @@ function mountBarrier(root){
  render();
 }
 
+
+function mountDim3(root){
+ const p=lesson(root,lang("3D thread bloğu: dilim, satır ve sütun","3D thread block: slice, row and column"),
+  lang("blockDim=(16,8,2), threadIdx=(5,3,1) için 181. lineer thread ve warp 5 sonucunu bul. Z dilimini veya hücreyi değiştir, kaynak kodun vurgularını izle.",
+    "Try blockDim=(16,8,2), threadIdx=(5,3,1): linear thread 181 in warp 5. Change the Z slice or cell and follow highlighted source lines."),[
+  {role:"z",code:"int tid = threadIdx.z * blockDim.x * blockDim.y"},
+  {role:"row",code:"        + threadIdx.y * blockDim.x"},
+  {role:"col",code:"        + threadIdx.x;"},
+  {role:"warp",code:"int warp = tid / warpSize;"},
+  {role:"lane",code:"int lane = tid % warpSize;"}
+ ]);
+ const st={bx:16,by:8,bz:2,z:1,pinned:{r:3,c:5},hover:null,role:null};
+ const bx=number("blockDim.x",16,1,16,v=>{st.bx=v;resize();});
+ const by=number("blockDim.y",8,1,16,v=>{st.by=v;resize();});
+ const bz=number("blockDim.z",2,1,8,v=>{st.bz=v;resize();});
+ const z=number("threadIdx.z",1,0,7,v=>{st.z=Math.min(v,st.bz-1);z.input.value=st.z;paint();});
+ p.controls.append(bx.el,by.el,bz.el,z.el);
+ let m=null;
+ p.onCode(v=>{st.role=v;paint();});
+ function resize(){
+  st.z=Math.min(st.z,st.bz-1);
+  st.pinned.r=Math.min(st.pinned.r,st.by-1);
+  st.pinned.c=Math.min(st.pinned.c,st.bx-1);
+  st.hover=null;z.input.max=st.bz-1;z.input.value=st.z;
+  p.figure.replaceChildren();
+  if(st.bx*st.by*st.bz>1024){
+    m=null;
+    p.figure.append(elt("p","learning-bad",
+      lang("1024 thread/blok sınırı aşıldı: kernel başlatılamaz.",
+        "Exceeds the 1024-thread-per-block limit; this kernel launch is invalid.")));
+    p.setFacts(text("blockDim",`${st.bx}×${st.by}×${st.bz}`));
+    return;
+  }
+  m=matrix(p.figure,st.by,st.bx,{
+   preview:(r,c,axis)=>{st.hover={r:r??st.pinned.r,c:c??st.pinned.c,axis};paint();},
+   clear:()=>{st.hover=null;paint();},
+   pick:(r,c)=>{st.pinned={r,c};paint();},
+   pickRow:r=>{st.pinned.r=r;paint();},
+   pickColumn:c=>{st.pinned.c=c;paint();}
+  },{value:(r,c)=>cuda3dIndex(st.bx,st.by,st.bz,c,r,st.z).linear});
+  paint();
+ }
+ function paint(){
+  if(!m)return;
+  const view=st.hover||st.pinned;
+  const a=cuda3dIndex(st.bx,st.by,st.bz,view.c,view.r,st.z);
+  paintMatrix(m,view,st.pinned,st.role||st.hover?.axis,(r,c)=>{
+    const q=[];
+    if(Math.floor(cuda3dIndex(st.bx,st.by,st.bz,c,r,st.z).linear/32)===a.warp)
+      q.push("is-warp");
+    if(st.role==="z")q.push("is-plane");
+    return q;
+  });
+  p.light(st.role?[st.role]:st.hover?["z","row","col","warp"]:[]);
+  p.setFacts(text("blockDim",`(${st.bx},${st.by},${st.bz}), ${a.threads} threads`),
+    text("threadIdx",`(${view.c},${view.r},${st.z})`),
+    text(lang("Z diliminin başlangıcı","Slice starting offset"),`${st.z}×${st.bx}×${st.by}=${a.planeOffset}`),
+    text(lang("Lineer id / warp / lane","Linear id / warp / lane"),`${a.linear} / ${a.warp} / ${a.lane}`));
+ }
+ resize();
+}
+
 const WIDGETS={"amdahl":mountAmdahl,barrier:mountBarrier,"halo":mountHalo,"race":mountRace,
- "cuda-index":mountCudaIndex,"tile":mountTile,"pitch":mountPitch,
+ "cuda-index":mountCudaIndex,"dim3-index":mountDim3,"tile":mountTile,"pitch":mountPitch,
  "coalesce-lanes":mountCoalesce,"transpose":mountTranspose};
 for(const node of document.querySelectorAll("[data-learning]")){
  const widget=WIDGETS[node.dataset.learning];
