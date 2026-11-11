@@ -1,6 +1,7 @@
 // Topic-local, code-linked exercises for the BİL 455/533 lecture pages.
 // Hover/focus previews, click pins; hovering a source line highlights the corresponding data.
 import { h, highlightC } from "./lib/ui.js";
+import { newBarrier, stepBarrier } from "./exam-model.js";
 import { t } from "./lib/i18n.js";
 import { amdahl, matrixIndex, cudaCell, haloCell, raceInit, raceStep,
   tiledLoads, pitchedCell, transposeCell, warpSegments } from "./learning-model.js";
@@ -479,7 +480,62 @@ function mountTranspose(root){
  }
  render();
 }
-const WIDGETS={"amdahl":mountAmdahl,"halo":mountHalo,"race":mountRace,
+
+function mountBarrier(root){
+ const p=lesson(root,lang("Blok bariyeri: önce paylaş, sonra oku","Block barrier: share before reading"),
+   lang("Dört thread'i istediğin sırada ilerlet. Her thread tile[i] yazar, sonra komşusunun değerini okumaya çalışır. Aynı bloktaki herkes bariyere ulaşmalıdır.",
+     "Advance four threads in any order. Each writes tile[i], then tries to read its neighbour. All block threads must reach the barrier."),[
+   {role:"declare",code:"__shared__ int tile[4];"},
+   {role:"write",code:"tile[threadIdx.x] = threadIdx.x + 1;"},
+   {role:"barrier",code:"__syncthreads();"},
+   {role:"read",code:"int next = tile[(threadIdx.x + 1) % 4];"}
+ ]);
+ let state=newBarrier(true),selected=0,hover=null,role=null;
+ const switcher=h("input",{type:"checkbox",checked:true,"aria-label":lang("Bariyer etkin","Barrier enabled")});
+ const panel=elt("div","learning-barrier-lanes");
+ const reset=()=>{state=newBarrier(switcher.checked);render();};
+ switcher.addEventListener("change",reset);
+ p.controls.append(h("label",{class:"learning-inline"},switcher,lang("Bariyeri kullan","Use barrier")),
+   button(lang("Sıfırla","Reset"),reset));
+ const lanes=Array.from({length:4},(_,i)=>{
+  const b=h("button",{type:"button",class:"learning-barrier-lane"});
+  b.addEventListener("mouseenter",()=>{hover=i;render();});
+  b.addEventListener("mouseleave",()=>{hover=null;render();});
+  b.addEventListener("focus",()=>{hover=i;render();});
+  b.addEventListener("blur",()=>{hover=null;render();});
+  b.addEventListener("click",()=>{selected=i;state=stepBarrier(state,i);render();});
+  panel.append(b);return b;
+ });
+ p.figure.append(panel);
+ p.onCode(v=>{role=v;render();});
+ function render(){
+   const stages=[lang("Yazmaya hazır","Ready to write"),lang("Yazdı","Written"),lang("Bariyerde","Waiting at barrier"),
+    lang("Bariyer açıldı","Barrier released"),lang("Okudu","Read")];
+   const shown=hover??selected;
+   lanes.forEach((b,i)=>{
+     const phase=state.phase[i];
+     b.textContent=`T${i}: ${stages[phase]} • tile[${i}]=${state.shared[i]??"?"} • next=${phase===4?(state.reads[i]??"?"):"—"}`;
+     b.className="learning-barrier-lane"+(i===shown?" is-active":"")+(i===selected?" is-pinned":"");
+     b.disabled=phase===4;
+     b.setAttribute("aria-pressed",i===selected?"true":"false");
+   });
+   const current=state.phase[shown],active=current===0?"write":current===1||current===2?"barrier":"read";
+   p.light(role?[role]:hover!==null?[active]:[]);
+   const bad=state.phase.some((phase,i)=>phase===4&&state.reads[i]===null);
+   p.setFacts(text(lang("Shared dizi","Shared array"),state.shared.map(x=>x??"?").join(", ")),
+     text(lang("Seçili thread / aşama","Selected thread / phase"),`T${shown} / ${stages[current]}`),
+     elt("p",bad?"learning-bad":"learning-note",bad?
+       lang("Bariyersiz erken okuma: veri yarışı; gerçek CUDA sonucu garanti edilmez.",
+         "Unsynchronized early read: data race; real CUDA output is not guaranteed."):
+       state.enabled?lang("Bariyer, tüm blok thread'leri beklemeden okumayı başlatmaz.",
+         "No thread passes the barrier until all threads in the block arrive."):
+       lang("Bariyer kapalı: okuma başka thread'in yazmasından önce gerçekleşebilir.",
+         "Barrier disabled: a read can occur before another thread writes.")));
+ }
+ render();
+}
+
+const WIDGETS={"amdahl":mountAmdahl,"barrier":mountBarrier,"halo":mountHalo,"race":mountRace,
  "cuda-index":mountCudaIndex,"tile":mountTile,"pitch":mountPitch,
  "coalesce-lanes":mountCoalesce,"transpose":mountTranspose};
 for(const node of document.querySelectorAll("[data-learning]")){
