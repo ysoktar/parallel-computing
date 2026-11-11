@@ -131,6 +131,20 @@ function mountAmdahl(root){
  p.controls.append(h("label",{},lang("Paralel iş yüzdesi","Parallel portion"),slider),pick.el);
  const bars=elt("div","learning-bars"),guess=h("input",{type:"number",step:"0.1",min:"1",placeholder:"2.5","aria-label":"speedup"}),
    message=elt("span","learning-message");
+ const barLabel=elt("p","learning-dim");
+ const serial=elt("div","learning-bar learning-bar-serial"),parallel=elt("div","learning-bar learning-bar-parallel");
+ bars.append(barLabel,elt("div","learning-bar-track",serial,parallel));
+ function emphasize(){
+   bars.classList.toggle("is-serial",role==="serial");
+   bars.classList.toggle("is-parallel",role==="parallel");
+   p.light(role?[role]:[]);
+ }
+ for(const [el,kind] of [[serial,"serial"],[parallel,"parallel"]]){
+   el.addEventListener("mouseenter",()=>{role=kind;emphasize();});
+   el.addEventListener("mouseleave",()=>{role=null;emphasize();});
+   el.addEventListener("focus",()=>{role=kind;emphasize();});
+   el.addEventListener("blur",()=>{role=null;emphasize();});
+ }
  const check=button(lang("Tahmini kontrol et","Check prediction"),()=>{
    const answer=amdahl(fraction/100,workers).speedup;
    message.textContent=guess.value.trim()!==""&&Math.abs(Number(guess.value)-answer)<0.11?
@@ -140,17 +154,12 @@ function mountAmdahl(root){
  p.onCode(v=>{role=v;render();});
  function render(){
    const x=amdahl(fraction/100,workers);
-   const serial=h("div",{class:"learning-bar learning-bar-serial",style:{width:`${x.serial*100}%`}},`${(x.serial*100).toFixed(0)}%`);
-   const parallel=h("div",{class:"learning-bar learning-bar-parallel",style:{width:`${x.parallel*100}%`}},`${(x.parallel*100).toFixed(0)}%`);
-   for(const [el,kind] of [[serial,"serial"],[parallel,"parallel"]]){
-     el.addEventListener("mouseenter",()=>{role=kind;render();});
-     el.addEventListener("mouseleave",()=>{role=null;render();});
-   }
-   // Only code hover controls the comparison bars; preserving the nodes avoids hover flicker.
-   bars.replaceChildren(elt("p","learning-dim",`fraction=${fraction/100}, N=${workers}`),elt("div","learning-bar-track",serial,parallel));
-   bars.classList.toggle("is-serial",role==="serial");
-   bars.classList.toggle("is-parallel",role==="parallel");
-   p.light(role?[role]:[]);
+   serial.style.width=`${x.serial*100}%`;
+   serial.textContent=`${(x.serial*100).toFixed(0)}%`;
+   parallel.style.width=`${x.parallel*100}%`;
+   parallel.textContent=`${(x.parallel*100).toFixed(0)}%`;
+   barLabel.textContent=`fraction=${fraction/100}, N=${workers}`;
+   emphasize();
    p.setFacts(text(lang("Seri süre","Serial time"),x.serial),
      text(lang("Paralel süre","Parallel time"),x.parallel),
      text(lang("Toplam / hızlanma","Total / speedup"),`${x.time} / ${x.speedup}×`));
@@ -228,8 +237,8 @@ function mountRace(root){
   p.light(role?[role]:latest?[latest.action]:[]);
   p.setFacts(text("counter",state.counter),text(lang("Mutex sahibi","Lock owner"),state.owner??"—"),
     text(lang("Son adım","Last step"),latest?`T${latest.thread} ${latest.action}`:lang("Başlamadı","Not started")),
-    elt("p","learning-note",lang("Bu, belirlediğin yürütme sırasının modelidir; işletim sistemi zamanlayıcısını tahmin etmez.",
-      "This models the interleaving you choose, not the operating system scheduler.")));
+    elt("p","learning-note",lang("Bu yalnızca seçilen olay sırasını gösterir. C/C++ data race tanımsız davranıştır; gerçek sonuç garanti değildir.",
+      "This is an interleaving illustration. A data race in C/C++ is undefined behaviour, not a guaranteed numeric result.")));
  }
  render();
 }
@@ -535,7 +544,7 @@ function mountBarrier(root){
  render();
 }
 
-const WIDGETS={"amdahl":mountAmdahl,"barrier":mountBarrier,"halo":mountHalo,"race":mountRace,
+const WIDGETS={"amdahl":mountAmdahl,barrier:mountBarrier,"halo":mountHalo,"race":mountRace,
  "cuda-index":mountCudaIndex,"tile":mountTile,"pitch":mountPitch,
  "coalesce-lanes":mountCoalesce,"transpose":mountTranspose};
 for(const node of document.querySelectorAll("[data-learning]")){
