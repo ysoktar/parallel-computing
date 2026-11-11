@@ -198,9 +198,133 @@ starvation: one participant never proceeds</pre>
 </div>
 </section>
 <div id="copy-ready-end"></div>
+
+<section class="cheat-symbol-guide" aria-labelledby="cheat-symbols">
+<h2 id="cheat-symbols">Değişkenler, bellek ve cache: her sembol ne demek?</h2>
+<p>Üstteki A4 iki yüzü kısa tutuldu. Aşağıdaki tabloyu <strong>çalışarak anlamak</strong>, ardından kopya kâğıdına en çok karıştırdığın satırları el yazınla aktarmak için kullan. Aynı harf farklı sorularda farklı anlama gelebilir; soruda verilen tanım geçerlidir.</p>
+<div class="cheat-symbol-table-wrap">
+<table class="cheat-symbol-table"><thead><tr><th>Sembol</th><th>Anlamı / formülü</th><th>Önemli ayrım</th></tr></thead><tbody>
+<tr><td><code>blockIdx.x/y</code></td><td>Seçilen bloğun grid içindeki x/y numarası</td><td>Blok kimliği, thread kimliği değil</td></tr>
+<tr><td><code>blockDim.x/y</code></td><td>Bloktaki yatay/dikey thread sayıları; <code>blockDim=(bx,by)</code></td><td>Örneğin (4,4) → 16 thread/blok</td></tr>
+<tr><td><code>threadIdx.x/y</code></td><td>Thread'in kendi bloğundaki koordinatları</td><td><code>tx=threadIdx.x</code>, <code>ty=threadIdx.y</code></td></tr>
+<tr><td><code>bx,by</code></td><td><em>Bağlama göre</em> blok genişliği/yüksekliği veya blok ID için kısaltma</td><td>Her örneğin başındaki tanımı oku; ayrıca <code>blockIdx.x/y</code> ile karıştırma</td></tr>
+<tr><td><code>row,col</code></td><td><code>row=blockIdx.y*blockDim.y+ty</code>; <code>col=blockIdx.x*blockDim.x+tx</code></td><td>Global matris satırı/sütunu; sıfırdan başlar</td></tr>
+<tr><td><code>W,H</code></td><td><code>W</code>=matris sütun sayısı, <code>H</code>=matris satır sayısı</td><td>Row-major: <code>A[row*W+col]</code></td></tr>
+<tr><td><code>N,T</code></td><td>Matmul'da <code>N</code>=matris boyutu, <code>T</code>=karo kenarı</td><td>Amdahl'da <code>N</code>=işçi/çekirdek sayısı</td></tr>
+<tr><td><code>phase,m,k</code></td><td><code>phase</code>/<code>m</code>=hangi karo (0,1,...); <code>k</code>=karodaki çarpım adımı (0..T-1)</td><td><code>phase</code> CUDA yerleşik değişkeni değildir; <code>for</code> ile tanımlanır</td></tr>
+<tr><td><code>Mds,Nds,sum</code></td><td><code>Mds/Nds</code>=shared matris karoları; <code>sum</code>=tek sonuç için biriken toplam</td><td>Bariyer yüklemeden ve yeniden yazmadan önce gerekir</td></tr>
+<tr><td><code>warp,lane</code></td><td><code>warp</code>=32'li thread grubu; <code>lane</code>=gruptaki sıra (0–31)</td><td>Blok içi <code>localID=ty*blockDim.x+tx</code>; <code>lane=localID%32</code></td></tr>
+<tr><td><code>pitchBytes,bytes</code></td><td><code>pitchBytes</code>=satırlar arası adım (bayt); <code>bytes</code>=ayrılan/kopyalanan toplam bayt</td><td><code>float</code>=4 B, <code>double</code>=8 B; 1 KiB=1024 B</td></tr>
+<tr><td><code>f,a,S</code></td><td>Amdahl: <code>f</code>=paralel oran; Gustafson: <code>a</code>=paralel süre oranı; <code>S</code>=hızlanma</td><td><code>N</code>=işçi sayısı; matris genişliği değil</td></tr>
+<tr><td><code>mutex,semaphore</code></td><td><code>mutex</code>=tek kilit sahibi; <code>semaphore</code>=izin sayacı</td><td><code>lock_guard</code>=scope sonunda açar; <code>unique_lock</code>=elle açılıp kapanabilir</td></tr>
+<tr><td><code>condition_variable</code></td><td>Bir koşul sağlanana dek mutex ile thread'i uyutur; <code>wait</code> kilidi geçici bırakır</td><td>Uyanınca koşulu yeniden kontrol et; <code>notify_one</code> bir bekleyeni uyandırır</td></tr>
+</tbody></table></div>
+<h3>GPU bellek hiyerarşisi: hangi bellek nerede?</h3>
+<div class="cache-hierarchy" role="group" aria-label="GPU bellek hiyerarşisi">
+<div><strong>Thread</strong><span>Register'lar: thread'e özel, SM içinde</span></div>
+<div><strong>SM (Streaming Multiprocessor)</strong><span>Shared memory: blok ortak, açıkça programlanır. L1: SM'ye ait otomatik cache.</span></div>
+<div><strong>GPU çipi</strong><span>L2: SM'lerin ortak kullandığı otomatik cache.</span></div>
+<div><strong>GPU belleği (VRAM)</strong><span>Global DRAM: büyük, tüm thread'lerden erişilebilir. Local/spill de burada yer alabilir.</span></div>
+<div><strong>CPU / host RAM</strong><span>CPU'nun sistem belleği; GPU VRAM ile kavramsal olarak ayrı. CPU'nun L1/L2'si GPU cache'leri değildir.</span></div>
+</div>
+<table class="cheat-symbol-table"><thead><tr><th>Bellek</th><th>Kim erişir?</th><th>Fiziksel yer / kontrol</th></tr></thead><tbody>
+<tr><td>Register</td><td>Tek thread</td><td>SM içinde, derleyici kullanır</td></tr>
+<tr><td>Local</td><td>Tek thread</td><td>Genellikle cihaz DRAM'inde; L1/L2 ile cache'lenebilir</td></tr>
+<tr><td>Shared (<code>__shared__</code>)</td><td>Aynı blok thread'leri</td><td>SM içinde, kod açıkça yükler/yazar</td></tr>
+<tr><td>L1 cache</td><td>SM'deki erişimler</td><td>Her SM'ye ait; donanım otomatik yönetir; bazı mimarilerde shared ile aynı fiziksel havuzu paylaşır</td></tr>
+<tr><td>L2 cache</td><td>GPU'daki tüm SM'ler</td><td>GPU çipindeki ortak daha büyük cache; donanım yönetir</td></tr>
+<tr><td>Global memory</td><td>Tüm cihaz thread'leri</td><td>GPU VRAM / cihaz DRAM'i</td></tr>
+<tr><td>Constant</td><td>Tüm cihaz thread'leri (okuma)</td><td>Salt okunur, özel constant cache'ten yararlanabilir</td></tr>
+</tbody></table>
+<p><strong>Cache hit</strong>: aranan veri cache'te bulunur. <strong>Cache miss</strong>: veri alt bellek seviyesinden istenir. Tipik fikir: register/shared ve cache çipe yakındır; VRAM daha büyük fakat daha yüksek gecikmelidir. <strong>Kesin kural değildir:</strong> L1/L2 boyutu, gecikmesi, L1/shared ayrımı ve hangi erişimlerin cache'lendiği GPU modeline bağlıdır. <code>L1 cache</code> ≠ <code>shared memory</code>: aynı fiziksel kaynak havuzunu kullanabilseler bile programlama davranışları farklıdır.</p>
+<p><strong>Ölçü birimleri:</strong> 1 B=8 bit; 1 KiB=1024 B; 1 MiB=1024 KiB; <code>float</code>=4 B; 32 float=128 B; <code>pitchBytes</code> satır başına gerçek bayt adımıdır (W×4 B'den büyük olabilir). <strong>32 B segment modeli</strong>, GPU L1/L2 cache line boyutuyla otomatik olarak aynı şey değildir.</p>
+<p class="cheat-sources">Kaynaklar: <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html">NVIDIA CUDA Programming Guide</a> · <a href="https://developer.nvidia.com/blog/cuda-refresher-cuda-programming-model">NVIDIA CUDA Refresher</a></p>
+</section>
 <section class="worked-guide"><h2 id="worked-examples">Kopya kâğıdına geçirmeden önce anlaman gereken çözümlü örnekler</h2>
 <p>Yukarıdaki iki A4 yüzü kısa tutuldu. Aşağıdaki örnekler hangi indeksin nereden geldiğini, hangi hücrenin boyanacağını ve kodun neden o şekilde yazıldığını adım adım gösterir. İşine yarayan açıklamaları kendi el yazınla kâğıda aktar, ardından sınavdaki ilgili soruyu çöz.</p>
-<div class="worked-examples"><article class="worked-example" data-worked-example="single-thread">
+<div class="worked-examples">
+<article class="worked-example worked-example-wide" data-worked-example="coalescing-trace">
+<h3>Coalescing: warp erişimleri ve transpose'ı tek tek say</h3>
+<pre class="worked-code"><code>// Warp: 32 threads; lane = 0..31; float=4 B
+// Assume base address aligned to 32 B.
+A[lane]       : offsets 0,4,...,124 B -&gt; 4 segments =128 B
+A[lane+1]     : offsets 4,8,...,128 B -&gt; 5 segments =160 B
+A[2*lane]     : offsets 0,8,...,248 B -&gt; 8 segments =256 B
+A[8*lane]     : offsets 0,32,...,992 B -&gt; 32 segments =1024 B
+A[1024*lane]  : offsets 0,4096,... -&gt; 32 segments =1024 B
+// Actual cache hits and transaction counts depend on GPU.
+// Row-major matrix: A[row*W+col] (W = column count)
+// x-neighbor threads -&gt; col+1 -&gt; +4 B: contiguous.
+// Naive transpose: B[col*H+row] (H = output width)
+// x-neighbor threads -&gt; col+1 -&gt; +4*H B: strided.</code></pre>
+<div class="worked-explanation"><p><strong>32 thread × 4 B = 128 B faydalı veri.</strong> Ardışık <code>A[lane]</code> erişimi 32 B hizalı dört segmente dokunur (4×32=128 B). Her ikinci eleman <code>A[2*lane]</code> sekiz segmente (256 B), çok uzak adresler <code>A[1024*lane]</code> ise 32 ayrı segmente (1024 B) dokunur. <strong>Bu, gerçek cache-line boyutu veya kesin GPU transaction sayısı değildir.</strong></p>
+<p><strong>Matris adresi:</strong> <code>A[row*W+col]</code>, burada W=matris sütun sayısı. Komşu x-thread <code>col</code> değerini 1 artırınca adres +4 bayt ilerler. <strong>Transpose:</strong> A'nın boyutu H×W ise B'nin boyutu W×H olur; yazma <code>B[col*H+row]</code>. Ardışık x-thread'lerde B adresi +4×H bayt zıplar. Coalescing kötüleşebilir.</p>
+<p><strong>Cache ile fark:</strong> Coalescing warp'ın adres düzenidir; L1/L2 cache hit/miss donanımda verinin bulunma durumudur. Bunlar aynı kavram değildir. <code>pitchBytes</code> hizalı satır adımıdır, float adres hesabında önce bayt eklenir.</p></div>
+<details class="worked-self-check"><summary>Hızlı kontrol: transpose ve bellek</summary><p>H=3, W=4, row=1, col=2 ise giriş A[1*4+2]=A[6], çıkış B[2*3+1]=B[7]. L1 cache her SM'de, L2 cache tüm SM'ler arasında ortaktır.</p></details>
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="lock-timeline">
+<h3>Mutex neyi önler? Bir sayaç üzerinde iki thread</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+std::mutex m; // shared lock
+int counter=0; // shared data
+void increment(){
+  std::lock_guard&lt;std::mutex&gt; hold(m); // lock
+  ++counter; // protected critical section
+} // hold destroyed =&gt; unlock</code></pre>
+<div class="worked-explanation"><p><strong>Adım adım:</strong> (1) <code>counter=0</code>. (2) T0 <code>m</code> mutex'ini kilitler. (3) T1 aynı <code>m</code> için bekler. (4) T0 <code>counter++</code> ile 1 yazar, scope sonunda lock_guard açar. (5) T1 kilidi alır, 2 yazar. <strong>Sonuç 2.</strong> Mutex yoksa iki thread 0 okuyup 1 yazabilir; C++'ta veri yarışı tanımsız davranıştır.</p>
+<p><strong>Değişkenler:</strong> <code>m</code>=tek sahipli mutex; <code>counter</code>=iki thread'in paylaştığı tamsayı; <code>hold</code>=RAII koruyucu nesne; <code>lock_guard</code> kapsam bittiğinde kilidi bırakır. <code>lock</code> kilidi alır, <code>unlock</code> bırakır; lock_guard bunları senin adına yönetir.</p></div>
+
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="producer-consumer">
+<h3>Producer–consumer: mutex, condition_variable ve semafor</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+#include &lt;condition_variable&gt;
+#include &lt;queue&gt;
+std::mutex m;
+std::condition_variable cv;
+std::queue&lt;int&gt; q; bool finished=false;
+void produce(int value) {
+  { std::lock_guard&lt;std::mutex&gt; lock(m);
+    q.push(value); }
+  cv.notify_one();
+}
+int consume() {
+  std::unique_lock&lt;std::mutex&gt; lock(m);
+  cv.wait(lock, [] { return !q.empty() || finished; });
+  if(q.empty()) return -1; // finished, no work
+  int v=q.front(); q.pop(); return v;
+}
+// When ending, set finished=true WITH m locked,
+// then cv.notify_all(). -1 is the end marker.</code></pre>
+<div class="worked-explanation"><p><strong>Producer</strong> (üretici) <code>value</code>'yu kuyruğa (<code>q</code>) ekler; mutex <code>m</code> kuyruğu korur; <code>cv.notify_one()</code> bekleyen tüketicilerden birini haberdar eder. <strong>Consumer</strong> (tüketici) <code>cv.wait(lock, koşul)</code> yapar: beklerken mutex'i bırakır, uyanınca yeniden kilitler ve koşulu kontrol eder. Böylece boş kuyruğu okuyup hata yapmaz.</p>
+<p><strong>Değişkenler:</strong> <code>q</code>=FIFO kuyruk, <code>m</code>=mutex, <code>cv</code>=condition variable, <code>finished</code>=üretim bitti mi, <code>v</code>=tüketilen değer. <code>unique_lock</code>, wait'ın kilidi bırakıp yeniden alabilmesi için gerekir. <code>std::counting_semaphore&lt;3&gt; permits(3)</code> ise en çok 3 işi eşzamanlı içeri alır; tek başına <code>q</code> veya <code>counter</code> korumaz.</p>
+<pre class="worked-code"><code>#include &lt;semaphore&gt;
+#include &lt;mutex&gt;
+std::counting_semaphore&lt;3&gt; permits(3); // 3 slots
+std::mutex m; int counter=0;
+void job(){
+  permits.acquire(); // 3 jobs may enter
+  { std::lock_guard&lt;std::mutex&gt; guard(m);
+    ++counter; } // only 1 writes at a time
+  doWorkNoThrow(); // illustrative: no exception
+  permits.release(); // return slot
+}</code></pre></div>
+
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="deadlock">
+<h3>Deadlock, starvation, livelock ve çözümü</h3>
+<pre class="worked-code"><code>std::mutex m1, m2;
+// Bad: T0 locks m1 -&gt; waits m2
+//      T1 locks m2 -&gt; waits m1
+void safe(){ std::scoped_lock both(m1,m2);
+  // both locks acquired without circular wait
+}
+// std::unique_lock is movable and supports
+// unlock()/lock(); used by condition_variable.</code></pre>
+<div class="worked-explanation"><p><strong>Deadlock:</strong> T0, <code>m1</code>'i tuttuğu sırada <code>m2</code>'yi bekler; T1 <code>m2</code>'yi tutarken <code>m1</code>'i bekler. İkisi de ilerleyemez. <code>std::scoped_lock both(m1,m2)</code> iki mutex'i deadlock'tan kaçınan kilitleme mekanizmasıyla edinir. Alternatif: bütün thread'ler kilitleri tutarlı sırada alsın.</p>
+<p><strong>Starvation:</strong> bir thread sürekli CPU/kilit sırası alamaz. <strong>Livelock:</strong> thread'ler işlem yapar ama faydalı ilerleme olmaz. <code>unique_lock</code> hareket ettirilebilir ve geçici olarak açılabilir; <code>condition_variable::wait</code> ile kullanılır.</p></div>
+
+</article><article class="worked-example" data-worked-example="single-thread">
 <h3>1. Sabit thread ve for döngüsünde gerçekten hangi hücreler değişir?</h3>
 <pre class="worked-code"><code>H=6; W=8;
 blockIdx=(1,0); blockDim=(4,2); threadIdx=(2,1);
