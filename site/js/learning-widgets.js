@@ -50,7 +50,10 @@ function lesson(root,title,description,source){
      code));
  const heading=elt("div","learning-title",title);
  const intro=elt("p","learning-intro",description);
- const wrap=elt("section","learning-widget",heading,intro,frame);
+ const hint=elt("p","learning-ux-hint",
+   lang("Üzerine gel veya odaklan: önizle • Tıkla: seçimi sabitle • Kodu da seçebilirsin",
+     "Hover or focus: preview • Click: pin selection • Source code is interactive too"));
+ const wrap=elt("section","learning-widget",heading,intro,hint,frame);
  root.replaceWith(wrap);
  return {controls,figure,facts,
    onCode(fn){codeChanged=fn;},
@@ -62,38 +65,61 @@ function lesson(root,title,description,source){
 function matrix(host,R,C,events={},{value=(r,c)=>r*C+c}={}){
  const frame=elt("div","learning-matrix-wrap"),label=elt("div","learning-dim",`${R} × ${C}`),
    grid=elt("div","learning-matrix");
+ const status=h("span",{class:"visually-hidden","aria-live":"polite","aria-atomic":"true"});
  grid.style.gridTemplateColumns=`repeat(${C+1},minmax(0,1fr))`;
  const cells=[];
  const corner=elt("div","learning-axis learning-axis-corner","r\\c");
  grid.append(corner);
  for(let c=0;c<C;c++){
-   const b=h("button",{type:"button",class:"learning-axis",title:`col ${c}`},c);
+   const b=h("button",{type:"button",class:"learning-axis",title:`col ${c}`,
+     "aria-label":lang(`Sütun ${c}`,`Column ${c}`)},c);
    b.addEventListener("mouseenter",()=>events.preview?.(null,c,"col"));
    b.addEventListener("mouseleave",()=>events.clear?.());
    b.addEventListener("focus",()=>events.preview?.(null,c,"col"));
    b.addEventListener("blur",()=>events.clear?.());
-   b.addEventListener("click",()=>events.pickColumn?.(c));
+   b.addEventListener("click",()=>{events.pickColumn?.(c);
+     status.textContent=lang(`Sütun ${c} seçildi`,`Column ${c} selected`);});
    grid.append(b);
  }
  for(let r=0;r<R;r++){
-   const axis=h("button",{type:"button",class:"learning-axis",title:`row ${r}`},r);
+   const axis=h("button",{type:"button",class:"learning-axis",title:`row ${r}`,
+     "aria-label":lang(`Satır ${r}`,`Row ${r}`)},r);
    axis.addEventListener("mouseenter",()=>events.preview?.(r,null,"row"));
    axis.addEventListener("mouseleave",()=>events.clear?.());
    axis.addEventListener("focus",()=>events.preview?.(r,null,"row"));
    axis.addEventListener("blur",()=>events.clear?.());
-   axis.addEventListener("click",()=>events.pickRow?.(r));
+   axis.addEventListener("click",()=>{events.pickRow?.(r);
+     status.textContent=lang(`Satır ${r} seçildi`,`Row ${r} selected`);});
    grid.append(axis);
    for(let c=0;c<C;c++){
-     const b=h("button",{type:"button",class:"learning-cell","aria-label":`row ${r}, col ${c}`},value(r,c));
+     const b=h("button",{type:"button",class:"learning-cell",
+       "aria-label":lang(`Satır ${r}, sütun ${c}`,`Row ${r}, column ${c}`),
+       "aria-keyshortcuts":"ArrowUp ArrowDown ArrowLeft ArrowRight"},value(r,c));
      b.addEventListener("mouseenter",()=>events.preview?.(r,c,"cell"));
      b.addEventListener("mouseleave",()=>events.clear?.());
      b.addEventListener("focus",()=>events.preview?.(r,c,"cell"));
      b.addEventListener("blur",()=>events.clear?.());
-     b.addEventListener("click",()=>events.pick?.(r,c));
+     b.addEventListener("click",()=>{
+       events.pick?.(r,c);
+       status.textContent=lang(`Satır ${r}, sütun ${c} seçildi`,
+         `Row ${r}, column ${c} selected`);
+     });
+     b.addEventListener("keydown",event=>{
+       const delta={ArrowRight:[0,1],ArrowLeft:[0,-1],ArrowDown:[1,0],ArrowUp:[-1,0]}[event.key];
+       if(!delta)return;
+       event.preventDefault();
+       const nr=Math.max(0,Math.min(R-1,r+delta[0]));
+       const nc=Math.max(0,Math.min(C-1,c+delta[1]));
+       const next=cells.find(item=>item.r===nr&&item.c===nc);
+       next?.b.focus();
+     });
      grid.append(b);cells.push({r,c,b});
    }
  }
- frame.append(label,grid);host.append(frame);
+ const scrollHint=elt("p","learning-scroll-hint",
+   lang("Geniş matriste yatay kaydır • Klavyede ok tuşlarıyla hücreler arasında gez",
+     "Scroll wide matrices horizontally • Use arrow keys to navigate cells"));
+ frame.append(label,grid,status);host.append(frame,scrollHint);
  return {cells,mark(fn){
    for(const {r,c,b} of cells){
      const styles=fn(r,c)||[];
