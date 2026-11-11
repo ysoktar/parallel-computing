@@ -43,9 +43,8 @@ id2D = threadIdx.y * blockDim.x + threadIdx.x
 warp = id2D/32 ; lane = id2D%32
 id3D = tz*bdx*bdy + ty*bdx + tx
 grid = ((W+bx-1)/bx, (H+by-1)/by)
-covered = (gx*bx) cols × (gy*by) rows
 warp=32 threads ; block&lt;=1024 threads</pre>
-<p>x is column, y is row; integer division. Edge threads beyond bounds do not write.</p>
+<p>H=rows, W=columns; tx=threadIdx.x, ty=threadIdx.y, bx=blockDim.x, by=blockDim.y; blockIdx=block coordinates, blockDim=threads per block; warp=32 consecutive local IDs, lane=position (0–31). Integer division; guard edges.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="2">
 <h3>2. CUDA host skeleton</h3>
@@ -73,7 +72,7 @@ for (int m=0; m&lt;W/T; ++m) {
   __syncthreads();                // tile may be overwritten
 }
 P[row*W+col]=sum;</pre>
-<p>Naive: 2W global reads/output. Tiled: 2W/T/output; ideally T× fewer. Shared/block = 2·T²·4 B.</p>
+<p>W=matrix width, T=tile side (=blockDim.x=blockDim.y in this example); tx=threadIdx.x, ty=threadIdx.y; m=phase (tile number, starts at 0), k=inner tile multiplication index (0..T-1); Mds/Nds=shared tiles; sum=output accumulator. First sync waits for loads, second protects reuse.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="4">
 <h3>4. Worked launch: &lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</h3>
@@ -121,7 +120,7 @@ a[1024*lane] → 32 segments (1024 B)
 a[0] → 1 segment (broadcast)
 byte_addr = base + (row*pitchBytes) + col*4
 cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>Assumes aligned 32 B segments; actual GPU/cache transactions vary. Row-major A[row*W+col] is good for adjacent x-lanes. Pitch is in bytes.</p>
+<p>lane=thread position within warp (0..31), float=4 B; 32 B=example aligned segment, not a universal cache-line size. row/col=matrix coordinates; W=columns; pitchBytes=physical row stride in BYTES, may be greater than W*4. Hardware cache affects transactions.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: access direction</h3>
@@ -133,7 +132,7 @@ shared (T=32, block=32×32):
 tile[ty][tx] = A[(by*T+ty)*N + bx*T+tx];
 __syncthreads();
 B[(bx*T+ty)*N + (by*T+tx)] = tile[tx][ty];</pre>
-<p>A shared tile can coalesce both reads and writes; track tile[y][x] versus tile[x][y].</p>
+<p>bx=blockIdx.x, by=blockIdx.y (block coordinates); tx=threadIdx.x, ty=threadIdx.y (thread within block); T=tile width, N=matrix width. A→B swaps row/col. Adjacent x-threads can read contiguously, but naive writes jump by N elements.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="9">
 <h3>9. Numerical questions / CGMA</h3>
@@ -149,14 +148,17 @@ BW-limited GFLOPS ≈ BW(GB/s)*ops/byte</pre>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="10">
 <h3>10. Memory types (scope / lifetime)</h3>
-<pre class="copy-sheet-code">register   : thread / thread ; fast, limited
-local      : thread / thread ; device memory, spills
-shared     : block / block   ; on-chip, sync for exchange
-global     : device threads / allocation lifetime ; DRAM
-constant   : all blocks / context ; cached, same address fast
-cudaMalloc → global allocation ; __shared__ → one array/block
-__constant__ : cudaMemcpyToSymbol()</pre>
-<p>Local does not mean fast; spilled registers may use device memory.</p>
+<pre class="copy-sheet-code">register  : per-thread values, SM register file
+local     : private/thread; spills in device DRAM
+shared    : one allocation/block, on-chip SM
+L1 cache  : one per SM, automatic hardware cache
+L2 cache  : shared across all SMs, automatic
+global    : device DRAM/VRAM, all device threads
+constant  : device read-only, constant cache
+CPU RAM   : host memory; distinct from GPU VRAM
+L1/shared can share SM on-chip capacity (GPU-dependent)
+1 KiB=1024 B; float=4 B; 32 floats=128 B</pre>
+<p>Scope ≠ physical location: local is thread-private but uses device memory, not fast shared memory. Caches are automatic copies of data; __shared__ is explicitly programmed. L1/L2 capacity and hit behavior vary by GPU.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="11">
 <h3>11. nvcc / unrolling</h3>
@@ -189,7 +191,7 @@ data race: unsynchronised conflicting accesses, &gt;=1 write
 mutex: mutual exclusion/ownership ; semaphore: permits
 deadlock: wait forever; livelock: moving no progress
 starvation: one participant never proceeds</pre>
-<p>Amdahl fixes problem size; Gustafson scales workload at fixed time. A C/C++ data race is undefined behaviour.</p>
+<p>Amdahl: f=parallelizable fraction of fixed problem, N=worker count, S=speedup. Gustafson: a=parallel execution-time fraction, N=workers. N here is NOT matrix width. Mutex=one owner; semaphore=permit count; race=unprotected conflicting access.</p>
 </section></div>
 <footer class="copy-sheet-foot">2/2 · Check dimensions before memory accesses.</footer>
 </article>
