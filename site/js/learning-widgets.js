@@ -2,6 +2,7 @@
 // Hover/focus previews, click pins; hovering a source line highlights the corresponding data.
 import { h, highlightC } from "./lib/ui.js";
 import { newBarrier, stepBarrier } from "./exam-model.js";
+import { createHoverGrace } from "./hover-grace.js";
 import { t } from "./lib/i18n.js";
 import { amdahl, matrixIndex, cudaCell, haloCell, raceInit, raceStep,
   tiledLoads, pitchedCell, transposeCell, warpSegments, cuda3dIndex } from "./learning-model.js";
@@ -25,15 +26,16 @@ function lesson(root,title,description,source){
  const code=h("pre",{class:"learning-code"},h("code"));
  const codeRoot=code.firstChild;
  let codeChanged=()=>{},hoverRole=null,lockedRole=null,activeRoles=[];
+ const hoverGrace=createHoverGrace();
  const codeLines=source.map((line,i)=>{
    const b=h("button",{class:"learning-code-line",type:"button","data-role":line.role||"generic",
      title:lang("Üzerine gelerek bağlı görselleştirmeyi vurgula","Hover to highlight the corresponding visualization")},
      h("span",{class:"learning-line-no"},String(i+1).padStart(2,"0")),
      h("span",{class:"learning-code-src",html:highlightC(line.code)}));
-   b.addEventListener("mouseenter",()=>{hoverRole=line.role;codeChanged(hoverRole);refresh();});
-   b.addEventListener("mouseleave",()=>{hoverRole=null;codeChanged(lockedRole);refresh();});
-   b.addEventListener("focus",()=>{hoverRole=line.role;codeChanged(hoverRole);refresh();});
-   b.addEventListener("blur",()=>{hoverRole=null;codeChanged(lockedRole);refresh();});
+   b.addEventListener("mouseenter",()=>hoverGrace.enter(()=>{hoverRole=line.role;codeChanged(hoverRole);refresh();}));
+   b.addEventListener("mouseleave",()=>hoverGrace.leave(()=>{hoverRole=null;codeChanged(lockedRole);refresh();}));
+   b.addEventListener("focus",()=>hoverGrace.enter(()=>{hoverRole=line.role;codeChanged(hoverRole);refresh();}));
+   b.addEventListener("blur",()=>hoverGrace.leave(()=>{hoverRole=null;codeChanged(lockedRole);refresh();}));
    b.addEventListener("click",()=>{lockedRole=lockedRole===line.role?null:line.role;codeChanged(lockedRole);refresh();});
    codeRoot.append(b);return b;
  });
@@ -62,7 +64,9 @@ function lesson(root,title,description,source){
 }
 // Generates labelled rows and columns with keyboard-accessible, clickable cells.
 // Reuses the nodes on hover (no hover-triggered DOM removal).
-function matrix(host,R,C,events={},{value=(r,c)=>r*C+c}={}){
+function matrix(host,R,C,events={},{value=(r,c)=>r*C+c,hoverGrace=createHoverGrace()}={}){
+ const show=(row,col,axis)=>hoverGrace.enter(()=>events.preview?.(row,col,axis));
+ const hide=()=>hoverGrace.leave(()=>events.clear?.());
  const frame=elt("div","learning-matrix-wrap"),label=elt("div","learning-dim",`${R} × ${C}`),
    grid=elt("div","learning-matrix");
  const status=h("span",{class:"visually-hidden","aria-live":"polite","aria-atomic":"true"});
@@ -73,10 +77,10 @@ function matrix(host,R,C,events={},{value=(r,c)=>r*C+c}={}){
  for(let c=0;c<C;c++){
    const b=h("button",{type:"button",class:"learning-axis",title:`col ${c}`,
      "aria-label":lang(`Sütun ${c}`,`Column ${c}`)},c);
-   b.addEventListener("mouseenter",()=>events.preview?.(null,c,"col"));
-   b.addEventListener("mouseleave",()=>events.clear?.());
-   b.addEventListener("focus",()=>events.preview?.(null,c,"col"));
-   b.addEventListener("blur",()=>events.clear?.());
+   b.addEventListener("mouseenter",()=>show(null,c,"col"));
+   b.addEventListener("mouseleave",hide);
+   b.addEventListener("focus",()=>show(null,c,"col"));
+   b.addEventListener("blur",hide);
    b.addEventListener("click",()=>{events.pickColumn?.(c);
      status.textContent=lang(`Sütun ${c} seçildi`,`Column ${c} selected`);});
    grid.append(b);
@@ -84,10 +88,10 @@ function matrix(host,R,C,events={},{value=(r,c)=>r*C+c}={}){
  for(let r=0;r<R;r++){
    const axis=h("button",{type:"button",class:"learning-axis",title:`row ${r}`,
      "aria-label":lang(`Satır ${r}`,`Row ${r}`)},r);
-   axis.addEventListener("mouseenter",()=>events.preview?.(r,null,"row"));
-   axis.addEventListener("mouseleave",()=>events.clear?.());
-   axis.addEventListener("focus",()=>events.preview?.(r,null,"row"));
-   axis.addEventListener("blur",()=>events.clear?.());
+   axis.addEventListener("mouseenter",()=>show(r,null,"row"));
+   axis.addEventListener("mouseleave",hide);
+   axis.addEventListener("focus",()=>show(r,null,"row"));
+   axis.addEventListener("blur",hide);
    axis.addEventListener("click",()=>{events.pickRow?.(r);
      status.textContent=lang(`Satır ${r} seçildi`,`Row ${r} selected`);});
    grid.append(axis);
@@ -95,10 +99,10 @@ function matrix(host,R,C,events={},{value=(r,c)=>r*C+c}={}){
      const b=h("button",{type:"button",class:"learning-cell",
        "aria-label":lang(`Satır ${r}, sütun ${c}`,`Row ${r}, column ${c}`),
        "aria-keyshortcuts":"ArrowUp ArrowDown ArrowLeft ArrowRight"},value(r,c));
-     b.addEventListener("mouseenter",()=>events.preview?.(r,c,"cell"));
-     b.addEventListener("mouseleave",()=>events.clear?.());
-     b.addEventListener("focus",()=>events.preview?.(r,c,"cell"));
-     b.addEventListener("blur",()=>events.clear?.());
+     b.addEventListener("mouseenter",()=>show(r,c,"cell"));
+     b.addEventListener("mouseleave",hide);
+     b.addEventListener("focus",()=>show(r,c,"cell"));
+     b.addEventListener("blur",hide);
      b.addEventListener("click",()=>{
        events.pick?.(r,c);
        status.textContent=lang(`Satır ${r}, sütun ${c} seçildi`,
@@ -151,6 +155,7 @@ function mountAmdahl(root){
    {role:"result",code:"double speedup = 1.0 / (serial + parallel);"}
  ]);
  let fraction=80,workers=4,role=null;
+ const barHover=createHoverGrace();
  const slider=h("input",{type:"range",min:0,max:100,value:80,"aria-label":lang("Paralel yüzde","Parallel percentage")});
  const pick=number("N",4,1,64,v=>{workers=v;render();});
  slider.addEventListener("input",()=>{fraction=Number(slider.value);render();});
@@ -166,10 +171,10 @@ function mountAmdahl(root){
    p.light(role?[role]:[]);
  }
  for(const [el,kind] of [[serial,"serial"],[parallel,"parallel"]]){
-   el.addEventListener("mouseenter",()=>{role=kind;emphasize();});
-   el.addEventListener("mouseleave",()=>{role=null;emphasize();});
-   el.addEventListener("focus",()=>{role=kind;emphasize();});
-   el.addEventListener("blur",()=>{role=null;emphasize();});
+   el.addEventListener("mouseenter",()=>barHover.enter(()=>{role=kind;emphasize();}));
+   el.addEventListener("mouseleave",()=>barHover.leave(()=>{role=null;emphasize();}));
+   el.addEventListener("focus",()=>barHover.enter(()=>{role=kind;emphasize();}));
+   el.addEventListener("blur",()=>barHover.leave(()=>{role=null;emphasize();}));
  }
  const check=button(lang("Tahmini kontrol et","Check prediction"),()=>{
    const answer=amdahl(fraction/100,workers).speedup;
@@ -341,7 +346,7 @@ function mountTile(root){
   {role:"barrier",code:"__syncthreads();"},
   {role:"index",code:"P[Row * W + Col] = sum;"}
  ]);
- const s={phase:0,pinned:{r:1,c:6},hover:null,role:null};
+ const s={phase:0,pinned:{r:1,c:6},hover:null,role:null,hoverGrace:createHoverGrace()};
  const selector=options(lang("Faz","Phase"),[[0,"0"],[1,"1"]],0,v=>{s.phase=Number(v);render();});
  p.controls.append(selector.el);
  const panels=elt("div","learning-matrices");p.figure.append(panels);
@@ -358,7 +363,7 @@ function mountTile(root){
       preview:(r,c,axis)=>{if(type==="M"&&r!==null)hover(r,s.pinned.c,axis==="col"?"col":"row");
         else if(type==="N"&&c!==null)hover(s.pinned.r,c,axis==="row"?"row":"col");},
       clear
-    },{value:(r,c)=>`${r},${c}`});
+    },{value:(r,c)=>`${r},${c}`,hoverGrace:s.hoverGrace});
   panels.append(host);
  }
  function render(){
@@ -438,17 +443,17 @@ function mountCoalesce(root){
   {role:"address",code:"float x = a[offset + lane * stride];"},
   {role:"segment",code:"// aligned 32-byte segments touched by the warp"}
  ]);
- const s={stride:1,offset:0,pinned:4,hover:null,role:null};
+ const s={stride:1,offset:0,pinned:4,hover:null,role:null,hoverGrace:createHoverGrace()};
  const stride=options("stride",[[1,"1"],[2,"2"],[8,"8"],[1024,"1024"]],1,v=>{s.stride=Number(v);render();});
  const offset=number("offset",0,0,8,v=>{s.offset=v;render();});
  p.controls.append(stride.el,offset.el);
  const lanes=elt("div","learning-lanes");p.figure.append(lanes);
  const btns=Array.from({length:32},(_,i)=>{
    const b=h("button",{type:"button",class:"learning-lane"},String(i));
-   b.addEventListener("mouseenter",()=>{s.hover=i;render();});
-   b.addEventListener("mouseleave",()=>{s.hover=null;render();});
-   b.addEventListener("focus",()=>{s.hover=i;render();});
-   b.addEventListener("blur",()=>{s.hover=null;render();});
+   b.addEventListener("mouseenter",()=>s.hoverGrace.enter(()=>{s.hover=i;render();}));
+   b.addEventListener("mouseleave",()=>s.hoverGrace.leave(()=>{s.hover=null;render();}));
+   b.addEventListener("focus",()=>s.hoverGrace.enter(()=>{s.hover=i;render();}));
+   b.addEventListener("blur",()=>s.hoverGrace.leave(()=>{s.hover=null;render();}));
    b.addEventListener("click",()=>{s.pinned=i;render();});
    lanes.append(b);return b;
  });
@@ -483,6 +488,7 @@ function mountTranspose(root){
   {role:"write",code:"B[col * N + row] = value;"}
  ]);
  let pinned={r:2,c:3},hover=null,role=null;
+ const hoverGrace=createHoverGrace();
  const pair=elt("div","learning-matrices"),original=elt("div","learning-tile-matrix"),
    target=elt("div","learning-tile-matrix");
  original.append(elt("strong","learning-matrix-name","A"));
@@ -494,12 +500,12 @@ function mountTranspose(root){
   pick:(r,c)=>{pinned={r,c};render();},
   pickRow:r=>{pinned.r=r;render();},
   pickColumn:c=>{pinned.c=c;render();}
- },{value:(r,c)=>r*6+c});
+ },{value:(r,c)=>r*6+c,hoverGrace});
  const to=matrix(target,6,6,{
   preview:(r,c,axis)=>{hover={r:c??pinned.r,c:r??pinned.c,axis:axis==="row"?"col":axis==="col"?"row":"cell"};render();},
   clear:()=>{hover=null;render();},
   pick:(r,c)=>{pinned={r:c,c:r};render();}
- },{value:(r,c)=>c*6+r});
+ },{value:(r,c)=>c*6+r,hoverGrace});
  p.onCode(v=>{role=v;render();});
  function render(){
   const view=hover||pinned,x=transposeCell(6,view.r,view.c);
@@ -526,6 +532,7 @@ function mountBarrier(root){
    {role:"read",code:"int next = tile[(threadIdx.x + 1) % 4];"}
  ]);
  let state=newBarrier(true),selected=0,hover=null,role=null;
+ const hoverGrace=createHoverGrace();
  const switcher=h("input",{type:"checkbox",checked:true,"aria-label":lang("Bariyer etkin","Barrier enabled")});
  const panel=elt("div","learning-barrier-lanes");
  const reset=()=>{state=newBarrier(switcher.checked);render();};
@@ -534,10 +541,10 @@ function mountBarrier(root){
    button(lang("Sıfırla","Reset"),reset));
  const lanes=Array.from({length:4},(_,i)=>{
   const b=h("button",{type:"button",class:"learning-barrier-lane"});
-  b.addEventListener("mouseenter",()=>{hover=i;render();});
-  b.addEventListener("mouseleave",()=>{hover=null;render();});
-  b.addEventListener("focus",()=>{hover=i;render();});
-  b.addEventListener("blur",()=>{hover=null;render();});
+  b.addEventListener("mouseenter",()=>hoverGrace.enter(()=>{hover=i;render();}));
+  b.addEventListener("mouseleave",()=>hoverGrace.leave(()=>{hover=null;render();}));
+  b.addEventListener("focus",()=>hoverGrace.enter(()=>{hover=i;render();}));
+  b.addEventListener("blur",()=>hoverGrace.leave(()=>{hover=null;render();}));
   b.addEventListener("click",()=>{selected=i;state=stepBarrier(state,i);render();});
   panel.append(b);return b;
  });

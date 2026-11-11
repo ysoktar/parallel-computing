@@ -1116,3 +1116,65 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
 .learning-code-line { white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; width:100%; align-items:flex-start; }
 .learning-code-src { min-width:0; width:100%; overflow-wrap:anywhere; white-space:pre-wrap; }
 .learning-code-src span { white-space:inherit; }
+
+
+/* Completed two-sided A4 handwriting reference; no printed sheet is permitted in the exam. */
+.copy-ready { --copy-zoom:1; max-width:100%; margin:1rem 0 2rem; }
+.copy-ready-note { font-size:.92rem; color:var(--text-2); max-width:78ch; }
+.copy-sheet-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  margin:12px 0 16px; padding:10px; background:var(--surface-2); border:1px solid var(--border);
+  border-radius:8px; }
+.copy-sheet-controls button { font:600 .88rem var(--font); min-height:42px; padding:8px 14px;
+  background:var(--surface); border:1px solid var(--border-strong); border-radius:7px;
+  color:var(--text); cursor:pointer; }
+.copy-sheet-controls button[aria-pressed="true"] { color:var(--accent-ink); background:var(--accent); border-color:var(--accent); }
+.copy-sheet-controls label { display:flex; align-items:center; gap:9px; margin-left:auto; font-size:.84rem; }
+.copy-sheet-controls input { accent-color:var(--accent); width:110px; }
+.copy-sheet-controls output { min-width:4ch; font:600 .8rem var(--mono); }
+.copy-sheet-pair { display:grid; grid-template-columns:minmax(0,1fr); justify-items:center; gap:22px; }
+.copy-sheet-page { width:min(100%,210mm); min-height:297mm; padding:10mm;
+  background:#fff; border:1px solid #bfc7c1; color:#151d18;
+  box-shadow:0 3px 20px rgba(0,0,0,.12); font-size:calc(13px * var(--copy-zoom));
+  font-family:Arial,"Segoe UI",sans-serif; line-height:1.24; overflow-wrap:anywhere; }
+.copy-sheet-page[hidden] { display:none !important; }
+.copy-sheet-page-head { display:flex; justify-content:space-between; gap:12px;
+  padding:0 0 6px; border-bottom:2px solid #385c3c; align-items:baseline; }
+.copy-sheet-page-head strong { font-size:1.24em; letter-spacing:.025em; }
+.copy-sheet-page-head span { font-size:.89em; color:#546359; white-space:nowrap; }
+.copy-sheet-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 9px;
+  margin-top:8px; align-content:start; }
+.copy-sheet-card { padding:6px 7px; border:1px solid #cad5c9; border-left:3px solid #507454;
+  min-width:0; background:#fff; break-inside:avoid; }
+.copy-sheet-card.wide { grid-column:1 / -1; }
+.copy-sheet-card h3 { font:700 1.02em/1.18 Arial,"Segoe UI",sans-serif;
+  margin:0 0 5px; color:#173a21; }
+.copy-sheet-card p { margin:5px 0 0; font-size:.91em; line-height:1.3; color:#404c40; }
+.copy-sheet-code { font:calc(11.8px * var(--copy-zoom))/1.22 var(--mono);
+  border:0; border-radius:0; background:transparent; color:#181e19; margin:0;
+  padding:0; white-space:pre-wrap; overflow-wrap:anywhere; overflow:visible; }
+.copy-sheet-foot { margin-top:8px; border-top:1px solid #cad5c9; padding-top:6px;
+  color:#566458; font-size:.87em; text-align:right; }
+@media(max-width:680px) {
+  .copy-sheet-page { width:100%; min-height:0; padding:14px;
+    font-size:calc(13px * var(--copy-zoom)); }
+  .copy-sheet-page-head { flex-wrap:wrap; }
+  .copy-sheet-grid { grid-template-columns:minmax(0,1fr); gap:8px; }
+  .copy-sheet-card { padding:8px 9px; }
+  .copy-sheet-code { font-size:calc(12px * var(--copy-zoom)); }
+  .copy-sheet-controls label { margin-left:0; flex-basis:100%; }
+}
+@media print {
+  @page { size:A4; margin:0; }
+  body[data-page="cheatsheet"] .content > :not(.copy-ready) { display:none !important; }
+  body[data-page="cheatsheet"] .copy-ready { display:block !important; margin:0; }
+  body[data-page="cheatsheet"] .copy-ready-note,
+  body[data-page="cheatsheet"] .copy-sheet-controls { display:none !important; }
+  body[data-page="cheatsheet"] .copy-sheet-pair { display:block; }
+  body[data-page="cheatsheet"] .copy-sheet-page,
+  body[data-page="cheatsheet"] .copy-sheet-page[hidden] {
+    display:block !important; box-shadow:none; border:0; border-radius:0;
+    width:210mm; height:297mm; min-height:297mm; max-height:297mm; padding:9mm;
+    font-size:10.4px; overflow:hidden; break-after:page; page-break-after:always;
+  }
+  body[data-page="cheatsheet"] .copy-sheet-code { font-size:9.3px; }
+}
