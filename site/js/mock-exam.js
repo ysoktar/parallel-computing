@@ -177,7 +177,11 @@ function makeGrid(question,entry,onChange){
 }
 function makeQuestion(question,i){
  const entry=safeEntry(question);
- const card=h("section",{class:"mock-question",id:"question-"+question.id,"data-question":question.id});
+ // Use static HTML anchors so cheat-sheet deep links work before and after JS initializes.
+ const card=root.querySelector("#question-"+question.id)||
+   h("section",{class:"mock-question",id:"question-"+question.id});
+ card.className="mock-question";
+ card.setAttribute("data-question",question.id);
  const top=node("div","mock-question-head",
   node("span","mock-question-number",String(i+1).padStart(2,"0")),
   node("div","mock-question-title",
