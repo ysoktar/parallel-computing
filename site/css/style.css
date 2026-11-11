@@ -1216,10 +1216,19 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
 .mock-code-interactive { cursor:pointer; }
 .mock-code-interactive:hover,.mock-code-interactive:focus-visible {
   border-left-color:var(--accent); background:var(--accent-wash); outline:0; }
-.mock-inline-input { font:inherit; line-height:1.35; width:auto; max-width:min(28ch,100%);
-  min-height:34px; padding:4px 5px; margin:1px 4px;
+.mock-inline-input { font:inherit; line-height:1.35; width:22ch; min-width:22ch; max-width:none;
+  min-height:39px; height:2.6em; padding:6px 9px; margin:2px 4px;
+  resize:horizontal; overflow-x:auto; overflow-y:hidden; white-space:pre;
   color:var(--text); background:var(--surface); border:1px solid var(--border-strong);
-  border-bottom:2px solid var(--accent); border-radius:4px; vertical-align:baseline; }
+  border-bottom:2px solid var(--accent); border-radius:5px; vertical-align:middle; }
+.mock-inline-input.is-expanded { width:min(64ch,calc(100vw - 6rem)); min-height:46px; }
+.mock-field-expand { display:inline-grid; place-items:center; vertical-align:middle; cursor:pointer;
+  min-width:38px; min-height:39px; padding:3px 8px; margin:0 2px;
+  border:1px solid var(--border-strong); border-radius:5px;
+  font-size:1.18rem; color:var(--text); background:var(--surface);
+  touch-action:manipulation; }
+.mock-field-expand[aria-expanded="true"] { border-color:var(--accent); background:var(--accent-wash); }
+.mock-field-expand:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
 .mock-inline-input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 .mock-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(330px,1fr);
   align-items:start; gap:15px; min-width:0; }
@@ -1277,7 +1286,9 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
  .mock-question-head { gap:8px; }
  .mock-question-title h2 { font-size:.98rem; }
  .mock-grid-cell,.mock-grid-axis { min-width:44px; height:44px; }
- .mock-inline-input { max-width:min(23ch,90%); }
+ .mock-inline-input { width:22ch; max-width:none; font-size:.78rem; }
+ .mock-field-expand { min-width:44px; min-height:44px; }
+ .mock-code-body { line-height:2.4; }
  .mock-action { min-height:44px; }
  .mock-code-line { font-size:.75rem; padding-inline:6px; }
  .mock-jump-button { min-height:44px; min-width:44px; }
