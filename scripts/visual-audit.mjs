@@ -37,6 +37,24 @@ try {
       const path=join(out,prefix+".png");
       await page.screenshot({path,fullPage:true,animations:"disabled"});
       entry.screenshot=path;
+      if(file==="cheatsheet.html"){
+        // Inspect each actual filled side, not only the default visible side.
+        const front=page.locator('.copy-sheet-page[data-sheet="front"]');
+        const back=page.locator('.copy-sheet-page[data-sheet="back"]');
+        entry.sheetCards=await page.locator("[data-copy-card]").count();
+        if(entry.sheetCards!==13)entry.scriptErrors.push("Expected 13 filled cheat-sheet sections");
+        await page.locator('[data-copy-view="front"]').click();
+        await front.screenshot({path:join(out,prefix+"-copy-front.png"),animations:"disabled"});
+        await page.locator('[data-copy-view="back"]').click();
+        await back.screenshot({path:join(out,prefix+"-copy-back.png"),animations:"disabled"});
+        const dims=await back.evaluate(el=>{
+          const rect=el.getBoundingClientRect();
+          return {width:rect.width,height:rect.height,scrollHeight:el.scrollHeight};
+        });
+        entry.sheetRatio=Number((dims.height/dims.width).toFixed(3));
+        entry.sheetBodyOverflow=Math.max(0,Math.ceil(dims.scrollHeight-dims.height));
+        await page.locator('[data-copy-view="both"]').click();
+      }
       if(entry.widgets){
         const widget=page.locator(".learning-widget").first();
         await widget.scrollIntoViewIfNeeded();
