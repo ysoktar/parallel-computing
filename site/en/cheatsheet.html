@@ -48,16 +48,19 @@ warp=32 threads ; block&lt;=1024 threads</pre>
 </section>
 <section class="copy-sheet-card" data-copy-card="2">
 <h3>2. CUDA host skeleton</h3>
-<pre class="copy-sheet-code">float *dA, *dB;
-cudaMalloc((void**)&amp;dA, bytes);
-cudaMalloc((void**)&amp;dB, bytes);
-cudaMemcpy(dA,hA,bytes,cudaMemcpyHostToDevice);
+<pre class="copy-sheet-code">float *dA, *dB; // GPU pointers
+size_t bytes=W*H*sizeof(float); // allocation
+cudaMalloc((void**)&amp;dA,bytes);
+cudaMalloc((void**)&amp;dB,bytes);
+cudaMemcpy(dA,hA,bytes,
+           cudaMemcpyHostToDevice);
 k&lt;&lt;&lt;grid,block&gt;&gt;&gt;(dA,dB,W);
-cudaGetLastError(); cudaDeviceSynchronize();
-cudaMemcpy(hB,dB,bytes,cudaMemcpyDeviceToHost);
-cudaFree(dA); cudaFree(dB);
-__global__: host→device, __device__: device→device</pre>
-<p>Kernel launch is asynchronous. Check H2D / D2H direction and byte count.</p>
+cudaGetLastError();
+cudaDeviceSynchronize();
+cudaMemcpy(hB,dB,bytes,
+           cudaMemcpyDeviceToHost);
+cudaFree(dA); cudaFree(dB);</pre>
+<p>dA/dB=device pointers; hA/hB=host arrays; bytes=total array size (W columns × H rows × 4 B). k=kernel name; grid=block count, block=threads per block. H2D/D2H are opposite copy directions.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="3">
 <h3>3. Tiled matmul: W×W, T×T, W % T = 0</h3>
@@ -105,23 +108,22 @@ s[t]=in[i]; __syncthreads();
 out[i]=s[B-1-t]; // reverse within block
 // reuse tile before loading next phase</pre>
 <p>Without the barrier, reading another thread's value may race. Blocks are independent.</p>
-</section></div>
+</section><section class="copy-sheet-card wide" data-copy-card="7">
+<h3>7. Global memory / coalescing / pitch</h3>
+<pre class="copy-sheet-code">32 lanes × float(4 B) = 128 B useful
+A[lane]        → 4×32 B = 128 B
+A[lane+1]      → 5×32 B = 160 B
+A[2*lane]      → 8×32 B = 256 B
+A[1024*lane]   → 32×32 B = 1024 B
+pitchBytes: row stride measured in bytes</pre>
+<p>lane=position in a 32-thread warp (0–31); W=matrix columns, A[row*W+col] is row-major; pitchBytes may exceed W*4. 32 B segments are a simplified aligned-access model, not guaranteed GPU cache-line sizes.</p>
+</section>
+</div>
 <footer class="copy-sheet-foot">1/2 · Compute coordinates, then trace code.</footer>
 </article>
 <article class="copy-sheet-page" data-sheet="back" aria-label="A4 back side">
 <header class="copy-sheet-page-head"><strong>BACK · MEMORY + PERFORMANCE</strong><span>BİL 455/533 · Midterm 2</span></header>
-<div class="copy-sheet-grid"><section class="copy-sheet-card wide" data-copy-card="7">
-<h3>7. Global memory / coalescing / pitch</h3>
-<pre class="copy-sheet-code">32 lanes × float(4 B) = 128 B requested
-aligned a[lane] → 4×32 B segments (128 B)
-a[lane+1] → 5 segments (160 B)
-a[2*lane] → 8 segments (256 B)
-a[1024*lane] → 32 segments (1024 B)
-a[0] → 1 segment (broadcast)
-byte_addr = base + (row*pitchBytes) + col*4
-cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>lane=thread position within warp (0..31), float=4 B; 32 B=example aligned segment, not a universal cache-line size. Row-major A[row*W+col]; row/col=matrix coordinates; W=columns; pitchBytes=physical row stride in BYTES, may be greater than W*4. Hardware cache affects transactions.</p>
-</section>
+<div class="copy-sheet-grid">
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: access direction</h3>
 <pre class="copy-sheet-code">// A and B: N×N, row-major
