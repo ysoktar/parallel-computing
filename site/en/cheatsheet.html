@@ -72,7 +72,7 @@ for (int m=0; m&lt;W/T; ++m) {
   __syncthreads();                // tile may be overwritten
 }
 P[row*W+col]=sum;</pre>
-<p>W=matrix width, T=tile side (=blockDim.x=blockDim.y in this example); tx=threadIdx.x, ty=threadIdx.y; m=phase (tile number, starts at 0), k=inner tile multiplication index (0..T-1); Mds/Nds=shared tiles; sum=output accumulator. First sync waits for loads, second protects reuse.</p>
+<p>W=matrix width, T=tile side (=blockDim.x=blockDim.y in this example); tx=threadIdx.x, ty=threadIdx.y; m=phase; phase=tile number (starting at 0), k=inner tile multiplication index (0..T-1); Mds/Nds=shared tiles; sum=output accumulator. First sync waits for loads, second protects reuse.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="4">
 <h3>4. Worked launch: &lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</h3>
