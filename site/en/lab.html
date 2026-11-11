@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/exam-lab.js"></script>
 </head>
 <body data-page="lab">
 <main><div class="content">
@@ -39,6 +40,20 @@
 <h2>Tiled matrix multiplication</h2>
 <p>Which block computes which tile, which elements arrive in shared memory in phase <code>m</code>, which element each thread loads. Code: <a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5</a>.</p>
 <div class="wgt-mount" data-widget="tiling"></div>
+
+
+<h2>New: Transpose thread tracer</h2>
+<p><strong>Exam scope:</strong> Trace which input element a thread reads and which output location it writes in naive and shared-memory transpose. After <code>__syncthreads()</code>, a thread can read a value another thread loaded into shared memory. Related to <a href="l5-cuda-kernels.html">Lecture 5</a>.</p>
+<div data-exam-widget="transpose"></div>
+
+<h2>New: __syncthreads() timeline</h2>
+<p>Advance four threads in different orders. See how the block barrier requires all participating threads to reach the synchronization point before their neighbours' shared data can be consumed. <strong>Without synchronization the actual GPU result is not guaranteed.</strong></p>
+<div data-exam-widget="barrier"></div>
+
+<h2>New: Inspect every warp member</h2>
+<p>The linear thread ID <code>threadIdx.y * blockDim.x + threadIdx.x</code> determines warp membership. Compare 8×32, 12×8, and 32×8 block shapes.</p>
+<div data-exam-widget="warp-shape"></div>
+<p class="wgt-sub">Shared-memory bank optimization is outside Midterm 2 scope.</p>
 
 <h2>Actually running CUDA code</h2>
 <p>Every code block on the site has a <strong>▶ Run</strong> button. Since a browser cannot run a compiler, a small helper program on your computer compiles and runs the code: C/C++ with <code>g++</code>/<code>clang++</code> on the CPU, CUDA with <code>nvcc</code> on the GPU.</p>
