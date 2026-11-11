@@ -120,7 +120,7 @@ a[1024*lane] → 32 segments (1024 B)
 a[0] → 1 segment (broadcast)
 byte_addr = base + (row*pitchBytes) + col*4
 cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>lane=warp içi thread sırası (0–31), float=4 B; 32 B=örnek hizalı bellek segmenti, her GPU'da cache-line boyutu demek değildir. row/col=matris koordinatları, W=sütun sayısı; pitchBytes=bayt cinsinden satır adımı, W*4'ten büyük olabilir. Gerçek işlemler cache'e bağlıdır.</p>
+<p>lane=warp içi thread sırası (0–31), float=4 B; 32 B=örnek hizalı bellek segmenti, her GPU'da cache-line boyutu demek değildir. Satır-major A[row*W+col]; row/col=matris koordinatları, W=sütun sayısı; pitchBytes=bayt cinsinden satır adımı, W*4'ten büyük olabilir. Gerçek işlemler cache'e bağlıdır.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: adresin yönü</h3>
