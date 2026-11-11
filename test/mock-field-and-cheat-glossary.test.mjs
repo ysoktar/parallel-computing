@@ -32,7 +32,7 @@ test("all A4 syntax symbols are defined near their relevant code in both languag
   const front=doc.slice(doc.indexOf('data-sheet="front"'),doc.indexOf('data-sheet="back"'));
   const back=doc.slice(doc.indexOf('data-sheet="back"'),doc.indexOf('id="copy-ready-end"'));
   for(const token of ["tx", "ty", "blockIdx", "blockDim", "row", "col", "W", "H", "N", "T", "phase", "lane"])
-    assert.match(front+back,new RegExp("(?<![A-Za-z])"+token+"\\\\s*(?:=|:|→)"),lang+" "+token);
+    assert.match(front+back,new RegExp("(?<![A-Za-z])"+token+"\\s*(?:=|:|→)"),lang+" "+token);
   assert.ok(doc.includes('data-worked-example="mutex-semaphore"'));
   assert.ok(doc.includes('data-worked-example="lock-timeline"'));
   assert.ok(doc.includes('data-worked-example="producer-consumer"'));
