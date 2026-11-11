@@ -1065,3 +1065,7 @@ pre.learning-code code { display:block; min-width:max-content; padding:0; }
 .learning-barrier-lane.is-active { background:var(--accent-wash); border-color:var(--accent); }
 .learning-barrier-lane.is-pinned { box-shadow:inset 3px 0 0 var(--critical); }
 .learning-barrier-lane:disabled { cursor:default; opacity:.7; }
+
+/* A matching 32-lane warp may span several matrix rows and Z slices. */
+.learning-cell.is-warp { box-shadow:inset 0 0 0 2px var(--s7); }
+.learning-cell.is-plane { border-color:var(--s7); }

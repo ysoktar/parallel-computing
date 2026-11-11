@@ -108,6 +108,8 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 
 <h3>Uygula: CUDA grid üzerinde indeks izleme</h3>
 <div data-learning="cuda-index"></div>
+<h3>Uygula: Z diliminde 3D thread indeksini izle</h3>
+<div data-learning="dim3-index"></div>
 <h2>Bloklar ve ölçeklenebilirlik</h2>
 <ul>
   <li>Thread blokları <strong>bağımsız çalışmak zorunda</strong>: herhangi bir sırada, paralel ya da seri çalıştırılabilmeli. Hangi bloğun hangi SM'de çalışacağını kontrol edemezsiniz. Bu sayede program SM sayısıyla <strong>ölçeklenir</strong>.</li>

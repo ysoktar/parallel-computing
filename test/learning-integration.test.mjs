@@ -7,7 +7,7 @@ const pages={
  "l1-intro.html":["amdahl"],
  "l2-design.html":["halo"],
  "l3-threads.html":["race"],
- "l4-cuda-intro.html":["cuda-index"],
+ "l4-cuda-intro.html":["cuda-index","dim3-index"],
  "l5-cuda-kernels.html":["cuda-index","barrier","tile"],
  "l6-cuda-memory.html":["pitch","coalesce-lanes"],
  "coalescing.html":["coalesce-lanes","transpose"],
