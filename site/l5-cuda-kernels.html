@@ -164,6 +164,8 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Uygula: thread kodu ve matris hücresi</h3>
 <div data-learning="cuda-index"></div>
 <h2>Senkronizasyon: <code>__syncthreads()</code></h2>
+<h3>Uygula: bariyeri kodla ve thread'lerle izle</h3>
+<div data-learning="barrier"></div>
 <ul>
   <li>Aynı bloktaki thread'ler faaliyetlerini bariyer senkronizasyonuyla koordine eder. Çağıran her thread, bloktaki tüm thread'ler o noktaya gelene kadar orada tutulur. Böylece bir sonraki faza geçmeden herkes önceki fazı bitirmiş olur. Tipik örnek: shared memory'yi doldurmak.</li>
   <li>Gerçek hayat: işe aynı arabayla giden dört kişi. Masalarında paralel çalışırlar; dönüşte herkes arabaya gelene kadar beklenir (bariyer).</li>

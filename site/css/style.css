@@ -1056,3 +1056,12 @@ pre.learning-code code { display:block; min-width:max-content; padding:0; }
   .learning-source { position:static; } }
 @media(max-width:510px) { .learning-widget { padding:10px; }
   .learning-axis,.learning-cell { width:24px; height:24px; font-size:.61rem; } }
+
+/* Code-linked four-thread barrier walkthrough. */
+.learning-barrier-lanes { display:grid; gap:5px; max-width:460px; }
+.learning-barrier-lane { width:100%; text-align:left; padding:8px 10px; color:var(--text);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:6px;
+  font:.77rem var(--mono); cursor:pointer; overflow-wrap:anywhere; }
+.learning-barrier-lane.is-active { background:var(--accent-wash); border-color:var(--accent); }
+.learning-barrier-lane.is-pinned { box-shadow:inset 3px 0 0 var(--critical); }
+.learning-barrier-lane:disabled { cursor:default; opacity:.7; }

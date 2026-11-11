@@ -225,6 +225,8 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <div class="wgt-mount" data-widget="tiling"></div>
 
 <h2>Soru tipi 3: <code>__syncthreads()</code></h2>
+<h3>Uygula: thread sırasını kendin belirle</h3>
+<div data-learning="barrier"></div>
 <ul>
   <li><strong>Blok içi bariyer:</strong> çağıran her thread, bloktaki <em>tüm</em> thread'ler o noktaya gelene kadar bekler. Farklı bloklar arasında senkronizasyon <strong>sağlamaz</strong> (bloklar arası: kernel'i bölmek / CUDA 9+ cooperative groups).</li>
   <li><strong>Bloktaki tüm thread'ler tarafından çalıştırılmalı.</strong> <code>if</code>/<code>else</code> içinde kullanmak tanımsız davranış (deadlock/yanlış sonuç); tek istisna koşulun bloktaki <em>tüm</em> thread'ler için aynı sonucu vermesi.</li>

@@ -164,6 +164,8 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Apply: thread code and matrix cells</h3>
 <div data-learning="cuda-index"></div>
 <h2>Synchronisation: <code>__syncthreads()</code></h2>
+<h3>Apply: trace the barrier in threads and code</h3>
+<div data-learning="barrier"></div>
 <ul>
   <li>Threads in the same block coordinate their activities with barrier synchronisation. Every calling thread is held at that point until all threads of the block reach it. This ensures everyone has finished one phase before anyone moves on. Typical example: filling shared memory.</li>
   <li>Real life: four people carpooling to work. They work in parallel at their desks; when leaving, everybody waits until all four are back at the car (barrier).</li>
