@@ -98,6 +98,7 @@ function makeGrid(question,entry,onChange){
  const live=h("span",{"aria-live":"polite",class:"mock-grid-status"});
  const codeLink=node("p","mock-grid-guide",tr("Kod satırlarının veya hücrelerin üzerine gelerek satır/sütun eşleşmesini izle.",
   "Hover source lines or cells to trace the row/column relationship."));
+ const gridScroll=node("div","mock-grid-scroll");
  const grid=node("div","mock-grid");
  grid.style.gridTemplateColumns="repeat("+String(cols+1)+",minmax(0,1fr))";
  const cells=[];
@@ -171,7 +172,8 @@ function makeGrid(question,entry,onChange){
    grid.append(cell);cells.push([r,c,cell]);
   }
  }
- wrap.append(guide,codeLink,grid,live);
+ gridScroll.append(grid);
+ wrap.append(guide,codeLink,gridScroll,live);
  repaint();
  return {wrap,repaint,bindCode};
 }
