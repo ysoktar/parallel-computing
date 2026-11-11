@@ -30,3 +30,13 @@ test("free browser screenshot audit rejects oversize desktop A4 sheets",()=>{
  assert.match(src,/entry\.sheetRatio\s*>\s*1\.48/);
  assert.match(src,/A4 page too tall/);
 });
+
+
+test("free Chromium also measures the front A4 height after placing coalescing there",()=>{
+ const script=read("scripts/visual-audit.mjs");
+ const css=read("site/css/style.css");
+ assert.match(script,/entry\.frontSheetRatio/);
+ assert.match(script,/Front A4 page too tall/);
+ assert.match(css,/\.copy-sheet-page\[data-sheet="front"\] \.copy-sheet-code/);
+ assert.match(css,/\.copy-sheet-page\[data-sheet="front"\] \.copy-sheet-card/);
+});
