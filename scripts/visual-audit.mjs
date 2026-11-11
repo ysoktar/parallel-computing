@@ -9,7 +9,7 @@ const base=process.env.AUDIT_BASE_URL || "http://127.0.0.1:8000";
 const out=process.env.AUDIT_OUT || "visual-audit";
 const sitePages=["index.html","l1-intro.html","l2-design.html","l3-threads.html",
   "l4-cuda-intro.html","l5-cuda-kernels.html","l6-cuda-memory.html",
-  "coalescing.html","lab.html","exam-midterm2.html","cheatsheet.html"];
+  "coalescing.html","lab.html","exam-midterm2.html","mock-exam.html","cheatsheet.html"];
 const sizes=[{name:"desktop",width:1440,height:900},{name:"mobile",width:390,height:844}];
 await mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
@@ -37,6 +37,30 @@ try {
       const path=join(out,prefix+".png");
       await page.screenshot({path,fullPage:true,animations:"disabled"});
       entry.screenshot=path;
+      if(file==="mock-exam.html"){
+        const questionCount=await page.locator(".mock-question").count();
+        entry.mockQuestions=questionCount;
+        if(questionCount!==12)entry.scriptErrors.push("Mock exam must render 12 questions, got "+questionCount);
+        const first=page.locator('[data-question="cuda-kernel"]');
+        const input=first.locator(".mock-inline-input").first();
+        if(await input.count()){
+          await input.fill("blockIdx.x*blockDim.x+threadIdx.x");
+          await first.locator(".mock-actions button").nth(1).click();
+          const shown=await first.locator(".mock-feedback").isVisible();
+          if(!shown)entry.scriptErrors.push("Checking a code blank did not show feedback");
+        }
+        const tracing=page.locator('[data-question="trace-single"]');
+        const cell=tracing.locator('.mock-grid-cell[aria-label*="1"][aria-label*="6"]').first();
+        if(await cell.count()){
+          await cell.click();
+          if(await cell.getAttribute("aria-pressed")!=="true")
+            entry.scriptErrors.push("Click did not pin a marked grid cell");
+          await tracing.locator(".mock-actions button").nth(1).click();
+          if(!await tracing.locator(".mock-feedback").isVisible())
+            entry.scriptErrors.push("Grid scoring feedback was not displayed");
+          await tracing.screenshot({path:join(out,prefix+"-trace-question.png"),animations:"disabled"});
+        }
+      }
       if(file==="cheatsheet.html"){
         // Inspect each actual filled side, not only the default visible side.
         const front=page.locator('.copy-sheet-page[data-sheet="front"]');

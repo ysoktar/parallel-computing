@@ -196,6 +196,102 @@ starvation: one participant never proceeds</pre>
 </div>
 </section>
 <div id="copy-ready-end"></div>
+<section class="worked-guide"><h2 id="worked-examples">Worked examples to understand before copying</h2>
+<p>The filled A4 sides above stay compact. These longer examples explain exactly how to compute answers and why the code uses those indices. Copy whichever annotations help you most by hand. Then try the corresponding writing questions in the mock exam.</p>
+<div class="worked-examples"><article class="worked-example" data-worked-example="single-thread">
+<h3>1. Which cells change when one fixed thread runs a loop?</h3>
+<pre class="worked-code"><code>H=6; W=8;
+blockIdx=(1,0); blockDim=(4,2); threadIdx=(2,1);
+row=0*2+1=1; col=1*4+2=6;
+for(dy=0;dy&lt;3;dy++){
+  r=row+2*dy;
+  A[r*W+col]++; // valid r&lt;H
+}
+dy=0 -&gt; A[1][6] = A[14]
+dy=1 -&gt; A[3][6] = A[30]
+dy=2 -&gt; A[5][6] = A[46]</code></pre>
+<div class="worked-explanation"><p><strong>Why:</strong> Because blockIdx and threadIdx are fixed, <code>col=6</code> never changes. Only loop variable dy moves r by two. Rows 1, 3 and 5 are inside H=6. <strong>Draw:</strong> column 6 at rows 1, 3 and 5 (zero-based).</p>
+ <p><strong>Common trap:</strong> Loop variable dy is not threadIdx.y. One varies within the thread; the other identifies the thread.</p></div>
+<p><a href="mock-exam.html#question-trace-single">Try the related mock-exam question</a></p>
+</article>
+<article class="worked-example" data-worked-example="block-loop">
+<h3>2. How to draw accesses when a whole block executes?</h3>
+<pre class="worked-code"><code>H=6; W=8; blockIdx=(1,1); blockDim=(4,2);
+tx=0..3 -&gt; col=1*4+tx = 4,5,6,7
+ty=0..1 -&gt; row=1*2+ty = 2,3
+for(j=0;j&lt;2;j++) r=row+j*2;
+j=0 -&gt; rows 2,3; j=1 -&gt; rows 4,5
+WROTE: rows {2,3,4,5} × cols {4,5,6,7}
+count = 4 rows * 4 cols = 16 cells</code></pre>
+<div class="worked-explanation"><p><strong>Why:</strong> A 4×2 block contains eight threads. Each writes twice, for 16 cells. Find four columns from tx, two starting rows from ty, then two additional rows from the loop.</p>
+ <p><strong>Drawing method:</strong> Draw a 6×8 matrix and shade the rectangle <code>r=2..5, c=4..7</code>. Do not confuse one thread's writes with the union over the block.</p></div>
+<p><a href="mock-exam.html#question-trace-block">Try the related mock-exam question</a></p>
+</article>
+<article class="worked-example" data-worked-example="mutex-semaphore">
+<h3>3. Mutex, lock_guard and semaphore are not interchangeable</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+#include &lt;semaphore&gt;
+std::mutex m;
+std::counting_semaphore&lt;3&gt; slots(3);
+int counter=0;
+void job(){
+  slots.acquire(); // at most 3 jobs enter
+  { std::lock_guard&lt;std::mutex&gt; hold(m);
+    ++counter; }  // only 1 thread modifies it
+  doWork();
+  slots.release();
+}
+// Without mutex, 3 concurrent increments may race.</code></pre>
+<div class="worked-explanation"><p><strong>Difference:</strong> A semaphore allows <strong>three concurrent jobs</strong>; it does not give mutual exclusion for <code>counter++</code>. A mutex allows one owner. A lock_guard releases its mutex at scope exit.</p>
+ <p><strong>Explain:</strong> Threads acquiring m1→m2 and m2→m1 can deadlock. Starvation is when a thread keeps being denied progress. No particular output is guaranteed for a C++ data race.</p></div>
+<p><a href="mock-exam.html#question-mutex-semaphore">Try the related mock-exam question</a></p>
+</article>
+<article class="worked-example" data-worked-example="coalescing">
+<h3>4. Coalescing: addresses and 32 B segments</h3>
+<pre class="worked-code"><code>32 lanes, float=4 B, aligned base=0
+lane i: A[i]        -&gt; 0,4,8,...,124 B
+  covered segment numbers: 0,1,2,3 (4×32B)
+lane i: A[2*i]      -&gt; 0,8,16,...,248 B
+  segments: 0..7 (8×32B)
+lane i: A[1024*i]   -&gt; spacing=4096 B
+  segments: 32 distinct (32×32B = 1024B)
+A[row*W+col] -&gt; if col changes +1, address +4B</code></pre>
+<div class="worked-explanation"><p><strong>Why:</strong> In row-major memory, adjacent x-lanes reading adjacent columns request 128 contiguous bytes, which occupy four aligned 32 B segments. Advancing the row instead changes the offset by W elements.</p>
+ <p><strong>Important:</strong> This is an <em>aligned 32 B segment teaching model</em>; actual cache and transaction behavior depends on the GPU. Pitch is expressed in bytes: <code>base + row*pitchBytes + col*4</code>.</p></div>
+<p><a href="mock-exam.html#question-coalescing">Try the related mock-exam question</a></p>
+</article>
+<article class="worked-example" data-worked-example="tiled">
+<h3>5. Tiled matmul: what one thread loads in one phase</h3>
+<pre class="worked-code"><code>N=32; T=8; blockIdx=(1,0);
+threadIdx=(2,3); phase=1
+row=0*8+3=3; col=1*8+2=10
+Mds[3][2] &lt;- M[3][1*8+2] = M[3][10] = M[106]
+Nds[3][2] &lt;- N[1*8+3][10] = N[11][10] = N[362]
+__syncthreads(); // all shared tiles loaded
+for(k=0;k&lt;8;k++) sum+=Mds[3][k]*Nds[k][2];
+__syncthreads(); // next phase must not overwrite
+P[3*32+10] = P[106] &lt;- accumulated 4 phases</code></pre>
+<div class="worked-explanation"><p><strong>One thread per phase</strong> loads two global values but performs eight multiply-accumulates; the other 63 threads load the rest of the tile for shared-memory reuse. There are four phases: 0,1,2,3.</p>
+ <p><strong>Two barriers:</strong> The first prevents reading before the cooperative tile is filled (RAW). The second prevents the next phase overwriting values still in use. Avoid divergent barrier control flow.</p></div>
+<p><a href="mock-exam.html#question-tiled-matmul">Try the related mock-exam question</a></p>
+</article>
+<article class="worked-example" data-worked-example="transpose">
+<h3>6. Transpose: one value, two different linear offsets</h3>
+<pre class="worked-code"><code>A is 3×5 (H=3,W=5), B is 5×3
+A[row=1][col=3] =&gt; A[1*5+3] = A[8]
+B[col=3][row=1] =&gt; B[3*3+1] = B[10]
+__global__ void trans(float*A,float*B,int H,int W){
+  int row=blockIdx.y*blockDim.y+threadIdx.y;
+  int col=blockIdx.x*blockDim.x+threadIdx.x;
+  if(row&lt;H &amp;&amp; col&lt;W) B[col*H+row]=A[row*W+col];
+}</code></pre>
+<div class="worked-explanation"><p><strong>Why:</strong> A has width 5; B has width 3. The value's row and column swap. Adjacent x-lanes may read A contiguously but their output stores have an H-element stride.</p>
+ <p><strong>Exam technique:</strong> Write the output shape first (W×H), then multiply the output row by the <em>new width</em> when forming its linear offset.</p></div>
+<p><a href="mock-exam.html#question-transpose-write">Try the related mock-exam question</a></p>
+</article></div>
+<div class="callout key"><p><strong>Common exam traps:</strong> localID is not the global matrix index; a loop variable is not a thread index; a counting semaphore does not guarantee exclusive writes; a divergent block barrier is unsafe; increasing occupancy does not necessarily improve performance.
+ <a href="mock-exam.html">Open the full 120-minute coding exam.</a></p></div>
+</section>
 <div class="callout key">
   <p>Writing tips: a fine pen; abbreviate formulas with variable names (<code>bx, by, tx, ty, T, W</code>); write code lines in full (you may be asked to write code); make two small sketches: the warp shape in an 8×32 block and the M/N tiles in phase m. Write the numbers out ready, since there is no calculator.</p>
 </div>
