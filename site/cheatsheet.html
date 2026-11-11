@@ -72,7 +72,7 @@ for (int m=0; m&lt;W/T; ++m) {
   __syncthreads();                // tile may be overwritten
 }
 P[row*W+col]=sum;</pre>
-<p>W=matris genişliği, T=karo kenarı (bu örnekte blockDim.x=blockDim.y=T); tx=threadIdx.x, ty=threadIdx.y; m=phase (yüklenen karo numarası, 0'dan başlar), k=karo içi çarpım indeksi (0..T-1). Mds/Nds=shared karolar, sum=biriken sonuç. İlk bariyer yüklemeyi, ikinci yeniden kullanımı korur.</p>
+<p>W=matris genişliği, T=karo kenarı (bu örnekte blockDim.x=blockDim.y=T); tx=threadIdx.x, ty=threadIdx.y; m=phase; phase=yüklenen karo numarası (0'dan başlar), k=karo içi çarpım indeksi (0..T-1). Mds/Nds=shared karolar, sum=biriken sonuç. İlk bariyer yüklemeyi, ikinci yeniden kullanımı korur.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="4">
 <h3>4. Sınav hesabı: &lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</h3>
