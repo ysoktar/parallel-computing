@@ -9,7 +9,7 @@ const base=process.env.AUDIT_BASE_URL || "http://127.0.0.1:8000";
 const out=process.env.AUDIT_OUT || "visual-audit";
 const sitePages=["index.html","l1-intro.html","l2-design.html","l3-threads.html",
   "l4-cuda-intro.html","l5-cuda-kernels.html","l6-cuda-memory.html",
-  "coalescing.html","lab.html","exam-midterm2.html","cheatsheet.html"];
+  "coalescing.html","lab.html","exam-midterm2.html","mock-exam.html","cheatsheet.html"];
 const sizes=[{name:"desktop",width:1440,height:900},{name:"mobile",width:390,height:844}];
 await mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
