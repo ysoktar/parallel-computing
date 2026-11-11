@@ -10,6 +10,7 @@
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
 <script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="exam-midterm2">
 <main><div class="content">
@@ -78,6 +79,8 @@ if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
 <h2>Soru tipi 1: Hangi indeks nereyi gösteriyor?</h2>
 <p>Geçmiş yıl sorusu: <strong>"<code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> ile tiled matris çarpımı eşlemesi"</strong>. Aşağıdaki çözüm bu tipteki her soruyu kapsayacak şekilde adım adım gidiyor.</p>
 
+<h3>Hücreye veya koda gel: indeksler</h3>
+<div data-learning="cuda-index"></div>
 <h3>Çözümlü örnek: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
 <pre class="code" data-run="matmul_rect.cu" data-title="Kernel (her thread P'nin bir elemanı)">
 __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
@@ -281,6 +284,8 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
 </pre>
 </div>
 
+<h3>Uygula: transpose ve adres eşleşmesi</h3>
+<div data-learning="transpose"></div>
 <h2>Soru tipi 5: Sayısal sorular</h2>
 <p>Hesap makinesi olmadığı için sayılar slaytlardaki gibi "güzel" seçilir. Bunları kopya kâğıdına yazın.</p>
 <table class="simple">

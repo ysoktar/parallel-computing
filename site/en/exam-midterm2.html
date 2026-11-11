@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="exam-midterm2">
 <main><div class="content">
@@ -78,6 +79,8 @@ if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
 <h2>Problem type 1: Which index points where?</h2>
 <p>Past exam question: <strong>"mapping of tiled matrix multiplication with <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>"</strong>. The solution below goes step by step so that it covers every question of this type.</p>
 
+<h3>Hover a cell or code: indices</h3>
+<div data-learning="cuda-index"></div>
 <h3>Worked example: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
 <pre class="code" data-run="matmul_rect.cu" data-title="Kernel (each thread one element of P)">
 __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
@@ -281,6 +284,8 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
 </pre>
 </div>
 
+<h3>Apply: transpose and address mapping</h3>
+<div data-learning="transpose"></div>
 <h2>Problem type 5: Numerical questions</h2>
 <p>Without a calculator the numbers are chosen "nice", as in the slides. Put these on your cheat sheet.</p>
 <table class="simple">
