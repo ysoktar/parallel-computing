@@ -113,8 +113,8 @@ q({
 q({
  id:"divergent-sync",type:"essay",points:10,minutes:12,topic:"L5",
  title:"CUDA hata düzeltme: ayrışan bariyer",title_en:"Debug CUDA: divergent block barrier",
- prompt:"Bu CUDA kodunun bariyerini neden yanlış kullandığını anlat; doğru kodu yaz. Shared tile[0..3] hangi thread'lerle doldurulur ve bariyer nereye konur?",
- prompt_en:"Explain why this CUDA barrier is wrong and rewrite the code. Which threads fill tile[0..3], and where must the barrier go?",
+ prompt:"Bu CUDA kodunda blockDim.x=8 varsay. Bariyerin neden yanlış kullanıldığını anlat ve doğru kodu yaz. Shared tile[0..3] hangi thread'lerle doldurulur, bariyer nereye konur?",
+ prompt_en:"Assume blockDim.x=8. Explain why this CUDA barrier is wrong and rewrite the code. Which threads fill tile[0..3], and where must the barrier go?",
  code:["__global__ void bad(const float *a,float *out){",
   "  __shared__ float tile[8];",
   "  int t=threadIdx.x;",
