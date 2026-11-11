@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l4-cuda-intro">
 <main><div class="content">
@@ -105,6 +106,10 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 </pre>
 <p class="small muted">The slides' <code>blockDimx.x</code> is a typo for <code>blockDim.x</code>.</p>
 
+<h3>Apply: trace indices across a CUDA grid</h3>
+<div data-learning="cuda-index"></div>
+<h3>Apply: trace the 3D thread block by Z slice</h3>
+<div data-learning="dim3-index"></div>
 <h2>Blocks and scalability</h2>
 <ul>
   <li>Thread blocks <strong>must execute independently</strong>: it must be possible to run them in any order, in parallel or in series. You cannot control which block runs on which SM. This lets the program <strong>scale</strong> with the number of SMs.</li>

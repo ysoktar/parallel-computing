@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="l2-design">
 <main><div class="content">
@@ -62,6 +63,8 @@ DnC(A) {
 </ul>
 <h3>Geometrik ayrıştırma</h3>
 <p>Diziler/matrisler bir veya daha fazla boyut boyunca bölünüp görevlere atanır. Veriler arası bağımlılık yoksa <strong>embarrassingly parallel</strong>. Örnek: 5 noktalı Laplace filtresi <code>[0 1 0; 1 −4 1; 0 1 0]</code>: her çıktı için 5 değer gerekir → bölge sınırlarında komşu (halo) satırları gerekir. GPU'daki blok/karo yaklaşımı budur.</p>
+<h3>Uygula: veri bölüşümü ve halo</h3>
+<div data-learning="halo"></div>
 <h3>Özyinelemeli veri ayrıştırması</h3>
 <p>Ağaç, liste, graf gibi yapılar elemanlarına ayrıştırılıp düğümlere atanır; algoritma değiştirilebilir (dinamik programlamaya benzer). Örnek: kısmi toplamlar (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: önce 2'li, sonra 4'lü, 8'li grupların toplamları.</p>
 <h3>Pipeline</h3>

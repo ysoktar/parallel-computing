@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l2-design">
 <main><div class="content">
@@ -62,6 +63,8 @@ DnC(A) {
 </ul>
 <h3>Geometric decomposition</h3>
 <p>Arrays/matrices are split along one or more dimensions and assigned to tasks. With no dependencies between data: <strong>embarrassingly parallel</strong>. Example: the 5-point Laplace filter <code>[0 1 0; 1 −4 1; 0 1 0]</code>: each output needs 5 values → neighbour (halo) rows are needed at region borders. This is the block/tile approach on GPUs.</p>
+<h3>Apply: partitions and halo cells</h3>
+<div data-learning="halo"></div>
 <h3>Recursive data decomposition</h3>
 <p>Trees, lists, graphs are decomposed into elements assigned to nodes; the algorithm may be modified (similar to dynamic programming). Example: partial sums (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: sums of groups of 2, then 4, then 8.</p>
 <h3>Pipeline</h3>

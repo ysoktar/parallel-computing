@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l5-cuda-kernels">
 <main><div class="content">
@@ -160,7 +161,11 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 </div>
 <p>Limits to take into account: maximum threads per block, maximum blocks per SM, <strong>maximum threads per SM</strong>. Generally aim for as many resident threads on the SMs as possible (occupancy).</p>
 
+<h3>Apply: thread code and matrix cells</h3>
+<div data-learning="cuda-index"></div>
 <h2>Synchronisation: <code>__syncthreads()</code></h2>
+<h3>Apply: trace the barrier in threads and code</h3>
+<div data-learning="barrier"></div>
 <ul>
   <li>Threads in the same block coordinate their activities with barrier synchronisation. Every calling thread is held at that point until all threads of the block reach it. This ensures everyone has finished one phase before anyone moves on. Typical example: filling shared memory.</li>
   <li>Real life: four people carpooling to work. They work in parallel at their desks; when leaving, everybody waits until all four are back at the car (barrier).</li>
@@ -263,6 +268,8 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
   <li>Global reads per thread: naive <code>2·width</code>, tiled <code>2·width/T</code> → T times fewer. This code assumes <code>width</code> is a multiple of <code>TILE_WIDTH</code>.</li>
 </ul>
 <div class="wgt-mount" data-widget="tiling"></div>
+<h3>Apply: M, N and P tile loads beside the code</h3>
+<div data-learning="tile"></div>
 <p>The same idea with a non-square block (e.g. <code>dim3(8,32)</code>): <a href="exam-midterm2.html#the-tiled-shared-memory-version-with-the-same-configuration">the solution in the midterm 2 guide</a>.</p>
 
 <h2>Check yourself</h2>

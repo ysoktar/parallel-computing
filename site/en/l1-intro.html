@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l1-intro">
 <main><div class="content">
@@ -96,6 +97,8 @@ N → ∞:  speedup → 1 / (1 − α)
   <li>But reality disagrees: every Top500 supercomputer is built from thousands to millions of off-the-shelf cores. Where is the flaw?</li>
 </ul>
 
+<h3>Apply: predict the Amdahl limit</h3>
+<div data-learning="amdahl"></div>
 <h2>Gustafson-Barsis's law</h2>
 <p>A parallel platform does more than speed up a sequential program: it can solve <strong>bigger problems</strong>. The question: how long would a sequential machine take to solve the problem the parallel machine solves?</p>
 <p>Assumptions: the parallel application runs in a <strong>fixed</strong> time T on N CPUs; during a fraction α of the time all machines work, (1 − α) is sequential. With T fixed, increasing N increases the work done.</p>

@@ -10,6 +10,7 @@
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
 <script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="coalescing">
 <main><div class="content">
@@ -78,6 +79,8 @@ struct __align__(16) Vec3 { float x; float y; float z; };   // 12 bayt veri, 16'
   <p>Kodda coalescing'i görmenin kısa yolu: adres ifadesinde <code>threadIdx.x</code>'in (ya da ondan türeyen <code>col</code>/<code>x</code>'in) <strong>çarpansız, en sağda</strong> durup durmadığına bakın. <code>A[row*width + col]</code> ✓; <code>A[col*width + row]</code> ✗ (ardışık thread'ler <code>width</code> eleman aralıklı); <code>A[2*col]</code> yarı verim.</p>
 </div>
 
+<h3>Uygula: lane, adres ve segment eşleşmesi</h3>
+<div data-learning="coalesce-lanes"></div>
 <h2>2D diziler ve pitch</h2>
 <ul>
   <li>Yaygın desen: <code>(tx, ty)</code> thread'i <code>BaseAddress + width·ty + tx</code> adresine erişir. Tam coalescing için <strong>hem thread bloğunun genişliği hem de dizinin genişliği warp boyunun (32) katı</strong> olmalı.</li>
@@ -154,6 +157,8 @@ __global__ void transposeNaive(float* odata, const float* idata)
   <li>Laboratuvardaki <code>a[i*1024]</code> örneği tam olarak bu yazma.</li>
 </ul>
 
+<h3>Uygula: A satır ve sütunundan B'ye</h3>
+<div data-learning="transpose"></div>
 <h3>3) Shared memory ile coalesced transpose</h3>
 <p>Fikir: karoyu global bellekten <strong>satır satır</strong> (coalesced) okuyup shared memory'ye koy; yer değiştirmeyi shared memory içinde yap (orada dağınık erişim ucuz); sonra karonun <strong>sütununu</strong> çıktıda <strong>satır</strong> olarak (coalesced) yaz. Blok da transpoze edilmiş yere yazmalı.</p>
 <pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">

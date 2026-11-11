@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="exam-midterm2">
 <main><div class="content">
@@ -78,6 +79,8 @@ if (row &lt; height &amp;&amp; col &lt; width) { ... }</div>
 <h2>Problem type 1: Which index points where?</h2>
 <p>Past exam question: <strong>"mapping of tiled matrix multiplication with <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>"</strong>. The solution below goes step by step so that it covers every question of this type.</p>
 
+<h3>Hover a cell or code: indices</h3>
+<div data-learning="cuda-index"></div>
 <h3>Worked example: <code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code></h3>
 <pre class="code" data-run="matmul_rect.cu" data-title="Kernel (each thread one element of P)">
 __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
@@ -222,6 +225,8 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <div class="wgt-mount" data-widget="tiling"></div>
 
 <h2>Problem type 3: <code>__syncthreads()</code></h2>
+<h3>Apply: schedule the threads yourself</h3>
+<div data-learning="barrier"></div>
 <ul>
   <li><strong>Barrier within a block:</strong> every calling thread waits until <em>all</em> threads of the block reach that point. It does <strong>not</strong> synchronise different blocks (across blocks: split the kernel / CUDA 9+ cooperative groups).</li>
   <li><strong>It must be executed by all threads of the block.</strong> Using it inside an <code>if</code>/<code>else</code> is undefined behaviour (deadlock/wrong result); the only exception is when the condition evaluates the same for <em>all</em> threads of the block.</li>
@@ -281,6 +286,8 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
 </pre>
 </div>
 
+<h3>Apply: transpose and address mapping</h3>
+<div data-learning="transpose"></div>
 <h2>Problem type 5: Numerical questions</h2>
 <p>Without a calculator the numbers are chosen "nice", as in the slides. Put these on your cheat sheet.</p>
 <table class="simple">

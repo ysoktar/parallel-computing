@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="l3-threads">
 <main><div class="content">
@@ -51,6 +52,8 @@ int main() {
   <li>GPU notu: birçok thread'in aynı değişkene eş zamanlı yazması GPU'da (CPU'dan çok daha) yavaş ve ciddi darboğaz; nerede saklandığına bağlı (GPU'da birçok bellek türü var).</li>
 </ul>
 
+<h3>Uygula: kaybolan güncelleme</h3>
+<div data-learning="race"></div>
 <h2>Lock, mutex, semafor</h2>
 <table class="simple">
   <thead><tr><th>Araç</th><th>Özellik</th></tr></thead>

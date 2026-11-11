@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l6-cuda-memory">
 <main><div class="content">
@@ -117,6 +118,10 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
 }
 </pre>
 
+<h3>Apply: pitch, row stride and padding</h3>
+<div data-learning="pitch"></div>
+<h3>Apply: warp accesses and segments</h3>
+<div data-learning="coalesce-lanes"></div>
 <h2>Local memory</h2>
 <ul>
   <li>Only some automatic variables go to local memory: <strong>(1)</strong> arrays the compiler cannot determine are indexed with constants, <strong>(2)</strong> large structs/arrays that would consume too many registers, <strong>(3)</strong> any variable if the kernel uses more registers than available (<strong>register spilling</strong>).</li>

@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
 </head>
 <body data-page="l3-threads">
 <main><div class="content">
@@ -51,6 +52,8 @@ int main() {
   <li>GPU note: many threads writing the same variable concurrently is (much) slower on a GPU than on a CPU and a serious bottleneck; it depends on where the variable is stored (GPUs have many memory types).</li>
 </ul>
 
+<h3>Apply: the lost update</h3>
+<div data-learning="race"></div>
 <h2>Locks, mutexes, semaphores</h2>
 <table class="simple">
   <thead><tr><th>Tool</th><th>Property</th></tr></thead>
