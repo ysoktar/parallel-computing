@@ -76,6 +76,10 @@ try {
           return {width:rect.width,height:rect.height,scrollHeight:el.scrollHeight};
         });
         entry.sheetRatio=Number((dims.height/dims.width).toFixed(3));
+        if(size.name==="desktop" && entry.sheetRatio > 1.48)
+          entry.scriptErrors.push("A4 page too tall: ratio "+entry.sheetRatio);
+        if(size.name==="desktop" && dims.scrollHeight>dims.height+2)
+          entry.scriptErrors.push("A4 content exceeds page height");
         entry.sheetBodyOverflow=Math.max(0,Math.ceil(dims.scrollHeight-dims.height));
         await page.locator('[data-copy-view="both"]').click();
       }
