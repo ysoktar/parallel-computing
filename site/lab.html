@@ -10,6 +10,7 @@
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
 <script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/exam-lab.js"></script>
 </head>
 <body data-page="lab">
 <main><div class="content">
@@ -39,6 +40,20 @@
 <h2>Tiled matris çarpımı</h2>
 <p>Hangi blok hangi karoyu hesaplar, faz <code>m</code>'de shared memory'ye hangi elemanlar gelir, her thread hangi elemanı yükler. Kod: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a>.</p>
 <div class="wgt-mount" data-widget="tiling"></div>
+
+
+<h2>Yeni: Transpose thread izleyici</h2>
+<p><strong>Sınav kapsamı:</strong> Naive transpose ile shared-memory transpose işlemlerinde bir thread'in hangi girdiyi okuyup hangi çıktı konumuna yazdığını izle. <code>__syncthreads()</code> sonrasında aynı thread, başka bir thread'in shared memory'ye yüklediği değeri okuyabilir. Bu örnek <a href="l5-cuda-kernels.html">L5</a> konularıyla bağlantılıdır.</p>
+<div data-exam-widget="transpose"></div>
+
+<h2>Yeni: __syncthreads() zaman çizelgesi</h2>
+<p>Dört thread'i farklı sıralarda ilerlet. Bariyerin bütün blok thread'lerinin paylaşılan veriyi okumadan önce yazma adımına ulaşmasını nasıl sağladığını gör. <strong>Bariyersiz durumda GPU çıktısı kesin olarak tahmin edilemez.</strong></p>
+<div data-exam-widget="barrier"></div>
+
+<h2>Yeni: Warp üyelerini tek tek gör</h2>
+<p><code>threadIdx.y * blockDim.x + threadIdx.x</code> ile bulunan lineer thread kimliği warp'a atanır. Özellikle 8×32, 12×8 ve 32×8 blok şekillerini karşılaştır.</p>
+<div data-exam-widget="warp-shape"></div>
+<p class="wgt-sub">Shared-memory bank optimization ikinci vize kapsamında değildir.</p>
 
 <h2>CUDA kodunu gerçekten çalıştırmak</h2>
 <p>Sitedeki her kod bloğunun altında <strong>▶ Çalıştır</strong> düğmesi var. Tarayıcı derleyici çalıştıramadığı için kodu sizin bilgisayarınızdaki küçük bir yardımcı program derleyip çalıştırır: C/C++ <code>g++</code>/<code>clang++</code> ile CPU'da, CUDA <code>nvcc</code> ile GPU'da.</p>
