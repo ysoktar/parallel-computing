@@ -198,9 +198,132 @@ starvation: one participant never proceeds</pre>
 </div>
 </section>
 <div id="copy-ready-end"></div>
+
+<section class="cheat-symbol-guide" aria-labelledby="cheat-symbols">
+<h2 id="cheat-symbols">Variables, memory and cache: what does each symbol mean?</h2>
+<p>The two completed A4 sides above remain concise. Learn the meanings here, then hand-copy the most useful details. The same letter can mean different things in different questions; always use the definitions supplied in the question.</p>
+<div class="cheat-symbol-table-wrap"><table class="cheat-symbol-table"><thead><tr><th>Symbol</th><th>Meaning / calculation</th><th>Do not confuse with</th></tr></thead><tbody>
+<tr><td><code>blockIdx.x/y</code></td><td>Selected block's horizontal/vertical position in the grid</td><td>Block ID, not thread ID</td></tr>
+<tr><td><code>blockDim.x/y</code></td><td>Threads per block in x/y, <code>blockDim=(bx,by)</code></td><td>(4,4) means 16 threads per block</td></tr>
+<tr><td><code>threadIdx.x/y</code></td><td>Thread position inside its own block</td><td><code>tx=threadIdx.x</code>, <code>ty=threadIdx.y</code></td></tr>
+<tr><td><code>bx,by</code></td><td>Depending on code, block dimensions OR block ID abbreviations</td><td>Read each example's definitions; do not assume <code>bx=blockIdx.x</code></td></tr>
+<tr><td><code>row,col</code></td><td><code>row=blockIdx.y*blockDim.y+ty</code>; <code>col=blockIdx.x*blockDim.x+tx</code></td><td>Zero-based global matrix row/column</td></tr>
+<tr><td><code>W,H</code></td><td><code>W</code>=number of columns, <code>H</code>=number of rows</td><td>Row-major: <code>A[row*W+col]</code></td></tr>
+<tr><td><code>N,T</code></td><td>In matmul, <code>N</code>=matrix width, <code>T</code>=tile side</td><td>In Amdahl, <code>N</code>=number of workers</td></tr>
+<tr><td><code>phase,m,k</code></td><td><code>phase</code>/<code>m</code>=tile number (starting at 0); <code>k</code>=within-tile multiplication index (0..T-1)</td><td><code>phase</code> is not a CUDA builtin; it is a loop variable</td></tr>
+<tr><td><code>Mds,Nds,sum</code></td><td><code>Mds/Nds</code>=shared tiles; <code>sum</code>=accumulator for one result cell</td><td>Synchronize after loading and before overwriting a tile</td></tr>
+<tr><td><code>warp,lane</code></td><td><code>warp</code>=32-thread group; <code>lane</code>=position in group (0–31)</td><td>Block-local <code>localID=ty*blockDim.x+tx</code>; <code>lane=localID%32</code></td></tr>
+<tr><td><code>pitchBytes,bytes</code></td><td><code>pitchBytes</code>=row spacing in bytes; <code>bytes</code>=total allocated/copied bytes</td><td><code>float</code>=4 B, <code>double</code>=8 B, 1 KiB=1024 B</td></tr>
+<tr><td><code>f,a,S</code></td><td>Amdahl: <code>f</code>=parallelizable fraction; Gustafson: <code>a</code>=parallel time fraction; <code>S</code>=speedup</td><td><code>N</code>=worker count, not matrix width</td></tr>
+<tr><td><code>mutex,semaphore</code></td><td><code>mutex</code>=exclusive owner; <code>semaphore</code>=permit counter</td><td><code>lock_guard</code>=unlock on scope exit; <code>unique_lock</code>=can unlock/relock</td></tr>
+<tr><td><code>condition_variable</code></td><td>Waits on a condition while temporarily releasing the mutex</td><td><code>wait</code> rechecks predicate; <code>notify_one</code> wakes one waiting thread</td></tr>
+</tbody></table></div>
+<h3>GPU memory hierarchy: where is each memory located?</h3>
+<div class="cache-hierarchy" role="group" aria-label="GPU memory hierarchy">
+<div><strong>Thread</strong><span>Registers: private to one thread, located on its SM</span></div>
+<div><strong>SM (Streaming Multiprocessor)</strong><span>Shared memory: explicit per-block scratchpad. L1: hardware-managed cache local to the SM.</span></div>
+<div><strong>GPU chip</strong><span>L2: one shared cache serving all SMs.</span></div>
+<div><strong>GPU memory (VRAM)</strong><span>Global device DRAM. Private local/spill data may be stored here too.</span></div>
+<div><strong>CPU / host RAM</strong><span>System memory, conceptually distinct from VRAM. CPU L1/L2 caches are not GPU L1/L2 caches.</span></div>
+</div>
+<table class="cheat-symbol-table"><thead><tr><th>Memory</th><th>Who accesses it?</th><th>Location / control</th></tr></thead><tbody>
+<tr><td>Register</td><td>One thread</td><td>On an SM, compiler allocated</td></tr>
+<tr><td>Local</td><td>One thread</td><td>Normally backed by device DRAM, may be cached in L1/L2</td></tr>
+<tr><td>Shared (<code>__shared__</code>)</td><td>Threads in one block</td><td>On-SM storage, loaded/updated by explicit CUDA code</td></tr>
+<tr><td>L1 cache</td><td>Accesses by an SM</td><td>Each SM has its own hardware cache; on some architectures shares a physical pool with shared memory</td></tr>
+<tr><td>L2 cache</td><td>All SMs</td><td>Larger, chip-wide hardware-managed cache</td></tr>
+<tr><td>Global memory</td><td>All device threads</td><td>Device DRAM/VRAM</td></tr>
+<tr><td>Constant</td><td>All device threads (read)</td><td>Read-only in kernels, can benefit from the constant cache</td></tr>
+</tbody></table>
+<p><strong>Cache hit</strong>: requested data already resides in the cache. <strong>Cache miss</strong>: fetch from a lower level. The common hierarchy puts registers, shared memory and caches close to computation; VRAM is larger and often higher latency. <strong>Do not memorize fixed sizes:</strong> L1/L2 capacities, latency, L1/shared configuration and caching behavior are GPU-dependent. <code>L1 cache</code> is not the same programming abstraction as <code>shared memory</code>, even when some hardware partitions the same on-SM capacity between them.</p>
+<p><strong>Units:</strong> 1 B=8 bits; 1 KiB=1024 B; 1 MiB=1024 KiB; <code>float</code>=4 B; 32 floats=128 B; <code>pitchBytes</code> is actual row stride in bytes (possibly greater than W×4 B). A hypothetical <strong>32 B access segment</strong> is not automatically equal to a GPU L1/L2 cache line.</p>
+<p class="cheat-sources">Sources: <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html">NVIDIA CUDA Programming Guide</a> · <a href="https://developer.nvidia.com/blog/cuda-refresher-cuda-programming-model">NVIDIA CUDA Refresher</a></p>
+</section>
 <section class="worked-guide"><h2 id="worked-examples">Worked examples to understand before copying</h2>
 <p>The filled A4 sides above stay compact. These longer examples explain exactly how to compute answers and why the code uses those indices. Copy whichever annotations help you most by hand. Then try the corresponding writing questions in the mock exam.</p>
-<div class="worked-examples"><article class="worked-example" data-worked-example="single-thread">
+<div class="worked-examples">
+<article class="worked-example worked-example-wide" data-worked-example="coalescing-trace">
+<h3>Coalescing: count warp accesses and transpose stride</h3>
+<pre class="worked-code"><code>// Warp: 32 threads; lane = 0..31; float=4 B
+// Assume base address aligned to 32 B.
+A[lane]       : offsets 0,4,...,124 B -&gt; 4 segments =128 B
+A[lane+1]     : offsets 4,8,...,128 B -&gt; 5 segments =160 B
+A[2*lane]     : offsets 0,8,...,248 B -&gt; 8 segments =256 B
+A[8*lane]     : offsets 0,32,...,992 B -&gt; 32 segments =1024 B
+A[1024*lane]  : offsets 0,4096,... -&gt; 32 segments =1024 B
+// Actual cache hits and transaction counts depend on GPU.
+// Row-major matrix: A[row*W+col] (W = column count)
+// x-neighbor threads -&gt; col+1 -&gt; +4 B: contiguous.
+// Naive transpose: B[col*H+row] (H = output width)
+// x-neighbor threads -&gt; col+1 -&gt; +4*H B: strided.</code></pre>
+<div class="worked-explanation"><p><strong>32 threads × 4 B = 128 B useful data.</strong> Consecutive <code>A[lane]</code> touches four aligned 32 B segments (128 B). <code>A[2*lane]</code> touches eight (256 B). Far-apart <code>A[1024*lane]</code> touches 32 (1024 B). <strong>These are modeled access segments, not universal GPU cache-line sizes or guaranteed memory transaction counts.</strong></p>
+<p><strong>Matrix offsets:</strong> <code>A[row*W+col]</code>, W=number of input columns. Increasing col by one for adjacent x threads advances by 4 bytes. <strong>Transpose:</strong> H×W input becomes W×H output, with <code>B[col*H+row]</code>. Adjacent x threads advance output stores by 4×H bytes, which can be inefficient.</p>
+<p><strong>Different mechanisms:</strong> Coalescing concerns the warp's address pattern; L1/L2 cache hit/miss concerns which data is already cached. <code>pitchBytes</code> is a row stride in bytes, applied before converting to float indexing.</p></div>
+<details class="worked-self-check"><summary>Quick check: transpose and memory</summary><p>If H=3, W=4, row=1, col=2: input A[1*4+2]=A[6], output B[2*3+1]=B[7]. L1 cache is on each SM; L2 cache is shared among SMs.</p></details>
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="lock-timeline">
+<h3>What does a mutex prevent? Two threads updating a counter</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+std::mutex m; // shared lock
+int counter=0; // shared data
+void increment(){
+  std::lock_guard&lt;std::mutex&gt; hold(m); // lock
+  ++counter; // protected critical section
+} // hold destroyed =&gt; unlock</code></pre>
+<div class="worked-explanation"><p><strong>Timeline:</strong> (1) counter=0. (2) T0 locks mutex m. (3) T1 must wait. (4) T0 increments to 1 and lock_guard unlocks at scope exit. (5) T1 locks and increments to 2. <strong>Final value: 2.</strong> Without protection both could read 0 and write 1; an actual C++ data race is undefined behaviour.</p>
+<p><strong>Variables:</strong> <code>m</code>=exclusive mutex, <code>counter</code>=shared integer, <code>hold</code>=RAII guard object; <code>lock_guard</code> unlocks automatically. Manual <code>lock</code>/<code>unlock</code> is possible, but RAII is safer.</p></div>
+
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="producer-consumer">
+<h3>Producer–consumer: mutex, condition_variable and semaphore</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+#include &lt;condition_variable&gt;
+#include &lt;queue&gt;
+std::mutex m;
+std::condition_variable cv;
+std::queue&lt;int&gt; q; bool finished=false;
+void produce(int value) {
+  { std::lock_guard&lt;std::mutex&gt; lock(m);
+    q.push(value); }
+  cv.notify_one();
+}
+int consume() {
+  std::unique_lock&lt;std::mutex&gt; lock(m);
+  cv.wait(lock, [] { return !q.empty() || finished; });
+  if(q.empty()) return -1; // finished, no work
+  int v=q.front(); q.pop(); return v;
+}
+// When ending, set finished=true WITH m locked,
+// then cv.notify_all(). -1 is the end marker.</code></pre>
+<div class="worked-explanation"><p>The <strong>producer</strong> adds <code>value</code> to queue <code>q</code> while mutex <code>m</code> protects the container. <code>cv.notify_one()</code> alerts one waiting consumer. The <strong>consumer</strong> calls <code>cv.wait(lock,predicate)</code>: it releases the mutex while sleeping, reacquires it on waking and rechecks the condition.</p>
+<p><strong>Variables:</strong> <code>q</code>=FIFO queue, <code>m</code>=mutex, <code>cv</code>=condition variable, <code>finished</code>=producer has stopped, <code>v</code>=consumed item. A <code>unique_lock</code> is needed so wait can unlock/relock the mutex. <code>std::counting_semaphore&lt;3&gt; permits(3)</code> allows up to 3 concurrent jobs, but does not alone guard a shared counter or queue.</p>
+<pre class="worked-code"><code>#include &lt;semaphore&gt;
+#include &lt;mutex&gt;
+std::counting_semaphore&lt;3&gt; permits(3); // 3 slots
+std::mutex m; int counter=0;
+void job(){
+  permits.acquire(); // 3 jobs may enter
+  { std::lock_guard&lt;std::mutex&gt; guard(m);
+    ++counter; } // only 1 writes at a time
+  doWorkNoThrow(); // illustrative: no exception
+  permits.release(); // return slot
+}</code></pre></div>
+
+</article>
+<article class="worked-example worked-example-wide" data-worked-example="deadlock">
+<h3>Deadlock, starvation, livelock and prevention</h3>
+<pre class="worked-code"><code>std::mutex m1, m2;
+// Bad: T0 locks m1 -&gt; waits m2
+//      T1 locks m2 -&gt; waits m1
+void safe(){ std::scoped_lock both(m1,m2);
+  // both locks acquired without circular wait
+}
+// std::unique_lock is movable and supports
+// unlock()/lock(); used by condition_variable.</code></pre>
+<div class="worked-explanation"><p><strong>Deadlock:</strong> T0 holds <code>m1</code> and waits for <code>m2</code>; T1 holds <code>m2</code> and waits for <code>m1</code>. Neither progresses. <code>std::scoped_lock both(m1,m2)</code> acquires both locks using deadlock-avoidance logic. Or acquire locks in the same order everywhere.</p>
+<p><strong>Starvation:</strong> a participant repeatedly cannot obtain its turn. <strong>Livelock:</strong> participants keep taking actions but make no useful progress. <code>unique_lock</code> is movable and unlockable; it supports <code>condition_variable::wait</code>.</p></div>
+
+</article><article class="worked-example" data-worked-example="single-thread">
 <h3>1. Which cells change when one fixed thread runs a loop?</h3>
 <pre class="worked-code"><code>H=6; W=8;
 blockIdx=(1,0); blockDim=(4,2); threadIdx=(2,1);
