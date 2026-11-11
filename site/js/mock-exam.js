@@ -3,6 +3,7 @@ import {h,highlightC} from "./lib/ui.js";
 import {t,EN} from "./lib/i18n.js";
 import {QUESTIONS,EXAM_MINUTES,scoreAnswer,scoreSummary} from "./mock-exam-model.js";
 import {createHoverGrace} from "./hover-grace.js";
+import {suggestedAnswerWidth} from "./mock-field-width.js";
 
 const tr=(a,b)=>t(a,b);
 const root=document.getElementById("mock-exam");
@@ -70,14 +71,36 @@ function codeLines(question,entry,rerender){
    if(m.index>last)body.append(h("span",{html:highlightC(line.slice(last,m.index))}));
    const key=m[1],value=entry.response&&typeof entry.response==="object"?entry.response[key]||"":"";
    // Identical placeholder keys are single input fields by design.
-   const input=h("input",{type:"text",value,autocomplete:"off",spellcheck:"false",
+   const input=h("textarea",{rows:"1",wrap:"off",autocomplete:"off",spellcheck:"false",
     class:"mock-inline-input","aria-label":question.labels?.[key]||key,
-    placeholder:question.labels?.[key]||"?",size:Math.min(25,Math.max(8,key.length+5))});
+    placeholder:question.labels?.[key]||"?"});
+   input.value=value;
+   input.style.minWidth=suggestedAnswerWidth(value)+"ch";
+   const expand=h("button",{type:"button",class:"mock-field-expand",
+    "aria-expanded":"false",
+    "aria-label":tr("Bu kod boşluğunu genişlet veya daralt","Expand or collapse this code field"),
+    title:tr("Kutuyu köşesinden sürükleyebilir ya da bu düğmeyle açabilirsin",
+      "Drag the corner to resize or use this button")}, "↔");
+   expand.addEventListener("click",()=>{
+     const open=input.classList.toggle("is-expanded");
+     expand.setAttribute("aria-expanded",String(open));
+     expand.setAttribute("title",open?tr("Daralt","Collapse"):tr("Genişlet","Expand"));
+     input.focus();
+   });
+   input.addEventListener("keydown",event=>{
+     if(event.key==="Enter"){
+       event.preventDefault();
+       const inputs=[...wrap.querySelectorAll(".mock-inline-input")];
+       const next=inputs[inputs.indexOf(input)+1];
+       if(next)next.focus();
+     }
+   });
    input.addEventListener("input",()=>{
+    input.style.minWidth=suggestedAnswerWidth(input.value)+"ch";
     entry.response[key]=input.value;entry.revealed=false;entry.selfScore=null;entry.solutionVisible=false;
     rerender();sumUI();
    });
-   body.append(input);slots.set(key,input);
+   body.append(input,expand);slots.set(key,input);
    last=re.lastIndex;
   }
   if(last<line.length)body.append(h("span",{html:highlightC(line.slice(last))}));
