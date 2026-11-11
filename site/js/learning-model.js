@@ -93,3 +93,13 @@ export function warpSegments(stride=1,offset=0,wordBytes=4){
   for(const a of addresses)for(let byte=a;byte<a+wordBytes;byte++)touched.add(Math.floor(byte/32));
   return {addresses,segments:touched.size,bytes:touched.size*32,uniqueBytes:new Set(addresses).size*wordBytes};
 }
+
+
+/** Threads in a 3D block are linearised with x varying fastest. */
+export function cuda3dIndex(bx,by,bz,tx,ty,tz){
+  valid(whole(bx,by,bz,tx,ty,tz) && bx>0 && by>0 && bz>0 && bx*by*bz<=1024
+    && tx>=0 && tx<bx && ty>=0 && ty<by && tz>=0 && tz<bz);
+  const planeOffset=tz*bx*by,linear=planeOffset+ty*bx+tx;
+  return {linear,warp:Math.floor(linear/32),lane:linear%32,
+    threads:bx*by*bz,planeOffset};
+}
