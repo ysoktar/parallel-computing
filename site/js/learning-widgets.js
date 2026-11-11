@@ -363,7 +363,7 @@ function mountTile(root){
       preview:(r,c,axis)=>{if(type==="M"&&r!==null)hover(r,s.pinned.c,axis==="col"?"col":"row");
         else if(type==="N"&&c!==null)hover(s.pinned.r,c,axis==="row"?"row":"col");},
       clear
-    },{value:(r,c)=>`${r},${c}`});
+    },{value:(r,c)=>`${r},${c}`,hoverGrace:s.hoverGrace});
   panels.append(host);
  }
  function render(){
@@ -443,17 +443,17 @@ function mountCoalesce(root){
   {role:"address",code:"float x = a[offset + lane * stride];"},
   {role:"segment",code:"// aligned 32-byte segments touched by the warp"}
  ]);
- const s={stride:1,offset:0,pinned:4,hover:null,role:null};
+ const s={stride:1,offset:0,pinned:4,hover:null,role:null,hoverGrace:createHoverGrace()};
  const stride=options("stride",[[1,"1"],[2,"2"],[8,"8"],[1024,"1024"]],1,v=>{s.stride=Number(v);render();});
  const offset=number("offset",0,0,8,v=>{s.offset=v;render();});
  p.controls.append(stride.el,offset.el);
  const lanes=elt("div","learning-lanes");p.figure.append(lanes);
  const btns=Array.from({length:32},(_,i)=>{
    const b=h("button",{type:"button",class:"learning-lane"},String(i));
-   b.addEventListener("mouseenter",()=>{s.hover=i;render();});
-   b.addEventListener("mouseleave",()=>{s.hover=null;render();});
-   b.addEventListener("focus",()=>{s.hover=i;render();});
-   b.addEventListener("blur",()=>{s.hover=null;render();});
+   b.addEventListener("mouseenter",()=>s.hoverGrace.enter(()=>{s.hover=i;render();}));
+   b.addEventListener("mouseleave",()=>s.hoverGrace.leave(()=>{s.hover=null;render();}));
+   b.addEventListener("focus",()=>s.hoverGrace.enter(()=>{s.hover=i;render();}));
+   b.addEventListener("blur",()=>s.hoverGrace.leave(()=>{s.hover=null;render();}));
    b.addEventListener("click",()=>{s.pinned=i;render();});
    lanes.append(b);return b;
  });
@@ -488,6 +488,7 @@ function mountTranspose(root){
   {role:"write",code:"B[col * N + row] = value;"}
  ]);
  let pinned={r:2,c:3},hover=null,role=null;
+ const hoverGrace=createHoverGrace();
  const pair=elt("div","learning-matrices"),original=elt("div","learning-tile-matrix"),
    target=elt("div","learning-tile-matrix");
  original.append(elt("strong","learning-matrix-name","A"));
@@ -499,12 +500,12 @@ function mountTranspose(root){
   pick:(r,c)=>{pinned={r,c};render();},
   pickRow:r=>{pinned.r=r;render();},
   pickColumn:c=>{pinned.c=c;render();}
- },{value:(r,c)=>r*6+c});
+ },{value:(r,c)=>r*6+c,hoverGrace});
  const to=matrix(target,6,6,{
   preview:(r,c,axis)=>{hover={r:c??pinned.r,c:r??pinned.c,axis:axis==="row"?"col":axis==="col"?"row":"cell"};render();},
   clear:()=>{hover=null;render();},
   pick:(r,c)=>{pinned={r:c,c:r};render();}
- },{value:(r,c)=>c*6+r});
+ },{value:(r,c)=>c*6+r,hoverGrace});
  p.onCode(v=>{role=v;render();});
  function render(){
   const view=hover||pinned,x=transposeCell(6,view.r,view.c);
@@ -531,6 +532,7 @@ function mountBarrier(root){
    {role:"read",code:"int next = tile[(threadIdx.x + 1) % 4];"}
  ]);
  let state=newBarrier(true),selected=0,hover=null,role=null;
+ const hoverGrace=createHoverGrace();
  const switcher=h("input",{type:"checkbox",checked:true,"aria-label":lang("Bariyer etkin","Barrier enabled")});
  const panel=elt("div","learning-barrier-lanes");
  const reset=()=>{state=newBarrier(switcher.checked);render();};
@@ -539,10 +541,10 @@ function mountBarrier(root){
    button(lang("Sıfırla","Reset"),reset));
  const lanes=Array.from({length:4},(_,i)=>{
   const b=h("button",{type:"button",class:"learning-barrier-lane"});
-  b.addEventListener("mouseenter",()=>{hover=i;render();});
-  b.addEventListener("mouseleave",()=>{hover=null;render();});
-  b.addEventListener("focus",()=>{hover=i;render();});
-  b.addEventListener("blur",()=>{hover=null;render();});
+  b.addEventListener("mouseenter",()=>hoverGrace.enter(()=>{hover=i;render();}));
+  b.addEventListener("mouseleave",()=>hoverGrace.leave(()=>{hover=null;render();}));
+  b.addEventListener("focus",()=>hoverGrace.enter(()=>{hover=i;render();}));
+  b.addEventListener("blur",()=>hoverGrace.leave(()=>{hover=null;render();}));
   b.addEventListener("click",()=>{selected=i;state=stepBarrier(state,i);render();});
   panel.append(b);return b;
  });
