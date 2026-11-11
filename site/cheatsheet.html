@@ -196,6 +196,102 @@ starvation: one participant never proceeds</pre>
 </div>
 </section>
 <div id="copy-ready-end"></div>
+<section class="worked-guide"><h2 id="worked-examples">Kopya kâğıdına geçirmeden önce anlaman gereken çözümlü örnekler</h2>
+<p>Yukarıdaki iki A4 yüzü kısa tutuldu. Aşağıdaki örnekler hangi indeksin nereden geldiğini, hangi hücrenin boyanacağını ve kodun neden o şekilde yazıldığını adım adım gösterir. İşine yarayan açıklamaları kendi el yazınla kâğıda aktar, ardından sınavdaki ilgili soruyu çöz.</p>
+<div class="worked-examples"><article class="worked-example" data-worked-example="single-thread">
+<h3>1. Sabit thread ve for döngüsünde gerçekten hangi hücreler değişir?</h3>
+<pre class="worked-code"><code>H=6; W=8;
+blockIdx=(1,0); blockDim=(4,2); threadIdx=(2,1);
+row=0*2+1=1; col=1*4+2=6;
+for(dy=0;dy&lt;3;dy++){
+  r=row+2*dy;
+  A[r*W+col]++; // valid r&lt;H
+}
+dy=0 -&gt; A[1][6] = A[14]
+dy=1 -&gt; A[3][6] = A[30]
+dy=2 -&gt; A[5][6] = A[46]</code></pre>
+<div class="worked-explanation"><p><strong>Neden:</strong> <code>blockIdx</code> ve <code>threadIdx</code> sabit olduğu için <code>col=6</code> değişmez. Döngü yalnızca <code>r</code> değerini 2 artırır. Matris 6×8 olduğundan 1, 3, 5 satırları geçerlidir. <strong>İşaretle:</strong> 6. sütunda, 1., 3. ve 5. satırlar (0 tabanlı).</p>
+ <p><strong>Sınav tuzağı:</strong> <code>for</code> ile dolaşılan <code>dy</code>, <code>threadIdx.y</code> değildir. Biri döngü değişkeni, diğeri CUDA thread konumudur.</p></div>
+<p><a href="mock-exam.html#question-trace-single">İlgili deneme sorusunu çöz</a></p>
+</article>
+<article class="worked-example" data-worked-example="block-loop">
+<h3>2. Tek thread yerine tüm blok verilirse nasıl çizerim?</h3>
+<pre class="worked-code"><code>H=6; W=8; blockIdx=(1,1); blockDim=(4,2);
+tx=0..3 -&gt; col=1*4+tx = 4,5,6,7
+ty=0..1 -&gt; row=1*2+ty = 2,3
+for(j=0;j&lt;2;j++) r=row+j*2;
+j=0 -&gt; rows 2,3; j=1 -&gt; rows 4,5
+WROTE: rows {2,3,4,5} × cols {4,5,6,7}
+count = 4 rows * 4 cols = 16 cells</code></pre>
+<div class="worked-explanation"><p><strong>Neden:</strong> Bir blokta <code>4×2=8</code> thread bulunur. Her thread iki defa yazar: toplam 16 hücre. Önce <code>tx</code> ile dört sütun, sonra <code>ty</code> ile iki satır, son olarak döngüyle iki yeni satır bulunur.</p>
+ <p><strong>Çizim yöntemi:</strong> 6×8 matrisi çiz; <code>r=2..5, c=4..7</code> dikdörtgenini boya. Tek thread'in erişimleriyle bütün bloğun birleşimini karıştırma.</p></div>
+<p><a href="mock-exam.html#question-trace-block">İlgili deneme sorusunu çöz</a></p>
+</article>
+<article class="worked-example" data-worked-example="mutex-semaphore">
+<h3>3. Mutex, lock_guard ve semaphore aynı şey değil</h3>
+<pre class="worked-code"><code>#include &lt;mutex&gt;
+#include &lt;semaphore&gt;
+std::mutex m;
+std::counting_semaphore&lt;3&gt; slots(3);
+int counter=0;
+void job(){
+  slots.acquire(); // at most 3 jobs enter
+  { std::lock_guard&lt;std::mutex&gt; hold(m);
+    ++counter; }  // only 1 thread modifies it
+  doWork();
+  slots.release();
+}
+// Without mutex, 3 concurrent increments may race.</code></pre>
+<div class="worked-explanation"><p><strong>Fark:</strong> Semaphore aynı anda <strong>3 işe izin</strong> verebilir; bu, <code>counter++</code> için karşılıklı dışlama sağlamaz. <code>mutex</code> tek kilit sahibine izin verir. <code>lock_guard</code> kapsam sona erdiğinde mutex'i otomatik açar.</p>
+ <p><strong>Sözel cevap:</strong> İki thread <code>m1→m2</code> ve <code>m2→m1</code> sırasıyla kilit beklerse <strong>deadlock</strong> olabilir. <strong>Starvation</strong> bir thread'in sürekli geride bırakılmasıdır. Bir C++ data race için belirli çıktı garanti edilmez.</p></div>
+<p><a href="mock-exam.html#question-mutex-semaphore">İlgili deneme sorusunu çöz</a></p>
+</article>
+<article class="worked-example" data-worked-example="coalescing">
+<h3>4. Coalescing: adres sıralaması ve 32 B segment</h3>
+<pre class="worked-code"><code>32 lanes, float=4 B, aligned base=0
+lane i: A[i]        -&gt; 0,4,8,...,124 B
+  covered segment numbers: 0,1,2,3 (4×32B)
+lane i: A[2*i]      -&gt; 0,8,16,...,248 B
+  segments: 0..7 (8×32B)
+lane i: A[1024*i]   -&gt; spacing=4096 B
+  segments: 32 distinct (32×32B = 1024B)
+A[row*W+col] -&gt; if col changes +1, address +4B</code></pre>
+<div class="worked-explanation"><p><strong>Neden:</strong> Satır-major bellekte yan yana <code>threadIdx.x</code> lane'leri yan yana sütunları okursa 128 baytlık istek dört 32 B segmente sığar. <code>row</code> değişirken <code>W</code> ile çarpılan adresler uzaklaşır.</p>
+ <p><strong>Önemli:</strong> Bu sayılar <em>hizalı 32 B segment öğretim modeli</em> içindir; gerçek GPU'nun cache ve bellek transaction davranışı donanımına bağlıdır. Pitch bayt cinsindendir: <code>base + row*pitchBytes + col*4</code>.</p></div>
+<p><a href="mock-exam.html#question-coalescing">İlgili deneme sorusunu çöz</a></p>
+</article>
+<article class="worked-example" data-worked-example="tiled">
+<h3>5. Tiled matmul: bir thread'in bir fazda ne yüklediği</h3>
+<pre class="worked-code"><code>N=32; T=8; blockIdx=(1,0);
+threadIdx=(2,3); phase=1
+row=0*8+3=3; col=1*8+2=10
+Mds[3][2] &lt;- M[3][1*8+2] = M[3][10] = M[106]
+Nds[3][2] &lt;- N[1*8+3][10] = N[11][10] = N[362]
+__syncthreads(); // all shared tiles loaded
+for(k=0;k&lt;8;k++) sum+=Mds[3][k]*Nds[k][2];
+__syncthreads(); // next phase must not overwrite
+P[3*32+10] = P[106] &lt;- accumulated 4 phases</code></pre>
+<div class="worked-explanation"><p><strong>Bir thread bir fazda</strong> yalnız iki global değer yükler fakat 8 çarpım-toplama yapar; diğer 63 thread karonun kalan değerlerini yüklediğinden shared bellek yeniden kullanılır. <code>phase=0,1,2,3</code> olmak üzere dört faz vardır.</p>
+ <p><strong>İki bariyer:</strong> İlk <code>__syncthreads()</code> tüm yüklemeler bitmeden okumayı önler (RAW). İkincisi diğer thread'lerin hâlâ kullandığı karonun sonraki fazda ezilmesini önler. Bariyeri ayrışan <code>if</code> içine koyma.</p></div>
+<p><a href="mock-exam.html#question-tiled-matmul">İlgili deneme sorusunu çöz</a></p>
+</article>
+<article class="worked-example" data-worked-example="transpose">
+<h3>6. Transpose: aynı değer, farklı lineer indeks</h3>
+<pre class="worked-code"><code>A is 3×5 (H=3,W=5), B is 5×3
+A[row=1][col=3] =&gt; A[1*5+3] = A[8]
+B[col=3][row=1] =&gt; B[3*3+1] = B[10]
+__global__ void trans(float*A,float*B,int H,int W){
+  int row=blockIdx.y*blockDim.y+threadIdx.y;
+  int col=blockIdx.x*blockDim.x+threadIdx.x;
+  if(row&lt;H &amp;&amp; col&lt;W) B[col*H+row]=A[row*W+col];
+}</code></pre>
+<div class="worked-explanation"><p><strong>Neden:</strong> A genişliği 5, B genişliği 3'tür. Değerin satır/sütun koordinatları yer değiştirir. Komşu x-lane'ler A'yı ardışık okuyabilir fakat B'ye yazarken <code>H</code> elemanlık stride ile ayrılır.</p>
+ <p><strong>Sınav yöntemi:</strong> Önce çıktı matrisinin boyutunu yaz (<code>W×H</code>); sonra hedefin lineer adresini hedef matrisin <em>yeni genişliği</em> ile çarp.</p></div>
+<p><a href="mock-exam.html#question-transpose-write">İlgili deneme sorusunu çöz</a></p>
+</article></div>
+<div class="callout key"><p><strong>Sık yapılan hatalar:</strong> localID global matris indeksi değildir; for değişkeni threadIdx değildir; semaphore tek başına kritik bölüm koruması değildir; ayrışan blok bariyeri hatalıdır; yüksek occupancy her zaman daha hızlı değildir.
+ <a href="mock-exam.html">Tam 120 dakikalık kod yazmalı denemeyi aç.</a></p></div>
+</section>
 <div class="callout key">
   <p>Yazma ipuçları: ince uçlu kalem; formülleri değişken adlarıyla kısaltın (<code>bx, by, tx, ty, T, W</code>); kod satırlarını tam yazın (sınavda kod yazdırılabilir); iki küçük çizim yapın: 8×32 blokta warp şekli ve faz m'de M/N karoları. Sayıları "hesap makinesi yok" diye hazır yazın.</p>
 </div>
