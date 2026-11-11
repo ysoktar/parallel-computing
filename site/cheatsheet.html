@@ -3,46 +3,198 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopya kâğıdı önerisi · Paralel Hesaplama</title>
+<title>Hazır A4 kopya kâğıdı · Paralel Hesaplama</title>
 <meta name="description" content="2. ara sınav için el yazısı A4 kopya kâğıdı önerisi: iki yüzün yerleşim planı ve her bölgeye yazılacaklar (indeksler, tiled matmul, __syncthreads, coalescing, transpose, unrolling, sayısal örnekler, bellek türleri, L1–L3).">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
+<script type="module" src="js/cheat-copy.js"></script>
 </head>
 <body data-page="cheatsheet">
 <main><div class="content">
 
-<h1>Kopya kâğıdı önerisi</h1>
+<h1>İki yüzlü CUDA kopya kâğıdı</h1>
 <p class="lead">Kural: 1 adet A4, iki yüz, <strong>el yazısı</strong>, sınavdan önce kontrol ediliyor. Aşağıda iki yüzün yerleşim planı ve her bölgeye ne yazılacağı var. Sınav 2 saat; kâğıda bakma süresi kısa olsun diye en çok sorulacaklar ön yüzde.</p>
 
 <div class="callout gotcha">
   <p>Bu sayfayı yazdırıp götüremezsiniz: fotokopi ve bilgisayar çıktısı yasak. Kendi elinizle geçirin; yazmanın kendisi de iyi bir tekrar. <strong>Yazmayın:</strong> bank conflict ve texture memory (bu sınavda yok), slaytlardaki uzun açıklamalar.</p>
 </div>
 
-<h2>Yerleşim planı</h2>
-<p>Kırmızı kenarlı bölgeler duyuruda açıkça geçen konular (shared memory, <code>__syncthreads()</code>, coalescing) ve geçmiş yıl sorusu. Bölge numaraları aşağıdaki başlıklarla aynı.</p>
-<div class="a4-pair">
-  <div class="a4 front">
-    <div class="hd a4-title">Ön yüz: CUDA çekirdeği</div>
-    <div class="rg hot"><b>1. İndeksler + warp şekli</b><span>row/col, lineer id, warp = id/32, dim3(8,32) çizimi</span></div>
-    <div class="rg hot tall"><b>3. Tiled matmul (kare T)</b><span>tam kod, Mds/Nds satırlarının anlamı, iki sync'in nedeni, okuma azalması T</span></div>
-    <div class="rg"><b>2. Host iskeleti</b><span>Malloc → Memcpy → &lt;&lt;&lt;&gt;&gt;&gt; → Memcpy → Free, niteleyiciler</span></div>
-    <div class="rg hot span2"><b>4. &lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt; çözümü + 8×32 tiled</b><span>2304 thread, 72 warp, 96×24, örnek thread (2,1)/(5,10) → (42,21); Mds[32][8], Nds[8][8]</span></div>
-    <div class="rg hot"><b>5. __syncthreads kuralları</b><span>blok içi, herkes çalıştırmalı, if/return tuzağı, doğru/yanlış örnek</span></div>
-    <div class="rg"><b>6. Shared memory deseni</b><span>yükle → sync → kullan → sync → yaz; reverse örneği; "önce kopyala"</span></div>
-  </div>
-  <div class="a4 back">
-    <div class="hd a4-title">Arka yüz: bellek ve sayılar</div>
-    <div class="rg hot"><b>7. Coalescing</b><span>32/64/128 B, hizalama, desen → segment tablosu, 1024 vs 128</span></div>
-    <div class="rg"><b>8. Transpose</b><span>copy, naive (yazma ✗), shared tile (ikisi ✓), 32×8 blok</span></div>
-    <div class="rg"><b>9. Sayısal örnekler</b><span>G80, GT200, CGMA, pitch</span></div>
-    <div class="rg"><b>10. Bellek türleri</b><span>register, local, shared, global, constant: kapsam/ömür/hız</span></div>
-    <div class="rg"><b>11. Unrolling + derleme</b><span>#pragma unroll artı/eksi; .cu→PTX→SASS, -arch/-code</span></div>
-    <div class="rg"><b>12. Warp, blok, occupancy</b><span>SM'ye blok atama, latency hiding, blok bağımsızlığı</span></div>
-    <div class="rg span2"><b>13. L1–L3 hızlı</b><span>Amdahl, Gustafson, verim, Flynn, PCAM, desenler, data race, mutex/semafor, deadlock/livelock/starvation</span></div>
-  </div>
+<h2 id="copy-ready">Hazır kopya kâğıdı: aynen el yazısıyla geçir</h2>
+<section class="copy-ready" aria-label="Ön ve arka yüz için hazır el yazısı taslağı">
+<p class="copy-ready-note">Bu iki A4 yüzü doldurulmuş taslaktır. Formülleri ve kod satırlarını kendi el yazınla aktar; sınava bilgisayar çıktısı götürmek yasak. Üstteki düğmelerle yüz değiştir, ekranda yazıları büyüt.</p>
+<div class="copy-sheet-controls" role="group" aria-label="Görünüm seçenekleri">
+<button type="button" data-copy-view="front" aria-pressed="false">Ön yüz</button>
+<button type="button" data-copy-view="back" aria-pressed="false">Arka yüz</button>
+<button type="button" data-copy-view="both" aria-pressed="true">İkisi</button>
+<label>Metin boyutu <input type="range" min="85" max="155" step="5" value="100" data-copy-zoom aria-label="Kâğıttaki metnin ekran ölçeği"><output data-copy-zoom-label>100%</output></label>
 </div>
+<div class="copy-sheet-pair" data-view="both">
+<article class="copy-sheet-page" data-sheet="front" aria-label="A4 ön yüz">
+<header class="copy-sheet-page-head"><strong>ÖN YÜZ · CUDA İNDEKS + KERNEL</strong><span>BİL 455/533 · 2. vize</span></header>
+<div class="copy-sheet-grid"><section class="copy-sheet-card" data-copy-card="1">
+<h3>1. CUDA indeksleri, 1D / 2D / 3D</h3>
+<pre class="copy-sheet-code">gid = blockIdx.x*blockDim.x + threadIdx.x
+col = blockIdx.x*blockDim.x + threadIdx.x
+row = blockIdx.y*blockDim.y + threadIdx.y
+A[row*W + col] ; if(row&lt;H &amp;&amp; col&lt;W)
+id2D = ty*bdx + tx ; warp=id2D/32 ; lane=id2D%32
+id3D = tz*bdx*bdy + ty*bdx + tx
+grid = ((W+bx-1)/bx, (H+by-1)/by)
+covered = (gx*bx) cols × (gy*by) rows
+warp=32 threads ; block&lt;=1024 threads</pre>
+<p>x sütun, y satır; bölmeler tamsayı. Sınırdaki taşan thread yazmaz.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="2">
+<h3>2. CUDA host iskeleti</h3>
+<pre class="copy-sheet-code">float *dA, *dB;
+cudaMalloc((void**)&amp;dA, bytes);
+cudaMalloc((void**)&amp;dB, bytes);
+cudaMemcpy(dA,hA,bytes,cudaMemcpyHostToDevice);
+k&lt;&lt;&lt;grid,block&gt;&gt;&gt;(dA,dB,W);
+cudaGetLastError(); cudaDeviceSynchronize();
+cudaMemcpy(hB,dB,bytes,cudaMemcpyDeviceToHost);
+cudaFree(dA); cudaFree(dB);
+__global__: host→device, __device__: device→device</pre>
+<p>Kernel launch asenkron. H2D / D2H ve bayt sayısına dikkat.</p>
+</section>
+<section class="copy-sheet-card wide" data-copy-card="3">
+<h3>3. Tiled matmul: W×W, T×T, W % T = 0</h3>
+<pre class="copy-sheet-code">__shared__ float Mds[T][T], Nds[T][T];
+int row=blockIdx.y*T+ty, col=blockIdx.x*T+tx;
+float sum=0;
+for (int m=0; m&lt;W/T; ++m) {
+  Mds[ty][tx] = M[row*W + m*T + tx];
+  Nds[ty][tx] = N[(m*T + ty)*W + col];
+  __syncthreads();                // tile ready
+  for (int k=0;k&lt;T;++k) sum+=Mds[ty][k]*Nds[k][tx];
+  __syncthreads();                // tile may be overwritten
+}
+P[row*W+col]=sum;</pre>
+<p>Naive: 2W global okuma / çıktı. Tiled: 2W/T / çıktı; idealde T kat daha az. 2·T²·4 B shared/blok.</p>
+</section>
+<section class="copy-sheet-card wide" data-copy-card="4">
+<h3>4. Sınav hesabı: <<<dim3(3,3), dim3(8,32)>>></h3>
+<pre class="copy-sheet-code">blocks=3*3=9 ; threads/block=8*32=256
+total threads=9*256=2304 ; warps/block=8
+warps(total)=9*8=72
+covered: rows=3*32=96, cols=3*8=24
+blockIdx=(2,1), threadIdx=(5,10)
+row=1*32+10=42 ; col=2*8+5=21
+P[row*24+col]=P[42*24+21]=P[1029]
+local id=10*8+5=85 ; warp=85/32=2 ; lane=21
+8×32: 1 warp spans 4 rows × 8 columns</pre>
+<p>8×32 tiled örneği: Mds[32][8], Nds[8][8]; Nds'yi yalnız ty<8 yükler, iki bariyer koşul dışındadır.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="5">
+<h3>5. __syncthreads() kuralları</h3>
+<pre class="copy-sheet-code">// wrong: divergent barrier
+if (tid&lt;16) { s[tid]=v; __syncthreads(); }
+// correct:
+if (tid&lt;16) s[tid]=v;
+__syncthreads();
+// load → sync → use → sync → next load</pre>
+<p>Blok bariyeridir; tüm katılan thread'ler erişmeli. Shared yazma→başka thread okuma için sync; erken return/ayrışan if tehlikeli.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="6">
+<h3>6. Shared memory ve reverse</h3>
+<pre class="copy-sheet-code">__shared__ float s[B]; // per-block, on-chip
+int t=threadIdx.x, i=blockIdx.x*B+t;
+s[t]=in[i]; __syncthreads();
+out[i]=s[B-1-t]; // reverse within block
+// reuse tile before loading next phase</pre>
+<p>Bariyer olmadan başka thread'in yazdığı değeri okumak race yaratabilir. Bloklar bağımsız.</p>
+</section></div>
+<footer class="copy-sheet-foot">1/2 · Koordinatları hesapla, sonra kodu izle.</footer>
+</article>
+<article class="copy-sheet-page" data-sheet="back" aria-label="A4 arka yüz">
+<header class="copy-sheet-page-head"><strong>ARKA YÜZ · BELLEK + PERFORMANS</strong><span>BİL 455/533 · 2. vize</span></header>
+<div class="copy-sheet-grid"><section class="copy-sheet-card wide" data-copy-card="7">
+<h3>7. Global bellek / coalescing / pitch</h3>
+<pre class="copy-sheet-code">32 lanes × float(4 B) = 128 B requested
+aligned a[lane] → 4×32 B segments (128 B)
+a[lane+1] → 5 segments (160 B)
+a[2*lane] → 8 segments (256 B)
+a[1024*lane] → 32 segments (1024 B)
+a[0] → 1 segment (broadcast)
+byte_addr = base + (row*pitchBytes) + col*4
+cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
+<p>32 B hizalı segment varsayımıdır; gerçek işlem GPU/cache'e bağlı. 2D row-major: A[row*W+col] ardışık x-lane için iyi. Pitch bayt cinsindendir.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="8">
+<h3>8. Transpose: adresin yönü</h3>
+<pre class="copy-sheet-code">// A and B: N×N, row-major
+naive: B[col*N+row] = A[row*N+col];
+read: adjacent col → coalesced
+write: adjacent col → stride N (poor)
+shared: tile[ty][tx]=A[row*N+col];
+__syncthreads();
+B[transposed_row*N+transposed_col]
+     = tile[tx][ty]; // remap tile/blocks</pre>
+<p>Shared tile okumayı ve yazmayı yakın adresli yapabilir; tile[y][x] vs tile[x][y] farkına bak.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="9">
+<h3>9. Sayısal sorular / CGMA</h3>
+<pre class="copy-sheet-code">speedup = Tserial/Tparallel
+efficiency = speedup/N
+threads/block = bx*by*bz
+warps/block = ceil(threads/block / 32)
+resident blocks/SM limited by:
+  threads, shared bytes, registers, max blocks
+CGMA = floating-point ops / global-memory accesses
+BW-limited GFLOPS ≈ BW(GB/s)*ops/byte</pre>
+<p>Eski GPU slaytlarındaki donanım sınırlarını modern GPU'ya genelleme. Sayı sorusunda verilen cihazın limitlerini kullan.</p>
+</section>
+<section class="copy-sheet-card wide" data-copy-card="10">
+<h3>10. Bellek türleri (scope / lifetime)</h3>
+<pre class="copy-sheet-code">register   : thread / thread ; fast, limited
+local      : thread / thread ; device memory, spills
+shared     : block / block   ; on-chip, sync for exchange
+global     : device threads / allocation lifetime ; DRAM
+constant   : all blocks / context ; cached, same address fast
+cudaMalloc → global allocation ; __shared__ → one array/block
+__constant__ : cudaMemcpyToSymbol()</pre>
+<p>Local ismi hızlı anlamına gelmez; register spill global bellek sistemiyle ilgilidir.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="11">
+<h3>11. nvcc / unrolling</h3>
+<pre class="copy-sheet-code">.cu → PTX (virtual ISA) → ptxas → SASS/cubin
+nvcc -arch=sm_XY ... ; -ptx ; -keep
+__CUDA_ARCH__ = XY0
+#pragma unroll 4 // fewer branches, more code
+#pragma unroll 1 // disable unrolling
++ ILP, constant indices ; - code size, register use</pre>
+<p>Çok unroll: register baskısı, spill, occupancy azalması olabilir.</p>
+</section>
+<section class="copy-sheet-card" data-copy-card="12">
+<h3>12. Warp, blok, gecikme gizleme</h3>
+<pre class="copy-sheet-code">warp = 32 consecutive linear thread IDs
+linearID = ty*blockDim.x + tx (2D)
+block → 1 SM; blocks run independently
+latency hiding: ready warp while another waits
+occupancy ≠ automatically higher performance
+SIMT: threads share instruction issue, can diverge</pre>
+<p>Warp kimliği blok içinde hesaplanır; blokların hangi SM'ye/ sırayla atanacağı garanti edilmez.</p>
+</section>
+<section class="copy-sheet-card wide" data-copy-card="13">
+<h3>13. Lecture 1–3: hızlı özet</h3>
+<pre class="copy-sheet-code">Amdahl: S=1/((1-f)+f/N); N→∞: 1/(1-f)
+Gustafson: S=(1-a)+a*N   (a=parallel-time share)
+Flynn: SISD / SIMD / MISD / MIMD
+PCAM: Partition → Communication → Agglomeration → Mapping
+patterns: task, D&amp;C, geometric, pipeline (slowest stage)
+data race: unsynchronised conflicting accesses, &gt;=1 write
+mutex: mutual exclusion/ownership ; semaphore: permits
+deadlock: wait forever; livelock: moving no progress
+starvation: one participant never proceeds</pre>
+<p>Amdahl sabit problem boyutu; Gustafson sabit süre/ölçeklenen iş yükü. Race C/C++'ta tanımsız davranıştır.</p>
+</section></div>
+<footer class="copy-sheet-foot">2/2 · Önce kapsam/ölçü, sonra coalescing.</footer>
+</article>
+</div>
+</section>
+<div id="copy-ready-end"></div>
 <div class="callout key">
   <p>Yazma ipuçları: ince uçlu kalem; formülleri değişken adlarıyla kısaltın (<code>bx, by, tx, ty, T, W</code>); kod satırlarını tam yazın (sınavda kod yazdırılabilir); iki küçük çizim yapın: 8×32 blokta warp şekli ve faz m'de M/N karoları. Sayıları "hesap makinesi yok" diye hazır yazın.</p>
 </div>
