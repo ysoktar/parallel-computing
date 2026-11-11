@@ -120,7 +120,7 @@ a[1024*lane] → 32 segments (1024 B)
 a[0] → 1 segment (broadcast)
 byte_addr = base + (row*pitchBytes) + col*4
 cudaMallocPitch(&amp;p, &amp;pitchBytes, W*4, H);</pre>
-<p>lane=thread position within warp (0..31), float=4 B; 32 B=example aligned segment, not a universal cache-line size. row/col=matrix coordinates; W=columns; pitchBytes=physical row stride in BYTES, may be greater than W*4. Hardware cache affects transactions.</p>
+<p>lane=thread position within warp (0..31), float=4 B; 32 B=example aligned segment, not a universal cache-line size. Row-major A[row*W+col]; row/col=matrix coordinates; W=columns; pitchBytes=physical row stride in BYTES, may be greater than W*4. Hardware cache affects transactions.</p>
 </section>
 <section class="copy-sheet-card" data-copy-card="8">
 <h3>8. Transpose: access direction</h3>
