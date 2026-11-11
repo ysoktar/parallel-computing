@@ -76,7 +76,7 @@ P[row*W+col]=sum;</pre>
 <p>Naive: 2W global reads/output. Tiled: 2W/T/output; ideally T× fewer. Shared/block = 2·T²·4 B.</p>
 </section>
 <section class="copy-sheet-card wide" data-copy-card="4">
-<h3>4. Worked launch: <<<dim3(3,3), dim3(8,32)>>></h3>
+<h3>4. Worked launch: &lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</h3>
 <pre class="copy-sheet-code">blocks=3*3=9 ; threads/block=8*32=256
 total threads=9*256=2304 ; warps/block=8
 warps(total)=9*8=72
