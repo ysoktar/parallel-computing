@@ -559,7 +559,7 @@ function mountDim3(root){
  const bx=number("blockDim.x",16,1,16,v=>{st.bx=v;resize();});
  const by=number("blockDim.y",8,1,16,v=>{st.by=v;resize();});
  const bz=number("blockDim.z",2,1,8,v=>{st.bz=v;resize();});
- const z=number("threadIdx.z",1,0,7,v=>{st.z=Math.min(v,st.bz-1);z.input.value=st.z;paint();});
+ const z=number("threadIdx.z",1,0,7,v=>{st.z=Math.min(v,st.bz-1);z.input.value=st.z;resize();});
  p.controls.append(bx.el,by.el,bz.el,z.el);
  let m=null;
  p.onCode(v=>{st.role=v;paint();});
