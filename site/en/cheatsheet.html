@@ -39,7 +39,8 @@
 col = blockIdx.x*blockDim.x + threadIdx.x
 row = blockIdx.y*blockDim.y + threadIdx.y
 A[row*W + col] ; if(row&lt;H &amp;&amp; col&lt;W)
-id2D = ty*bdx + tx ; warp=id2D/32 ; lane=id2D%32
+id2D = threadIdx.y * blockDim.x + threadIdx.x
+warp = id2D/32 ; lane = id2D%32
 id3D = tz*bdx*bdy + ty*bdx + tx
 grid = ((W+bx-1)/bx, (H+by-1)/by)
 covered = (gx*bx) cols × (gy*by) rows
