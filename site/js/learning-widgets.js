@@ -47,7 +47,7 @@ function lesson(root,title,description,source){
    elt("div","learning-source",
      elt("div","learning-source-label",lang("Kodla bağlantılı gösterim • Kodun üzerine de gelebilirsin","Code-linked view • Hover the source too")),
      code));
- const heading=elt("h3","learning-title",title);
+ const heading=elt("div","learning-title",title);
  const intro=elt("p","learning-intro",description);
  const wrap=elt("section","learning-widget",heading,intro,frame);
  root.replaceWith(wrap);
