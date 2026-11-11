@@ -1223,8 +1223,9 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
 .mock-inline-input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 .mock-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(330px,1fr);
   align-items:start; gap:15px; min-width:0; }
-.mock-grid-wrap { max-width:100%; overflow-x:auto; min-width:0;
-  overscroll-behavior-x:contain; }
+.mock-grid-wrap { max-width:100%; min-width:0; }
+.mock-grid-scroll { max-width:100%; min-width:0; overflow-x:auto;
+  overscroll-behavior-x:contain; scrollbar-width:thin; }
 .mock-grid-guide { font-size:.79rem; color:var(--text-2); margin:0 0 7px; }
 .mock-grid { display:grid; gap:3px; width:max-content; padding:3px 2px 8px; }
 .mock-grid-axis { display:grid; place-items:center; min-width:37px; height:37px;
