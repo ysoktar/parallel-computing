@@ -1353,3 +1353,12 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
 @media print {
   body[data-page="cheatsheet"] .cheat-symbol-guide { display:none!important; }
 }
+
+
+/* Keep the A4 front within one page without shrinking the actual text size. */
+@media(min-width:641px) {
+  .copy-sheet-page[data-sheet="front"] .copy-sheet-grid { gap:4px 7px; }
+  .copy-sheet-page[data-sheet="front"] .copy-sheet-card { padding:4px 6px; }
+  .copy-sheet-page[data-sheet="front"] .copy-sheet-card p { margin-top:3px; line-height:1.18; }
+  .copy-sheet-page[data-sheet="front"] .copy-sheet-code { line-height:1.12; }
+}
