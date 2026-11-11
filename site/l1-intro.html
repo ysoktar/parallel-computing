@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
 </head>
 <body data-page="l1-intro">
 <main><div class="content">
@@ -96,6 +97,8 @@ N → ∞:  speedup → 1 / (1 − α)
   <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
 </ul>
 
+<h3>Uygula: Amdahl sınırını tahmin et</h3>
+<div data-learning="amdahl"></div>
 <h2>Gustafson-Barsis yasası</h2>
 <p>Paralel platform sadece seri programı hızlandırmaz, <strong>daha büyük problemleri</strong> çözebilir. Soru: paralel makinenin çözdüğü problemi seri makine ne kadar sürede çözer?</p>
 <p>Varsayımlar: paralel uygulama N CPU'da <strong>sabit</strong> T süresinde çalışır; zamanın α kısmında tüm makineler çalışır, (1 − α) kısmı seridir. T sabitken N artarsa yapılan iş artar.</p>
