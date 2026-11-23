@@ -27,6 +27,10 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp'ın thread'leri) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalleden (ardışık adresler) ise tek otobüs (tek 128 baytlık transaction) yeter. Her biri farklı semtten ise 32 ayrı sefer gerekir; otobüslerin çoğu boş koltukla gider. Coalescing, thread'lerin adreslerini aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği: okuma bir yönde, yazma diğer yönde ardışık; shared memory bu iki yönü birbirine çevirir.</p>
+</div>
+
 <h2>Global bellek transaction'ları</h2>
 <p>Lecture 6, slayt 43–48:</p>
 <ul>
@@ -194,10 +198,12 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
   <p>Buradaki <code>__syncthreads()</code> zorunlu: bir thread'in yazdığı <code>tile[threadIdx.x][threadIdx.y+j]</code> başka bir thread (hatta başka bir warp) tarafından yüklendi. Sadece kopya yapan <code>copySharedMem</code>'de her thread kendi yüklediğini yazdığı için bariyer teknik olarak gereksizdir (yazıda sadece karşılaştırma için konmuş); ölçümler bariyerin darboğaz olmadığını gösterir.</p>
 </div>
 
-<h3>4) Bank conflict'siz versiyon <span class="badge-beyond">finalde</span></h3>
-<div class="callout beyond">
-  <p>32×32 karoda bir sütunun tüm elemanları aynı shared memory bank'ına düşer; sütun okumak (<code>tile[threadIdx.x][…]</code>) 32-yollu bank conflict'tir. Çözüm tek satır: <code>__shared__ float tile[TILE_DIM][TILE_DIM + 1];</code> (her satır bir bank kayar). Bank optimizasyonu bu sınavda yok; sadece neden var olduğunu bilmek yeter.</p>
-</div>
+<h3>4) Bank conflict'siz versiyon</h3>
+<p>32×32 karoda <code>tile[r][c]</code>'nin bank'ı <code>(32r + c) % 32 = c</code>: bir sütunun 32 elemanı aynı bank'ta. Yazma aşaması sütun okur (<code>tile[threadIdx.x][threadIdx.y + j]</code>): warp'taki 32 thread aynı bank'tan farklı kelimeler ister → <strong>32-yollu bank conflict</strong>. Çözüm tek satır, satırları bir eleman uzatmak:</p>
+<pre class="code" data-run="transpose.cu">
+__shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: sütun boyunca hepsi farklı
+</pre>
+<p>Ayrıntılı bank hesabı ve görselleştirme: <a href="l6-cuda-memory.html#bank-lar-ve-bank-conflict-ler">L6, bank'lar</a>.</p>
 
 <h3>Ölçümler (NVIDIA yazısı, GB/s)</h3>
 <table class="simple">
@@ -249,6 +255,20 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li>Döngü sayısı sabitse (transpose'daki <code>j</code> döngüsü: <code>TILE_DIM/BLOCK_ROWS = 4</code> tur; tiled matmul'deki <code>k</code> döngüsü: <code>TILE_WIDTH</code> tur) derleyici genelde zaten açar. Döngü sayısı çalışma zamanında belliyse (<code>width/TILE_WIDTH</code>) tam açılamaz.</li>
   <li>Bağlantı: L6'daki "local memory" slaytı. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
 </ul>
+
+<h2>Özet</h2>
+<ul>
+  <li>Bir warp'ın erişimleri 32/64/128 baytlık, boyutuna hizalı segmentlere toplanır; ne kadar az segment, o kadar iyi.</li>
+  <li>Kontrol: adreste <code>threadIdx.x</code> çarpansız ve en sağda mı? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>2D dizilerde satır başları hizalı olsun diye <code>cudaMallocPitch</code>; pitch bayt cinsinden.</li>
+  <li>Transpose: naive'de yazma ✗; shared memory karosuyla okuma ve yazma ✓; <code>[32][33]</code> padding bank conflict'i kaldırır.</li>
+  <li>Loop unrolling: döngü kontrolünü azaltır, ILP'yi artırır; bedeli register.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>float</code> dizisinde bir warp <code>a[threadIdx.x * 2 + 1]</code> okuyor (dizi 128 B hizalı). Kaç tane 32 B segment taşınır, verim nedir?</p>
+<div class="hint"><p>Adresler 4, 12, 20, …, 252 (bayt): 0–255 aralığındaki 8 segmentin hepsine dokunulur → 8 · 32 = 256 B taşınır, 128 B kullanılır: <strong>%50</strong>.</p></div>
+<p><strong>2.</strong> Shared memory'li transpose'ta neden hem global okuma hem global yazma coalesced olur? Hangi erişim dağınık kalır ve neden sorun değildir?</p>
+<div class="hint"><p>Okumada ve yazmada <code>threadIdx.x</code> global adresin en sağında (satır boyunca ardışık). Yer değiştirme shared memory içinde yapılır: <code>tile[threadIdx.x][…]</code> sütun okur, yani dağınık erişim <strong>shared</strong> bellektedir. Shared memory on-chip ve hızlı olduğu için bu ucuzdur; tek bedeli bank conflict'tir, o da <code>[32][33]</code> padding ile çözülür.</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="2">

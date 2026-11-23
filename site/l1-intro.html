@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Bir mutfak düşünün.</strong> Uzun yıllar boyunca yemekler, tek aşçı her yıl daha hızlı çalıştığı için hızlandı (saat frekansı arttı). Bir noktada aşçı daha hızlı çalışamaz oldu: fazla hızlanınca mutfak ısınıyor (güç duvarı). Çözüm: <strong>mutfağa daha çok aşçı koymak</strong> (çok çekirdek). Ama yeni bir sorun çıkar: tarifin bazı adımları sıralıdır (önce hamur, sonra fırın) ve aşçılar birbirini beklemek, malzeme paylaşmak zorundadır.</p>
+  <p>Bu ders bu hikâyenin üç sorusunu cevaplar: <strong>neden</strong> çok çekirdeğe geçtik (Moore, güç duvarı), paralel makineler <strong>nasıl sınıflanır</strong> (Flynn, paylaşımlı/dağıtık bellek, CPU/GPU) ve aşçı sayısını artırınca <strong>ne kadar hızlanırız</strong> (speedup, verim, Amdahl, Gustafson).</p>
+</div>
+
 <h2>Moore yasası ve güç duvarı</h2>
 <ul>
   <li><strong>Moore yasası</strong> (Gordon Moore, 1970'ler): entegre devredeki transistör sayısı yaklaşık <strong>iki yılda bir iki katına</strong> çıkar. Frekans değil, transistör sayısı.</li>
@@ -97,6 +102,19 @@ N → ∞:  speedup → 1 / (1 − α)
   <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
 </ul>
 
+<h3>Sezgi: sayılarla Amdahl</h3>
+<p>Seri çalışan bir program <strong>100 saniye</strong> sürsün; bunun <strong>90 saniyesi</strong> paralelleştirilebilir (α = 0,9), <strong>10 saniyesi</strong> değil. N çekirdekte paralel kısım 90/N saniyeye iner, seri kısım hep 10 saniye kalır:</p>
+<table class="simple">
+  <thead><tr><th>N</th><th>Süre</th><th>Speedup</th><th>Verim</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>10 + 90 = 100 s</td><td>1</td><td>%100</td></tr>
+    <tr><td>2</td><td>10 + 45 = 55 s</td><td>1,82</td><td>%91</td></tr>
+    <tr><td>10</td><td>10 + 9 = 19 s</td><td>5,26</td><td>%53</td></tr>
+    <tr><td>100</td><td>10 + 0,9 = 10,9 s</td><td>9,17</td><td>%9</td></tr>
+    <tr><td>∞</td><td>10 s</td><td>10</td><td>→ 0</td></tr>
+  </tbody>
+</table>
+<p>Ders: çekirdek eklemek sadece paralel kısmı küçültür; <strong>seri kısım bir taban oluşturur</strong> ve speedup asla 1/(1 − α)'yı geçemez. Her yeni çekirdek bir öncekinden daha az kazandırır, bu yüzden verim hızla düşer. Hızlanmak için önce seri kısmı küçültmek gerekir.</p>
 <h3>Uygula: Amdahl sınırını tahmin et</h3>
 <div data-learning="amdahl"></div>
 <h2>Gustafson-Barsis yasası</h2>
@@ -110,8 +128,37 @@ efficiency = speedup / N = (1 − α)/N + α</div>
   <p>α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
 </div>
 
+<div class="callout key">
+  <p><strong>Amdahl mı, Gustafson mı?</strong> Soru şu: problem boyutu sabit mi? <strong>Aynı problemi daha hızlı</strong> çözmek istiyorsanız (strong scaling) Amdahl geçerlidir ve seri kısım sizi sınırlar. <strong>Aynı sürede daha büyük problem</strong> çözmek istiyorsanız (weak scaling: daha ince ızgara, daha çok piksel) Gustafson geçerlidir: paralel kısım N ile büyür, seri kısım büyümez, speedup neredeyse N olur. Süper bilgisayarlar ikinci senaryoda yaşar.</p>
+</div>
 <h2>Gecikme ve throughput</h2>
 <p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>
+
+<h2>Özet</h2>
+<ul>
+  <li>Moore yasası <strong>transistör sayısı</strong> hakkındadır, frekans hakkında değil. Frekans güç ve ısı yüzünden ~2005'te 2–4 GHz'de durdu (güç ∝ f³); fazla transistörler çekirdeklere harcandı.</li>
+  <li>Çok çekirdekten performans almak <strong>paralel yazılım</strong> ister; bu dersin konusu bu.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Çok çekirdekli CPU'lar ve GPU'lar MIMD; GPU'nun programlama modeli SIMT.</li>
+  <li>Paylaşımlı bellek (ortak adres uzayı, kolay, sınırlı ölçek; NUMA) ↔ dağıtık bellek (mesajlaşma, zor, çok ölçeklenir).</li>
+  <li>CPU gecikme için (büyük önbellek, karmaşık kontrol), GPU throughput için (çok sayıda basit ALU, geniş bellek yolu) tasarlanır.</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, verim = speedup/N. Amdahl: 1/((1−α) + α/N), tavan 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>α'yı seri kısım sanmak. Bu derste α <strong>paralelleştirilebilen</strong> kısım; seri kısım 1 − α.</li>
+  <li>Speedup ile verimi karıştırmak: 16 çekirdekte speedup 8 ise verim %50'dir, "8 kat verim" diye bir şey yok.</li>
+  <li>NUMA'yı dağıtık bellek sanmak: NUMA'da adresleme ortaktır, sadece uzak bellek daha yavaştır.</li>
+  <li>Seri programı yavaş bir versiyonla karşılaştırmak: altın kural, en hızlı bilinen seri çözümle kıyaslanır.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir programın %95'i paralelleştirilebiliyor. 19 çekirdekte speedup ve verim nedir? Sonsuz çekirdekte en fazla ne olur?</p>
+<div class="hint"><p>1/(0,05 + 0,95/19) = 1/(0,05 + 0,05) = <strong>10</strong>; verim 10/19 ≈ <strong>%53</strong>. Sınır: 1/0,05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> Aynı program için Gustafson'a göre 19 çekirdekte speedup ve verim nedir? Neden Amdahl'dan farklı?</p>
+<div class="hint"><p>0,05 + 19·0,95 = 0,05 + 18,05 = <strong>18,1</strong>; verim 0,05/19 + 0,95 ≈ <strong>%95,3</strong>. Gustafson problem boyutunun çekirdek sayısıyla büyüdüğünü (sabit süre) varsayar, Amdahl problemi sabit tutar.</p></div>
+<p><strong>3.</strong> Saat frekansını artırmaya devam etmek neden mümkün olmadı? İki neden yazın.</p>
+<div class="hint"><p>(1) Güç frekansla çok hızlı (yaklaşık f³) artar: ısı atılamaz. (2) Yüksek frekanslı saat sinyalini üretmek ve yonga boyunca dağıtmak zorlaşır (dalga şekli bozulur). Voltajı düşürmek bir süre yardımcı oldu ama yetmedi.</p></div>
+<p><strong>4.</strong> Bir sunucu çiftliğinde 10.000 düğüm birlikte çalışacak. Paylaşımlı mı dağıtık bellek mi? Neden?</p>
+<div class="hint"><p>Dağıtık bellek: paylaşımlı bellek tek bir ortak ortamda (bellek yolu, önbellek tutarlılığı) darboğaz yapar ve onlarca-yüzlerce çekirdekte tıkanır. Dağıtık bellekte her düğüm kendi belleğine sahiptir, iletişim mesajla olur; pahalıdır ama paylaşılan bir darboğaz olmadığı için çok ölçeklenir.</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="2">

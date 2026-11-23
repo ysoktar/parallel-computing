@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Bir ev inşaatı düşünün.</strong> Önce işi parçalara ayırırsınız (temel, duvar, elektrik, boya), sonra hangi işin hangisini beklediğini belirlersiniz (boya duvardan sonra), birbirine çok bağlı işleri aynı ekibe verirsiniz (tesisatçı hem mutfağı hem banyoyu yapsın) ve ekipleri eşit yük alacak şekilde dağıtırsınız. Paralel program tasarımı aynı dört adımdır: <strong>PCAM</strong>.</p>
+  <p>Ardından iki "hazır kalıp" ailesi gelir: işi <strong>nasıl böleceğinizi</strong> anlatan ayrıştırma desenleri (geometrik, pipeline, böl ve yönet…) ve programı <strong>nasıl yapılandıracağınızı</strong> anlatan program yapısı desenleri (SPMD, master-worker, fork/join…). CUDA'da yazdığınız her kernel aslında bir geometrik ayrıştırma + SPMD örneğidir.</p>
+</div>
+
 <h2>Önce sor: paralel gerekli ve mümkün mü?</h2>
 <ul>
   <li>Algoritma paralel uygulamaya izin vermeyebilir; zaman/mühendislik kaynağı olmayabilir.</li>
@@ -44,6 +49,15 @@
 </table>
 <p>Hesapları çoğaltmak (duplicate) sonuçlarını iletme ihtiyacını ortadan kaldırarak performansı artırabilir. Örnekler: matris toplama (tamamen bağımsız), 2D konvolüsyon (komşu verisi gerekir).</p>
 
+<h3>Çözümlü örnek: 2D konvolüsyonu PCAM ile tasarlamak</h3>
+<p>Problem: N×N bir görüntüye 3×3 bir filtre uygulamak (Exercise 2 ve 4). Her çıktı pikseli, girdide kendisi ve 8 komşusundan hesaplanır.</p>
+<ol>
+  <li><strong>Partitioning:</strong> en ince parça <strong>bir çıktı pikseli</strong> → N² görev. Görevler bağımsız hesaplanabilir (çıktılar birbirini beklemez): veri ayrıştırması.</li>
+  <li><strong>Communication:</strong> her görev komşularının girdi değerlerini okur. Paylaşımlı bellekte bu "okuma"dır; dağıtık bellekte komşu görevlere mesaj gerekir. Bağımlılık grafında her düğümün 8 komşusuyla kenarı var.</li>
+  <li><strong>Agglomeration:</strong> N² minik görev çok fazla iletişim demek. Pikselleri <strong>şeritler ya da karolar</strong> hâlinde gruplayın: grup içindeki komşuluk bedava olur, sadece <strong>sınırdaki</strong> satır/sütunlar (halo) dışarıdan gerekir. Karo ne kadar büyükse halo/iç oranı o kadar küçük.</li>
+  <li><strong>Mapping:</strong> grupları eşit büyüklükte tutun (yük dengesi) ve her çekirdeğe bir/birkaç grup verin. GPU'da: karo = thread bloğu, halo = karonun etrafındaki fazla satırlar, ve karo shared memory'ye yüklenir.</li>
+</ol>
+<p>Aynı akıl yürütme matris çarpımında da var: bir çıktı elemanı = bir görev, gruplama = blok/karo, iletişimi azaltma = shared memory ile tiling (L5).</p>
 <h2>Ayrıştırma desenleri</h2>
 <p>Mattson ve diğerlerinin altı deseni; fonksiyonel ve veri ayrıştırmasına <strong>veri akışı</strong> (data flow) ayrıştırması eklenir. Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
 <h3>Task parallelism</h3>
@@ -75,6 +89,18 @@ DnC(A) {
 <h3>Olay tabanlı koordinasyon</h3>
 <p>İletişim akışı sabit değil, görevler çalışma zamanında dinamik etkileşir; yürütme profili önceden bilinemez. Örnek: ayrık olay simülasyonu (olay = zaman damgalı mesaj).</p>
 
+<h3>Hangi deseni ne zaman?</h3>
+<table class="simple">
+  <thead><tr><th>Problem</th><th>Uygun desen</th><th>Neden</th></tr></thead>
+  <tbody>
+    <tr><td>Görüntü filtreleme, matris toplama/çarpma</td><td>Geometrik</td><td>Veri düzenli bir ızgara; bölgeler bağımsız (komşu varsa halo).</td></tr>
+    <tr><td>Merge sort, quicksort, ağaç üzerinde arama</td><td>Divide-and-conquer</td><td>Problem kendine benzer alt problemlere bölünüyor; görevler dinamik.</td></tr>
+    <tr><td>Video kod çözme: oku → çöz → filtrele → göster</td><td>Pipeline</td><td>Veri akışı sabit aşamalardan geçiyor; aşamalar farklı kareler üzerinde eş zamanlı.</td></tr>
+    <tr><td>Kısmi toplamlar, bağlı liste işlemleri</td><td>Özyinelemeli veri</td><td>Yapı düzensiz; algoritma ikili ağaç gibi adımlara dönüştürülüyor.</td></tr>
+    <tr><td>Oyun döngüsü (girdi, çizim, ses, yapay zekâ)</td><td>Task parallelism</td><td>Az sayıda farklı görev; ölçeklenmez ama basit.</td></tr>
+    <tr><td>Trafik, ağ, fabrika simülasyonu</td><td>Olay tabanlı</td><td>Etkileşimler çalışma zamanında belli oluyor.</td></tr>
+  </tbody>
+</table>
 <h2>Program yapısı desenleri</h2>
 <div class="two-col">
   <div>
@@ -98,6 +124,28 @@ DnC(A) {
   </tbody>
 </table>
 <p>Platformlar desen dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
+
+<h2>Özet</h2>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (olabildiğince çok parça, işlemci sayısının 10–100 katı), <strong>C</strong>ommunication (bağımlılık grafı), <strong>A</strong>gglomeration (iletişimi azaltmak için grupla, ~10 katı), <strong>M</strong>apping (yük dengesi + iletişim; genel hâli NP-complete).</li>
+  <li>Ayrıştırma: fonksiyonel (adımlara göre), veri (veriye göre), veri akışı (pipeline, olay).</li>
+  <li>Pipeline'ın hızını <strong>en yavaş aşama</strong> belirler; fayda ancak aşamalar eş zamanlı çalışırsa.</li>
+  <li>Divide-and-conquer'da paralellik <strong>bağımlılık grafından</strong> okunur, çağrı grafından değil.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Task parallelism'i ölçeklenir sanmak: görev sayısı sabit olduğu için çekirdek sayısını takip edemez.</li>
+  <li>Pipeline'ın toplam gecikmesini throughput'u ile karıştırmak: 2+5+3 ms'lik pipeline'da bir öğenin gecikmesi 10 ms, ama kararlı durumda her 5 ms'de bir çıktı.</li>
+  <li>Agglomeration'ı unutmak: N² minik görev teoride çok paralel, pratikte iletişim ve görev yönetimi maliyeti yüzünden yavaş.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir histogram hesabını (Exercise 1) PCAM adımlarıyla tasarlayın. Hangi adımda yarış (race) sorunu çıkar, nasıl çözersiniz?</p>
+<div class="hint"><p>P: her piksel bir görev (veri ayrıştırması). C: her görev 256 kutudan birini günceller: tüm görevler aynı küçük diziye yazar, yani yoğun iletişim ve <strong>yarış</strong>. A: pikselleri thread başına parçalara grupla; her thread önce <strong>kendi yerel histogramını</strong> tutsun, sonunda yerel histogramlar toplanır (iletişim sona kalır). M: eşit büyüklükte parçalar. Ortak histograma doğrudan yazılacaksa atomic ya da mutex gerekir (L3); GPU'da blok başına shared memory histogramı + atomicAdd.</p></div>
+<p><strong>2.</strong> 4 aşamalı bir pipeline'da aşama süreleri 4, 4, 8, 4 ms. 100 öğe ne kadar sürer? Darboğazı nasıl gidersiniz?</p>
+<div class="hint"><p>İlk çıktı 20 ms'de (doluş), sonra her 8 ms'de bir: yaklaşık 20 + 99·8 = <strong>812 ms</strong>. Darboğaz 8 ms'lik aşama: onu ikiye bölün (4+4) ya da o aşamayı iki kopya hâlinde paralel çalıştırın; o zaman her 4 ms'de bir çıktı alınır (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> SPMD ile master-worker arasındaki farkı birer örnekle açıklayın.</p>
+<div class="hint"><p>SPMD: herkes aynı programı çalıştırır, benzersiz ID'sine göre farklı veriyi işler (CUDA kernel'i, MPI). Master-worker: roller farklı: master iş dağıtır ve sonuç toplar, işçiler iş yapar; boşta kalan işçiye yeni iş verildiği için yük dengesi kendiliğinden olur (ör. bir render çiftliğinde kare dağıtmak).</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="3">

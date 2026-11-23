@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>Think of a kitchen.</strong> For many years meals got faster because the single cook worked faster every year (clock frequency went up). At some point the cook could not go faster: working faster heats up the kitchen (the power wall). The fix: <strong>put more cooks in the kitchen</strong> (multi-core). But that creates a new problem: some steps of the recipe are sequential (dough first, then the oven), and the cooks have to wait for each other and share ingredients.</p>
+  <p>This lecture answers the three questions of that story: <strong>why</strong> we moved to multi-core (Moore, the power wall), how parallel machines <strong>are classified</strong> (Flynn, shared/distributed memory, CPU/GPU), and <strong>how much faster</strong> we get with more cooks (speedup, efficiency, Amdahl, Gustafson).</p>
+</div>
+
 <h2>Moore's law and the power wall</h2>
 <ul>
   <li><strong>Moore's law</strong> (Gordon Moore, 1970s): the number of transistors in an integrated circuit <strong>doubles about every two years</strong>. Transistor count, not frequency.</li>
@@ -97,6 +102,19 @@ N → ∞:  speedup → 1 / (1 − α)
   <li>But reality disagrees: every Top500 supercomputer is built from thousands to millions of off-the-shelf cores. Where is the flaw?</li>
 </ul>
 
+<h3>Intuition: Amdahl with numbers</h3>
+<p>Let a sequential program take <strong>100 seconds</strong>; <strong>90 seconds</strong> of it can be parallelised (α = 0.9), <strong>10 seconds</strong> cannot. On N cores the parallel part drops to 90/N seconds, the serial part always stays 10 seconds:</p>
+<table class="simple">
+  <thead><tr><th>N</th><th>Time</th><th>Speedup</th><th>Efficiency</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>10 + 90 = 100 s</td><td>1</td><td>100%</td></tr>
+    <tr><td>2</td><td>10 + 45 = 55 s</td><td>1.82</td><td>91%</td></tr>
+    <tr><td>10</td><td>10 + 9 = 19 s</td><td>5.26</td><td>53%</td></tr>
+    <tr><td>100</td><td>10 + 0.9 = 10.9 s</td><td>9.17</td><td>9%</td></tr>
+    <tr><td>∞</td><td>10 s</td><td>10</td><td>→ 0</td></tr>
+  </tbody>
+</table>
+<p>Lesson: adding cores only shrinks the parallel part; <strong>the serial part is a floor</strong> and the speedup can never exceed 1/(1 − α). Each new core gains less than the previous one, so efficiency drops fast. To go faster, shrink the serial part first.</p>
 <h3>Apply: predict the Amdahl limit</h3>
 <div data-learning="amdahl"></div>
 <h2>Gustafson-Barsis's law</h2>
@@ -110,8 +128,37 @@ efficiency = speedup / N = (1 − α)/N + α</div>
   <p>α = 0.9, N = 10. <strong>Amdahl:</strong> 1 / (0.1 + 0.09) = 1/0.19 ≈ 5.26. <strong>Gustafson:</strong> 0.1 + 9 = 9.1. The difference is whether the problem is fixed (Amdahl, strong scaling) or grows with N (Gustafson, weak scaling).</p>
 </div>
 
+<div class="callout key">
+  <p><strong>Amdahl or Gustafson?</strong> The question is: is the problem size fixed? If you want to solve <strong>the same problem faster</strong> (strong scaling), Amdahl applies and the serial part limits you. If you want to solve <strong>a bigger problem in the same time</strong> (weak scaling: a finer grid, more pixels), Gustafson applies: the parallel part grows with N, the serial part does not, and the speedup is almost N. Supercomputers live in the second scenario.</p>
+</div>
 <h2>Latency and throughput</h2>
 <p>A work request arrives at t = 0. A <strong>latency-optimised processor</strong> (CPU) produces the first result quickly (low latency). A <strong>throughput-optimised processor</strong> (GPU) produces the first result later (high latency) but much more output per unit time (high throughput).</p>
+
+<h2>Summary</h2>
+<ul>
+  <li>Moore's law is about the <strong>number of transistors</strong>, not frequency. Frequency stopped at 2–4 GHz around 2005 because of power and heat (power ∝ f³); the extra transistors went into cores.</li>
+  <li>Getting performance from many cores needs <strong>parallel software</strong>; that is what this course is about.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Multi-core CPUs and GPUs are MIMD; the GPU's programming model is SIMT.</li>
+  <li>Shared memory (common address space, easy, limited scale; NUMA) ↔ distributed memory (message passing, harder, scales far).</li>
+  <li>CPUs are designed for latency (big caches, complex control), GPUs for throughput (many simple ALUs, wide memory buses).</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, efficiency = speedup/N. Amdahl: 1/((1−α) + α/N), ceiling 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Taking α to be the serial part. In this course α is the <strong>parallelisable</strong> part; the serial part is 1 − α.</li>
+  <li>Mixing up speedup and efficiency: a speedup of 8 on 16 cores is 50% efficiency; there is no such thing as "8 times efficiency".</li>
+  <li>Thinking NUMA is distributed memory: in NUMA addressing is shared, remote memory is just slower.</li>
+  <li>Comparing against a slow sequential version: the golden rule compares with the fastest known sequential solution.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 95% of a program can be parallelised. What are the speedup and efficiency on 19 cores? What is the most you can get with infinitely many cores?</p>
+<div class="hint"><p>1/(0.05 + 0.95/19) = 1/(0.05 + 0.05) = <strong>10</strong>; efficiency 10/19 ≈ <strong>53%</strong>. Bound: 1/0.05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> For the same program, what are the speedup and efficiency on 19 cores according to Gustafson? Why is it different from Amdahl?</p>
+<div class="hint"><p>0.05 + 19·0.95 = 0.05 + 18.05 = <strong>18.1</strong>; efficiency 0.05/19 + 0.95 ≈ <strong>95.3%</strong>. Gustafson assumes the problem grows with the number of cores (fixed time); Amdahl keeps the problem fixed.</p></div>
+<p><strong>3.</strong> Why was it not possible to keep raising the clock frequency? Give two reasons.</p>
+<div class="hint"><p>(1) Power grows very fast with frequency (about f³): the heat cannot be removed. (2) A high-frequency clock signal is hard to generate and distribute across the chip (the waveform degrades). Lowering the voltage helped for a while but was not enough.</p></div>
+<p><strong>4.</strong> 10,000 nodes in a server farm will work together. Shared or distributed memory? Why?</p>
+<div class="hint"><p>Distributed memory: shared memory becomes a bottleneck in a single common medium (memory bus, cache coherence) and chokes at tens to hundreds of cores. In distributed memory each node has its own memory and communicates by messages; that is expensive, but with no shared bottleneck it scales very far.</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

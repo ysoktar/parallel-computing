@@ -27,6 +27,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>The library analogy.</strong> 256 students (the threads of a block) need different pages of the same books. The books are in the big library across town (global memory: large but far away, hundreds of cycles). If everyone goes to the library for every page, the roads jam. The smart way: the students split the work, copy the needed pages <strong>once</strong> to a shared desk (shared memory: small but right next to you), and everyone reads from the desk. Waiting until "has everyone finished copying?" is <code>__syncthreads()</code>.</p>
+  <p>The lecture moves in three steps: (1) turning a CPU loop into a kernel and the five host-side steps, (2) each thread finding its own data with <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>, (3) why the simple kernel is slow (CGMA = 1) and how tiling with shared memory fixes it.</p>
+</div>
+
 <h2>Data parallelism: from loop to kernel</h2>
 <p>Data parallelism: the same operation performed on independent data elements simultaneously (vector addition, convolution, matrix-vector and matrix-matrix multiplication). Rule of thumb: <strong>when you see nested <code>for</code> loops with regular indexing, there is a good chance of parallelisation.</strong></p>
 <div class="two-col">
@@ -163,6 +168,16 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 
 <h3>Apply: thread code and matrix cells</h3>
 <div data-learning="cuda-index"></div>
+<h3>Building the index formula step by step</h3>
+<p>Think of a book with 10 lines per page. Which line of the book, counting from the start, is line 7 of page 3? <code>3·10 + 7 = 37</code> (pages and lines start at 0). In CUDA, page = block, line = thread:</p>
+<div class="formula-box">global index = blockIdx.x · blockDim.x + threadIdx.x
+             (which block) · (threads per block) + (position in the block)
+<<<4, 256>>>: thread 37 of block 2 → 2·256 + 37 = 549</div>
+<p>In 2D we do the same on two axes separately: the x axis gives the columns, the y axis the rows; in row-major memory the element is at <code>A[row·width + col]</code>.</p>
+<div class="formula-box">col = blockIdx.x · blockDim.x + threadIdx.x
+row = blockIdx.y · blockDim.y + threadIdx.y
+if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
+<p><strong>Why the bounds check?</strong> The number of blocks is rounded up: 1000 elements with 256-thread blocks launch <code>(1000 + 255)/256 = 4</code> blocks = 1024 threads. The last 24 threads have no element; without the <code>if</code> they write outside the array.</p>
 <h2>Synchronisation: <code>__syncthreads()</code></h2>
 <h3>Apply: trace the barrier in threads and code</h3>
 <div data-learning="barrier"></div>
@@ -237,6 +252,16 @@ Ratio: (16·16·2·width) / (16·width·2) = 16</div>
   <p><strong>Slides 86 and 88: "What about 16×8?", "1024×1024 matrices, 32×8 blocks?"</strong> A BX×BY block computes a BY-row × BX-column tile of P. Without shared memory the block does <code>BX·BY·2·width</code> reads; with tiles it reads <code>BY·width</code> from M and <code>BX·width</code> from N. Reduction = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10.7×</strong>. 32×8: 512/40 = <strong>12.8×</strong> (independent of the matrix size). For a square T×T it equals T.</p>
 </div>
 
+<h3>Intuition: tracing one phase with numbers</h3>
+<p>A small example: <code>width = 4</code>, <code>TILE_WIDTH = 2</code>, so 4 blocks of 2×2 and 4 threads per block. Block <code>(0,0)</code> computes the top-left 2×2 tile of P (P<sub>00</sub>, P<sub>01</sub>, P<sub>10</sub>, P<sub>11</sub>). The dot product has length 4, so there are <code>width/T = 2</code> phases:</p>
+<table class="simple">
+  <thead><tr><th>Phase</th><th>Into Mds (from M)</th><th>Into Nds (from N)</th><th>Added to each thread's Pvalue</th></tr></thead>
+  <tbody>
+    <tr><td>m = 0</td><td>M rows 0–1, columns 0–1</td><td>N rows 0–1, columns 0–1</td><td>terms k = 0, 1: M[r][0]·N[0][c] + M[r][1]·N[1][c]</td></tr>
+    <tr><td>m = 1</td><td>M rows 0–1, columns 2–3</td><td>N rows 2–3, columns 0–1</td><td>terms k = 2, 3: M[r][2]·N[2][c] + M[r][3]·N[3][c]</td></tr>
+  </tbody>
+</table>
+<p>After the two phases each thread has summed all 4 terms (as in the CPU version). The difference: the two elements of row 0 of M are read from global memory <strong>once</strong> per phase, and both threads of that row use them from shared memory. In a T×T tile each element is used by T threads, so global traffic drops T times.</p>
 <h3>The tiled kernel</h3>
 <p>Threads <strong>cooperatively</strong> load Md and Nd elements into shared memory, then use them in their dot products. Since shared memory is small, Md and Nd are divided into tiles that fit, and the dot product is split into <strong>phases</strong>: in phase <code>m</code> each thread loads one element from the M tile and one from the N tile.</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90">
@@ -271,6 +296,42 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Apply: M, N and P tile loads beside the code</h3>
 <div data-learning="tile"></div>
 <p>The same idea with a non-square block (e.g. <code>dim3(8,32)</code>): <a href="exam-midterm2.html#the-tiled-shared-memory-version-with-the-same-configuration">the solution in the midterm 2 guide</a>.</p>
+
+<h2>Summary</h2>
+<ul>
+  <li>Kernel = the body of the loop; the outer loops become threads. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global index = <code>blockIdx·blockDim + threadIdx</code> (on each axis); row-major address <code>row·width + col</code>; round the grid up, check the bounds.</li>
+  <li><code>__syncthreads()</code>: barrier within a block, everyone in the block must execute it.</li>
+  <li>Blocks are assigned to SMs block by block; warp = 32 threads, the scheduling unit; many warps = latency hiding.</li>
+  <li>Naive matmul has CGMA = 1 → bandwidth-bound (~6% efficiency). Tiling: load a tile into shared memory once, use it T times → T times less global traffic, CGMA = T.</li>
+  <li>Two barriers in the tiled kernel: after loading (tile filled) and after computing (not overwritten).</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Passing a number of elements to <code>cudaMalloc</code>/<code>cudaMemcpy</code>: sizes are always in <strong>bytes</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Using x for the row and y for the column: consecutive threads go to distant elements (coalescing breaks) and the matrix is computed transposed.</li>
+  <li>Forgetting the second <code>__syncthreads()</code> in the tiled kernel: a fast thread writes the next phase's tile while others are reading.</li>
+  <li>Timing right after the kernel: the launch is asynchronous, call <code>cudaDeviceSynchronize()</code> first.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Write a kernel that multiplies an <code>n</code>-element array by <code>s</code>, and the host code that launches it (256 threads per block, <code>n</code> may not be a multiple of 256).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // the extra threads do nothing
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> What is the CGMA ratio of tiled matmul with TILE_WIDTH = T? Show it.</p>
+<div class="hint"><p>In each phase a thread does <strong>2 global reads</strong> (one element each into Mds and Nds) and, in the inner loop, T multiplications + T additions = <strong>2T FP operations</strong>. CGMA = 2T / 2 = <strong>T</strong>. With T = 16, a 16 times improvement: on the G80 the 21.6 GFLOPS bound rises to ~345 GFLOPS (close to the 367 peak).</p></div>
+<p><strong>3.</strong> Compute the shared memory use of 16×16 tiled matmul and how many blocks fit on a G80 SM. What is the limit?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/block</strong>; 16 KB/SM → 8 blocks by shared memory. But with 256 threads/block, 768/256 = <strong>3 blocks</strong>. The limit: threads per SM (not shared memory).</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="3">

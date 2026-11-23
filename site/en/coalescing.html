@@ -27,6 +27,10 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>Think of a shuttle bus.</strong> 32 passengers (the threads of a warp) go to the warehouse (global memory) at the same time. If they all live in the same neighbourhood (consecutive addresses), one bus (one 128-byte transaction) is enough. If each lives in a different district, 32 separate trips are needed and most buses run with empty seats. Coalescing means gathering the threads' addresses into the same "neighbourhood". The transpose is the best example: reading is consecutive in one direction, writing in the other; shared memory turns one direction into the other.</p>
+</div>
+
 <h2>Global memory transactions</h2>
 <p>Lecture 6, slides 43–48:</p>
 <ul>
@@ -194,10 +198,12 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
   <p>The <code>__syncthreads()</code> here is mandatory: the <code>tile[threadIdx.x][threadIdx.y+j]</code> a thread writes out was loaded by another thread (even another warp). In <code>copySharedMem</code>, which only copies, each thread writes what it loaded itself, so the barrier is technically unnecessary (the article includes it only for comparison); the measurements show the barrier is not the bottleneck.</p>
 </div>
 
-<h3>4) The version without bank conflicts <span class="badge-beyond">final</span></h3>
-<div class="callout beyond">
-  <p>In a 32×32 tile all elements of a column fall into the same shared memory bank; reading a column (<code>tile[threadIdx.x][…]</code>) is a 32-way bank conflict. The fix is one line: <code>__shared__ float tile[TILE_DIM][TILE_DIM + 1];</code> (each row shifts by one bank). Bank optimisation is not on this exam; knowing why it exists is enough.</p>
-</div>
+<h3>4) The version without bank conflicts</h3>
+<p>In a 32×32 tile the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank. The store phase reads a column (<code>tile[threadIdx.x][threadIdx.y + j]</code>): the 32 threads of the warp want different words from the same bank → a <strong>32-way bank conflict</strong>. The fix is one line, making each row one element longer:</p>
+<pre class="code" data-run="transpose.cu">
+__shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: all different along a column
+</pre>
+<p>The detailed bank calculation and a visualisation: <a href="l6-cuda-memory.html#banks-and-bank-conflicts">L6, banks</a>.</p>
 
 <h3>Measurements (NVIDIA article, GB/s)</h3>
 <table class="simple">
@@ -249,6 +255,20 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li>If the trip count is constant (the transpose's <code>j</code> loop: <code>TILE_DIM/BLOCK_ROWS = 4</code> iterations; tiled matmul's <code>k</code> loop: <code>TILE_WIDTH</code> iterations) the compiler usually unrolls it anyway. If the trip count is only known at run time (<code>width/TILE_WIDTH</code>) it cannot be fully unrolled.</li>
   <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
 </ul>
+
+<h2>Summary</h2>
+<ul>
+  <li>A warp's accesses are gathered into 32/64/128-byte segments aligned to their size; the fewer the segments, the better.</li>
+  <li>Check: is <code>threadIdx.x</code> without a multiplier and rightmost in the address? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>For 2D arrays, <code>cudaMallocPitch</code> so that row starts are aligned; the pitch is in bytes.</li>
+  <li>Transpose: in the naive version the write is ✗; with a shared memory tile read and write are ✓; <code>[32][33]</code> padding removes bank conflicts.</li>
+  <li>Loop unrolling: reduces loop control, increases ILP; the price is registers.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> A warp reads <code>a[threadIdx.x * 2 + 1]</code> from a <code>float</code> array (128 B aligned). How many 32 B segments are moved, and what is the efficiency?</p>
+<div class="hint"><p>Addresses 4, 12, 20, …, 252 (bytes): all 8 segments of the range 0–255 are touched → 8 · 32 = 256 B moved, 128 B used: <strong>50%</strong>.</p></div>
+<p><strong>2.</strong> In the shared-memory transpose, why are both the global read and the global write coalesced? Which access stays scattered, and why is that not a problem?</p>
+<div class="hint"><p>In both the read and the write, <code>threadIdx.x</code> is rightmost in the global address (consecutive along a row). The swapping is done inside shared memory: <code>tile[threadIdx.x][…]</code> reads a column, so the scattered access is in <strong>shared</strong> memory. Shared memory is on-chip and fast, so this is cheap; its only cost is bank conflicts, which <code>[32][33]</code> padding removes.</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

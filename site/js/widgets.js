@@ -322,5 +322,67 @@ function drill(root) {
   make();
 }
 
-const WIDGETS = { mapping, coalesce, tiling, drill };
+// ------------------------------------------------------------------------------------------------ banks
+// Shared memory bank conflicts: 32 banks of 4-byte words, bank = word index % 32. A warp's request is split into as
+// many transactions as the largest number of DISTINCT words that fall into one bank (same word = broadcast, free).
+const BANK_PRESETS = {
+  s1: { label: "s[tid]", stride: 1, offset: 0 },
+  s2: { label: "s[2*tid]", stride: 2, offset: 0 },
+  s3: { label: "s[3*tid]", stride: 3, offset: 0 },
+  s4: { label: "s[4*tid]", stride: 4, offset: 0 },
+  s32: { label: "s[32*tid]", stride: 32, offset: 0 },
+  same: { label: "s[0]", stride: 0, offset: 0 },
+  col32: { label: "tile[tid][0], float tile[32][32]", stride: 32, offset: 0 },
+  col33: { label: "tile[tid][0], float tile[32][33]", stride: 33, offset: 0 },
+};
+function banks(root) {
+  const st = { ...BANK_PRESETS[root.dataset.preset || "s2"] };
+  const box = h("div", { class: "wgt" },
+    h("div", { class: "wgt-title" }, tl("Shared memory bank'ları", "Shared memory banks")),
+    h("div", { class: "wgt-sub", html: tl(
+      "Thread <code>i</code>, 4 baytlık <code>s[offset + i·stride]</code> kelimesine erişir. Kelime <code>w</code>, <code>w % 32</code> numaralı bank'tadır. Aynı bank'a düşen <strong>farklı</strong> kelimeler sırayla servis edilir (n-yollu conflict = n tur); aynı kelimeyi okuyan thread'ler yayınla tek turda alır.",
+      "Thread <code>i</code> accesses the 4-byte word <code>s[offset + i·stride]</code>. Word <code>w</code> is in bank <code>w % 32</code>. <strong>Different</strong> words in the same bank are served one after another (n-way conflict = n rounds); threads reading the same word get it in one round by broadcast.") }));
+  const ctl = h("div", { class: "wgt-controls" });
+  const pre = sel(tl("Hazır örnek", "Preset"), Object.entries(BANK_PRESETS).map(([k, v]) => [k, v.label]), root.dataset.preset || "s2",
+    (v) => { Object.assign(st, BANK_PRESETS[v]); strideIn.inp.value = st.stride; offIn.inp.value = st.offset; draw(); });
+  const strideIn = num("stride", st.stride, 0, 64, (v) => { st.stride = v; draw(); });
+  const offIn = num("offset", st.offset, 0, 64, (v) => { st.offset = v; draw(); });
+  ctl.append(pre.el, strideIn.el, offIn.el);
+  const fig = h("div", { class: "wgt-grid-wrap" });
+  const out = h("div", { class: "wgt-out" });
+  box.append(ctl, fig, out);
+  root.replaceWith(box);
+  function draw() {
+    const words = Array.from({ length: 32 }, (_, i) => st.offset + i * st.stride);
+    const byBank = Array.from({ length: 32 }, () => []);
+    words.forEach((w, i) => byBank[w % 32].push({ i, w }));
+    const degree = Math.max(...byBank.map((l) => new Set(l.map((x) => x.w)).size));
+    const rows = Math.max(...byBank.map((l) => l.length), 1);
+    const cw = 26, ch = 18, W = 32 * cw + 40, H = rows * ch + 40;
+    const svg = s("svg", { width: W, height: H, role: "img", "aria-label": tl("Bank başına thread'ler", "Threads per bank") });
+    for (let b = 0; b < 32; b++) {
+      const x = 36 + b * cw;
+      const distinct = new Set(byBank[b].map((e) => e.w)).size;
+      svg.append(s("rect", { x, y: 18, width: cw - 2, height: rows * ch + 4, fill: distinct > 1 ? "var(--critical)" : "var(--surface-3)", "fill-opacity": distinct > 1 ? 0.15 : 1, rx: 3 }));
+      svg.append(s("text", { x: x + cw / 2 - 1, y: 12, "text-anchor": "middle", "font-size": 9, fill: "var(--text-2)" }, b));
+      byBank[b].forEach((e, k) => {
+        svg.append(s("rect", { x: x + 2, y: 21 + k * ch, width: cw - 6, height: ch - 3, rx: 3, fill: WARP_COLORS[e.w % WARP_COLORS.length], "fill-opacity": 0.85 }));
+        svg.append(s("text", { x: x + cw / 2 - 1, y: 21 + k * ch + 11, "text-anchor": "middle", "font-size": 9, fill: "#fff" }, `t${e.i}`));
+      });
+    }
+    svg.append(s("text", { x: 2, y: 12, "font-size": 9, fill: "var(--text-2)" }, "bank"));
+    fig.replaceChildren(svg);
+    out.replaceChildren(kv([
+      [tl("Kelime indeksleri", "Word indices"), `${words.slice(0, 6).join(", ")}, …, ${words[31]}`],
+      [tl("Bank'lar", "Banks"), `${words.slice(0, 6).map((w) => w % 32).join(", ")}, …, ${words[31] % 32}`],
+      [tl("Sonuç", "Result"), degree <= 1
+        ? `<span class="good">${tl("conflict yok: tek tur", "no conflict: one round")}</span>`
+        : `<span class="bad">${tl(`${degree}-yollu bank conflict: ${degree} tur (throughput / ${degree})`, `${degree}-way bank conflict: ${degree} rounds (throughput / ${degree})`)}</span>`],
+      [tl("Kural", "Rule"), tl("stride &gt; 0 ise conflict derecesi = EBOB(stride, 32): tek stride → conflict yok, stride 2 → 2-yollu, 4 → 4-yollu, 32 → 32-yollu", "for stride &gt; 0 the conflict degree = gcd(stride, 32): odd stride → no conflict, stride 2 → 2-way, 4 → 4-way, 32 → 32-way")],
+    ]));
+  }
+  draw();
+}
+
+const WIDGETS = { mapping, coalesce, tiling, drill, banks };
 for (const el of $$(".wgt-mount[data-widget]")) WIDGETS[el.dataset.widget]?.(el);
