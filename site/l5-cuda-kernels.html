@@ -27,6 +27,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar şehrin öbür ucundaki büyük kütüphanede (global bellek: büyük ama uzak, yüzlerce çevrim). Herkes her sayfa için kütüphaneye giderse yollar tıkanır. Akıllıcası: öğrenciler işi bölüşüp gereken sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama hemen yanınızda) kopyalar, herkes masadan okur. "Herkes kopyalamayı bitirdi mi?" diye beklemek <code>__syncthreads()</code>'tir.</p>
+  <p>Bu ders üç adımda ilerler: (1) bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım, (2) her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması, (3) basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
+</div>
+
 <h2>Veri paralelliği: döngüden kernel'e</h2>
 <p>Veri paralelliği: bağımsız veri elemanları üzerinde aynı işlemin aynı anda yapılması (vektör toplama, konvolüsyon, matris-vektör ve matris-matris çarpımı). Pratik kural: <strong>düzenli indekslenen iç içe <code>for</code> döngüleri gördüğünüzde büyük ihtimalle paralelleştirilebilir.</strong></p>
 <div class="two-col">
@@ -163,6 +168,16 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 
 <h3>Uygula: thread kodu ve matris hücresi</h3>
 <div data-learning="cuda-index"></div>
+<h3>İndeks formülünü adım adım kurmak</h3>
+<p>Bir kitap düşünün: her sayfada 10 satır var. 3. sayfanın 7. satırı, kitabın baştan kaçıncı satırıdır? <code>3·10 + 7 = 37</code> (sayfalar ve satırlar 0'dan başlıyor). CUDA'da sayfa = blok, satır = thread:</p>
+<div class="formula-box">global indeks = blockIdx.x · blockDim.x + threadIdx.x
+              (kaçıncı blok) · (blok başına thread) + (blok içindeki sıra)
+<<<4, 256>>>: blok 2'nin 37. thread'i → 2·256 + 37 = 549</div>
+<p>2D'de aynı şeyi iki eksende ayrı ayrı yaparız: x ekseni sütunları, y ekseni satırları verir; row-major bellekte eleman <code>A[row·width + col]</code>'dadır.</p>
+<div class="formula-box">col = blockIdx.x · blockDim.x + threadIdx.x
+row = blockIdx.y · blockDim.y + threadIdx.y
+if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
+<p><strong>Neden sınır kontrolü?</strong> Grid blok sayısı yukarı yuvarlanır: 1000 elemana 256'lık bloklarla <code>(1000 + 255)/256 = 4</code> blok = 1024 thread başlar. Son 24 thread'in elemanı yok; <code>if</code> olmazsa dizinin dışına yazarlar.</p>
 <h2>Senkronizasyon: <code>__syncthreads()</code></h2>
 <h3>Uygula: bariyeri kodla ve thread'lerle izle</h3>
 <div data-learning="barrier"></div>
@@ -237,6 +252,16 @@ Oran: (16·16·2·width) / (16·width·2) = 16</div>
   <p><strong>Slayt 86 ve 88: "16×8 ne olur?", "1024×1024 matris, 32×8 blok?"</strong> BX×BY'lik bir blok P'nin BY satır × BX sütunluk karosunu hesaplar. Shared memory olmadan blok <code>BX·BY·2·width</code> okuma yapar; karolarla M'den <code>BY·width</code>, N'den <code>BX·width</code> okur. Azalma = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10,7×</strong>. 32×8: 512/40 = <strong>12,8×</strong> (matris boyutundan bağımsız). Kare T×T için bu T'ye eşittir.</p>
 </div>
 
+<h3>Sezgi: bir fazı sayılarla izlemek</h3>
+<p>Küçük bir örnek: <code>width = 4</code>, <code>TILE_WIDTH = 2</code>, yani 2×2'lik 4 blok ve her blokta 4 thread. Blok <code>(0,0)</code> P'nin sol üst 2×2 karosunu (P<sub>00</sub>, P<sub>01</sub>, P<sub>10</sub>, P<sub>11</sub>) hesaplar. İç çarpımın uzunluğu 4, bu yüzden <code>width/T = 2</code> faz vardır:</p>
+<table class="simple">
+  <thead><tr><th>Faz</th><th>Mds'ye gelen (M'den)</th><th>Nds'ye gelen (N'den)</th><th>Her thread'in Pvalue'suna eklenen</th></tr></thead>
+  <tbody>
+    <tr><td>m = 0</td><td>M satır 0–1, sütun 0–1</td><td>N satır 0–1, sütun 0–1</td><td>k = 0, 1 terimleri: M[r][0]·N[0][c] + M[r][1]·N[1][c]</td></tr>
+    <tr><td>m = 1</td><td>M satır 0–1, sütun 2–3</td><td>N satır 2–3, sütun 0–1</td><td>k = 2, 3 terimleri: M[r][2]·N[2][c] + M[r][3]·N[3][c]</td></tr>
+  </tbody>
+</table>
+<p>İki fazın sonunda her thread 4 terimin hepsini toplamış olur (CPU versiyonuyla aynı). Fark şurada: M'nin satır 0'ının iki elemanı faz başına <strong>bir kez</strong> global'den okunur ve aynı satırdaki iki thread de onu shared memory'den kullanır. T×T karoda her eleman T thread tarafından kullanılır, yani global trafik T kat azalır.</p>
 <h3>Tiled kernel</h3>
 <p>Thread'ler Md ve Nd elemanlarını <strong>işbirliğiyle</strong> shared belleğe yükler, sonra iç çarpımda bunları kullanır. Shared bellek küçük olduğu için Md ve Nd, shared'a sığan karolara bölünür ve iç çarpım <strong>fazlara</strong> ayrılır: faz <code>m</code>'de her thread M karosundan ve N karosundan birer eleman yükler.</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90">
@@ -271,6 +296,42 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Uygula: kodla birlikte M, N ve P karo yükleri</h3>
 <div data-learning="tile"></div>
 <p>Kare olmayan blokla (ör. <code>dim3(8,32)</code>) aynı fikir: <a href="exam-midterm2.html#ayni-konfigurasyonla-tiled-shared-memory-versiyon">2. vize rehberindeki çözüm</a>.</p>
+
+<h2>Özet</h2>
+<ul>
+  <li>Kernel = döngünün gövdesi; dıştaki döngüler thread'lere dönüşür. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global indeks = <code>blockIdx·blockDim + threadIdx</code> (her eksende); row-major adres <code>row·width + col</code>; grid'i yukarı yuvarla, sınırı kontrol et.</li>
+  <li><code>__syncthreads()</code>: blok içi bariyer, bloktaki herkes çalıştırmalı.</li>
+  <li>Bloklar SM'lere blok blok atanır; warp = 32 thread, zamanlama birimi; çok warp = gecikme gizleme.</li>
+  <li>Naive matmul CGMA = 1 → bant genişliği sınırlı (~%6 verim). Tiling: karoyu shared'a bir kez yükle, T kez kullan → global trafik T kat az, CGMA = T.</li>
+  <li>Tiled kernel'de iki bariyer: yüklemeden sonra (karo dolsun) ve hesaptan sonra (üzerine yazılmasın).</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li><code>cudaMalloc</code>/<code>cudaMemcpy</code>'ye eleman sayısını vermek: boyut her zaman <strong>bayt</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Row için x, col için y kullanmak: ardışık thread'ler bellekte uzak elemanlara gider (coalescing bozulur) ve matris transpoze hesaplanır.</li>
+  <li>Tiled kernel'de ikinci <code>__syncthreads()</code>'i unutmak: hızlı thread bir sonraki fazın karosunu diğerleri okurken yazar.</li>
+  <li>Kernel'den hemen sonra süre ölçmek: başlatma asenkron, önce <code>cudaDeviceSynchronize()</code>.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>n</code> elemanlı bir diziyi <code>s</code> ile çarpan bir kernel ve onu başlatan host kodunu yazın (blok başına 256 thread, <code>n</code> 256'nın katı olmayabilir).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // fazla thread'ler bir şey yapmaz
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> TILE_WIDTH = T olan tiled matmul'ün CGMA oranı nedir? Gösterin.</p>
+<div class="hint"><p>Her fazda bir thread <strong>2 global okuma</strong> yapar (Mds ve Nds'ye birer eleman) ve iç döngüde T çarpma + T toplama = <strong>2T FP işlem</strong>. CGMA = 2T / 2 = <strong>T</strong>. T = 16 ile 16 kat iyileşme: G80'de 21,6 GFLOPS sınırı ~345 GFLOPS'a çıkar (tepe 367'ye yakın).</p></div>
+<p><strong>3.</strong> 16×16 tile matmul'de shared bellek kullanımını ve G80'de SM başına kaç blok sığacağını hesaplayın. Sınırlayan nedir?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/blok</strong>; 16 KB/SM → shared'a göre 8 blok. Ama 256 thread/blok ile 768/256 = <strong>3 blok</strong>. Sınırlayan: SM başına thread sayısı (shared değil).</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="3">

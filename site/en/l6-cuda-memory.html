@@ -10,6 +10,7 @@
 <script src="../js/theme-init.js"></script>
 <script type="module" src="../js/layout.js"></script>
 <script type="module" src="../js/learning-widgets.js"></script>
+<script type="module" src="../js/widgets.js"></script>
 </head>
 <body data-page="l6-cuda-memory">
 <main><div class="content">
@@ -22,8 +23,13 @@
     <li>Tell the runtime API from the driver API; explain PTX, cubin and JIT compilation.</li>
     <li>Say which code is loaded on which GPU from a <code>-gencode</code> line.</li>
     <li>Compute blocks/threads per SM from the register and shared memory limits.</li>
-    <li>Say what local and constant memory are and their best access patterns (texture is not on this midterm).</li>
+    <li>Say what local and constant memory are and their best access patterns; compute the degree of a bank conflict.</li>
   </ul>
+</div>
+
+<div class="callout why" data-label="The big picture">
+  <p><strong>The memory hierarchy is like a workshop.</strong> The tool in your hand (a register) is used instantly but only as many as fit in your hands. Your workbench (shared memory) is a few steps away, shared by the team but small. The shelf (the L2 cache) is a little further. The warehouse (global memory) holds everything but a round trip takes hundreds of cycles. Fast code keeps the most used things in hand and on the bench, and makes bulk (coalesced) trips to the warehouse.</p>
+  <p>The lecture has two halves: first how code is compiled and which GPUs it runs on (nvcc, PTX, cubin, compute capability), then each memory type: limits (registers, shared), global (coalescing, pitch), local, shared (banks), constant and texture.</p>
 </div>
 
 <h2>Programming interface: runtime and driver API</h2>
@@ -136,18 +142,41 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
   <li>Unlike global memory access, a shared memory access does not cause another ready warp to run to hide the delay.</li>
   <li>Usage and tiled matmul: <a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5</a>.</li>
 </ul>
-<section class="is-beyond">
-<h3>Banks and bank conflicts <span class="badge-beyond">final</span></h3>
-<div class="callout beyond">
-  <p>Announcement: "Shared memory bank optimization is not included in this exam." A short summary for reference:</p>
-  <ul>
-    <li>For high bandwidth, shared memory is divided into <strong>32 banks</strong> of equal size that can be accessed simultaneously; consecutive 4-byte (8-byte on newer architectures) chunks are assigned to consecutive banks.</li>
-    <li>n addresses falling in n distinct banks are served simultaneously. If two addresses fall in the same bank: a <strong>bank conflict</strong>, the request is split into conflict-free parts and serialised (n-way conflict → throughput / n).</li>
-    <li>Stride 1 and stride 3 (odd) are conflict-free; stride 2 is a two-way conflict. Threads reading the same word do not conflict (broadcast).</li>
-    <li>Fix: padding (e.g. <code>tile[32][33]</code>).</li>
-  </ul>
-</div>
-</section>
+<h3>Banks and bank conflicts</h3>
+<p><strong>Analogy:</strong> shared memory is like a shop with 32 tills. Each customer (thread) goes to the till of their item. If 32 customers spread over 32 different tills, everyone pays at once. If they all pile up at the same till, they wait in turn. Exception: customers who want the same item (the same word) are served together (a broadcast).</p>
+<ul>
+  <li>Shared memory is divided into <strong>32 banks</strong> that can be accessed at the same time. Consecutive 4-byte words go to consecutive banks (newer architectures also have an 8-byte mode):</li>
+</ul>
+<div class="formula-box">bank = (byte address / 4) % 32  =  (float/int array index) % 32
+s[0] → bank 0, s[1] → bank 1, …, s[31] → bank 31, s[32] → bank 0 again</div>
+<ul>
+  <li>If the addresses of a warp's request fall into 32 different banks, the request is served <strong>in one round</strong>.</li>
+  <li>If <strong>different</strong> words fall into the same bank: a <strong>bank conflict</strong>; the hardware splits the request into conflict-free parts and performs them in turn. If at most n different words fall into one bank: an n-way conflict, throughput / n.</li>
+  <li>Threads reading the same word do not conflict (broadcast).</li>
+  <li>Unlike global memory, a wait on shared memory is not hidden by switching to another warp; a conflict slows down directly.</li>
+</ul>
+<h4>Examples (32 threads, 4-byte elements)</h4>
+<table class="simple">
+  <thead><tr><th>Access</th><th>Bank of thread i</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td><code>s[tid]</code></td><td>i % 32: all different</td><td>no conflict</td></tr>
+    <tr><td><code>s[2*tid]</code></td><td>0, 2, 4, …, 30, 0, 2, …: threads i and i+16 same bank, different words</td><td>2-way</td></tr>
+    <tr><td><code>s[3*tid]</code></td><td>0, 3, 6, …: 3 and 32 are coprime → all different</td><td>no conflict</td></tr>
+    <tr><td><code>s[4*tid]</code></td><td>only 8 banks are used, 4 words each</td><td>4-way</td></tr>
+    <tr><td><code>s[32*tid]</code></td><td>all bank 0</td><td>32-way (the worst)</td></tr>
+    <tr><td><code>s[0]</code></td><td>all the same word</td><td>no conflict (broadcast)</td></tr>
+  </tbody>
+</table>
+<p>General rule: for <code>s[stride*tid]</code> the conflict degree is <strong>gcd(stride, 32)</strong>. An odd stride is always conflict-free.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="s2"></div>
+<h4>Reading a column of a 2D array, and padding</h4>
+<p>In <code>__shared__ float tile[32][32];</code> the element <code>tile[r][c]</code> has index <code>r·32 + c</code> and bank <code>(r·32 + c) % 32 = c</code>. So <strong>all elements of a column are in the same bank</strong>. The store phase of the transpose reads a column with <code>tile[threadIdx.x][j]</code>: the 32 threads of the warp want 32 different words from the same bank → a <strong>32-way conflict</strong>.</p>
+<p>The fix: make each row one element longer (padding):</p>
+<div class="formula-box">__shared__ float tile[32][33];           // 33 elements per row
+tile[r][c] → index r·33 + c → bank (r·33 + c) % 32 = (r + c) % 32
+in column c, r = 0..31 → banks c, c+1, …, c+31 (mod 32): all different → no conflict</div>
+<p>The cost: 32 extra floats (128 B) of shared memory. In NVIDIA's transpose measurements this one line takes the coalesced transpose from 51 GB/s to 99.5 GB/s (95% of copy): <a href="coalescing.html#matrix-transpose">Coalescing page</a>.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="col32"></div>
 
 <h2>L2 cache control</h2>
 <p>If a kernel accesses a global memory region repeatedly those accesses are <strong>persisting</strong>; if only once, <strong>streaming</strong>. With CUDA 11.0 and compute capability 8.0+, a portion of L2 can be set aside for persisting accesses; normal/streaming accesses use that portion only when it is unused.</p>
@@ -164,9 +193,8 @@ float data[256];                             // host-side buffer
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel launch
 </pre>
 
-<section class="is-beyond">
-<h2 data-toc="Texture memory">Texture memory <span class="badge-beyond">not on midterm 2</span></h2>
-<div class="callout beyond"><p>Texture memory is not in the scope of midterm 2. This section is for reference and later.</p></div>
+<h2>Texture memory</h2>
+<div class="callout key"><p><strong>When texture?</strong> When the access pattern is irregular but local in 2D (rotating, scaling, warping an image: neighbouring pixels are read together), when coordinates are fractional (bilinear interpolation for free), and when out-of-range reads should be handled automatically (clamp/border/wrap/mirror). The cost: copying the data into a CUDA array, and read-only access.</p></div>
 
 <ul>
   <li>A subset of the texturing hardware the GPU uses for graphics. Textures are <strong>read-only</strong>; a surface is like a texture that can be written.</li>
@@ -221,8 +249,6 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Reading on the device: linear-memory textures <code>tex1Dfetch()</code>, array textures <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Management functions: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. In the older <em>texture reference API</em>, type, dimensionality and read mode are fixed at compile time; normalisation, filter and address mode can change at run time (CUDA array textures only).</p>
 
-</section>
-
 <h2>Memory overview</h2>
 <table class="simple">
   <thead><tr><th>Memory</th><th>Scope</th><th>Latency</th><th>Note</th></tr></thead>
@@ -232,13 +258,39 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
     <tr><td>Local</td><td>Thread</td><td>400–600 cycles</td><td>Actually global memory.</td></tr>
     <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 cycles</td><td>Always cached in L2; coalescing essential.</td></tr>
     <tr><td>Constant</td><td>Kernel</td><td>400–600 cycles</td><td>Constant cache; same address → broadcast.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 cycles</td><td>Texture cache, optimised for 2D (not on midterm 2).</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 cycles</td><td>Texture cache, optimised for 2D.</td></tr>
   </tbody>
 </table>
 <ul>
   <li>Whether reads are cached in both the unified L1/texture cache and L2, or in L2 only, can be partly configured per access with load-instruction modifiers. Marking pointers <strong><code>const</code> and <code>__restrict__</code></strong> increases the likelihood that the compiler detects the read-only condition.</li>
   <li>Unless you use shared memory explicitly, <strong>never assume</strong> your data will be cached, or which cache will be used.</li>
 </ul>
+
+<h2>Summary</h2>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (virtual ISA) → ptxas → SASS (cubin). A cubin for X.y runs only on X.z (z ≥ y); future GPUs need PTX + JIT. <code>-arch</code> selects the PTX, <code>-code</code> the binary.</li>
+  <li>Kernel launches are asynchronous: call <code>cudaDeviceSynchronize()</code> when timing; the first call includes initialisation.</li>
+  <li>Register and shared memory limits decide the threads/blocks per SM; too many registers → spill → local memory (as slow as global).</li>
+  <li>Global: coalescing (aligned 32/64/128 B segments), pitch in 2D. Local: variable-indexed arrays and spills.</li>
+  <li>Shared: 32 banks, bank = word index % 32; different words in the same bank = conflict; for <code>s[stride·tid]</code> the degree is gcd(stride, 32); <code>[32][33]</code> padding for column reads.</li>
+  <li>Constant: best when everyone reads the <strong>same</strong> address (broadcast). Texture: 2D locality, interpolation, boundary handling; read-only, needs a CUDA array.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Mixing up coalescing and bank conflicts: coalescing is about consecutive addresses in <strong>global</strong> memory; bank conflicts are about different words falling into the same bank of <strong>shared</strong> memory. <code>s[2*tid]</code> means half efficiency in global memory and a 2-way conflict in shared memory.</li>
+  <li>Taking the pitch for a number of elements: the pitch is in <strong>bytes</strong>, the row start is <code>(char*)p + r*pitch</code>.</li>
+  <li>Having consecutive threads read consecutive addresses of constant memory: that is the bad pattern for constant memory (32 separate requests).</li>
+  <li>Thinking a binary built with <code>-code=sm_70</code> runs on an 8.x GPU (not across a major change, and with no PTX there is no JIT).</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 32 threads read <code>s[8*threadIdx.x + 1]</code> from <code>__shared__ float s[1024]</code>. How many ways is the bank conflict?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → only 4 banks are used, with 8 different words each → <strong>8-way</strong> (gcd(8, 32) = 8; the offset does not change the degree).</p></div>
+<p><strong>2.</strong> Why is <code>tile[32][33]</code> used instead of <code>__shared__ float tile[32][32]</code> in the transpose? Show it with the bank calculation.</p>
+<div class="hint"><p>With width 32 the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank, so a warp reading a column makes a 32-way conflict. With width 33 the bank is <code>(33r + c) % 32 = (r + c) % 32</code>: 32 different banks for r = 0..31 → no conflict. The cost is 32 floats.</p></div>
+<p><strong>3.</strong> A kernel uses 40 registers per thread and an SM has 65,536 registers. With 256 threads per block, how many blocks fit on an SM at most (by registers)?</p>
+<div class="hint"><p>256·40 = 10,240 registers per block; 65,536 / 10,240 = 6.4 → <strong>6 blocks</strong> (1536 threads). Bringing it down to 32 registers allows 8 blocks (2048 threads): register usage directly decides occupancy.</p></div>
+<p><strong>4.</strong> When do you choose constant memory and when texture memory? One example each.</p>
+<div class="hint"><p>Constant: when all threads read the same small data at the same time, e.g. the coefficients of a convolution filter (every thread reads the same coefficient at the same moment → broadcast). Texture: reads that are local in 2D but irregular, and fractional coordinates, e.g. image rotation (<code>texRotate.cu</code>): neighbouring pixels come from the cache, bilinear interpolation and edge handling are done in hardware.</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

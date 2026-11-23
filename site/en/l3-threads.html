@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>Think of a shared notebook.</strong> Several people update a number in the same notebook: each reads the number, adds one in their head, and writes it back. If two of them read at the same time, both see the same old number and one overwrites the other's update. Threads in shared memory are exactly this: they are fast because they see the same memory, and precisely because of that the result breaks if the <strong>order</strong> is not controlled.</p>
+  <p>This lecture first shows the problem (data races, race conditions), then the tools: a <strong>mutex</strong> (one person at the notebook at a time), a <strong>semaphore</strong> (at most N people), an <strong>atomic</strong> (a single indivisible hardware operation), a <strong>monitor / condition variable</strong> (sleep until a condition holds). Finally, what goes wrong when these tools are misused: deadlock, livelock, starvation.</p>
+</div>
+
 <h2>What is a thread?</h2>
 <ul>
   <li><strong>Process:</strong> a running program with its own address space, open files and PID (<code>fork()</code> copies a process: expensive). <strong>Thread:</strong> a separate flow of execution inside a process; it has its own program counter, stack, registers and state, but <strong>shares</strong> the address space with the other threads of the process. A "lightweight process": cheaper to create and switch.</li>
@@ -54,6 +59,20 @@ int main() {
 
 <h3>Apply: the lost update</h3>
 <div data-learning="race"></div>
+<h3>Step by step: why does <code>counter++</code> break?</h3>
+<p><code>counter++</code> is one line, but for the processor it is three steps: <strong>read</strong> (load), <strong>add one</strong>, <strong>write</strong> (store). If two threads run it at the same time while counter = 5, one possible order is:</p>
+<table class="simple">
+  <thead><tr><th>Time</th><th>Thread 1</th><th>Thread 2</th><th>counter (memory)</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>read → 5</td><td></td><td>5</td></tr>
+    <tr><td>2</td><td></td><td>read → 5</td><td>5</td></tr>
+    <tr><td>3</td><td>5 + 1 = 6</td><td></td><td>5</td></tr>
+    <tr><td>4</td><td></td><td>5 + 1 = 6</td><td>5</td></tr>
+    <tr><td>5</td><td>write 6</td><td></td><td>6</td></tr>
+    <tr><td>6</td><td></td><td>write 6</td><td><strong>6</strong> (should be 7)</td></tr>
+  </tbody>
+</table>
+<p>One update was lost (a <em>lost update</em>). The essence of the fix: make the read-modify-write triple <strong>indivisible</strong>. Either put a lock around it (a mutex: only one thread enters that line at a time) or use the hardware's single-instruction atomic operation (<code>++</code> on a <code>std::atomic&lt;int&gt;</code>, <code>atomicAdd</code> on a GPU).</p>
 <h2>Locks, mutexes, semaphores</h2>
 <table class="simple">
   <thead><tr><th>Tool</th><th>Property</th></tr></thead>
@@ -81,6 +100,18 @@ acquire() {                       release() {
   <li><strong>Recursive locks:</strong> a normal mutex acquired twice by the same thread deadlocks; a recursive mutex allows it.</li>
 </ul>
 
+<h3>Which tool when?</h3>
+<table class="simple">
+  <thead><tr><th>Need</th><th>Tool</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Only one thread at a time may modify a data structure</td><td>mutex (+ <code>lock_guard</code>)</td><td>inserting into a shared <code>std::map</code></td></tr>
+    <tr><td>A single number/flag must be updated indivisibly</td><td><code>std::atomic</code></td><td>a counter, a "done" flag, a histogram bin</td></tr>
+    <tr><td>At most N threads may use a resource at once</td><td>counting semaphore</td><td>at most 4 concurrent file downloads</td></tr>
+    <tr><td>Wait until a condition holds (without busy waiting)</td><td>condition variable (monitor)</td><td>a consumer wakes when the queue is not empty</td></tr>
+    <tr><td>Signal an event once</td><td>binary semaphore / future</td><td>a "data ready" signal</td></tr>
+    <tr><td>Nobody continues until everyone reaches a point</td><td>barrier</td><td>each step of an iterative simulation; <code>__syncthreads()</code> on a GPU</td></tr>
+  </tbody>
+</table>
 <h2>Consistency models</h2>
 <ul>
   <li>Design concerns: cache <strong>coherence</strong> (the same address) and the memory <strong>consistency model</strong> (the order in which operations on different addresses become visible).</li>
@@ -98,6 +129,9 @@ acquire() {                       release() {
   </tbody>
 </table>
 
+<div class="callout key">
+  <p><strong>How to prevent deadlock?</strong> <span class="badge-class">extra</span> A deadlock needs four conditions together: mutual exclusion, hold and wait (waiting for one resource while holding another), no preemption, and <strong>circular wait</strong>. The most practical prevention is to break the cycle: all threads take the locks <strong>in the same order</strong> (R1 first, then R2). In C++17, <code>std::scoped_lock lk(m1, m2);</code> takes several mutexes without deadlock.</p>
+</div>
 <h2>Producer-consumer</h2>
 <p>Producers put items into a shared buffer (e.g. <code>BUFFSIZE = 100</code>), consumers take them. Three semaphores: <code>slotsAvail</code> (initially BUFFSIZE), <code>resAvail</code> (initially 0), and a mutex (<code>l</code>) protecting the buffer indices.</p>
 <pre class="code" data-run="prodcons.cpp" data-run-note="Pseudocode; the runnable version has 2 producers, 3 consumers, BUFFSIZE = 100." data-title="Pseudocode with synchronisation">
@@ -156,6 +190,33 @@ public:
 <div class="callout key">
   <p><strong>The CPU ↔ GPU bridge:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel launch + <code>cudaDeviceSynchronize()</code>; a barrier ≈ <code>__syncthreads()</code> (but within a block only); <code>std::atomic</code> ≈ <code>atomicAdd</code>; the histogram exercise shows the same race problem in both worlds.</p>
 </div>
+
+<h2>Summary</h2>
+<ul>
+  <li>Threads share the process's address space: communication is cheap, but access to shared data must be synchronised.</li>
+  <li><strong>Data race</strong>: concurrent access with at least one writer (undefined behaviour in C++). <strong>Race condition</strong>: a wrong result because of ordering.</li>
+  <li>Read-modify-write must be indivisible: a mutex or an atomic.</li>
+  <li>Mutex = one thread + ownership; semaphore = N threads, a counter; condition variable = wait for a condition while releasing the lock.</li>
+  <li>Deadlock (nobody progresses, CPU idle), livelock (nobody progresses, CPU busy), starvation (one thread never gets a turn).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (free slots) and <code>resAvail</code> (full slots) semaphores + a mutex protecting the indices.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) and LL/SC: the hardware basis of atomics and lock-free structures.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Locking only the writer and not the reader: a read races with a write too.</li>
+  <li>Waiting on a condition variable with <code>if</code>: after waking, the condition must be checked again (<code>while</code> or <code>wait(lock, predicate)</code>).</li>
+  <li>Swapping the semaphore and mutex order in producer-consumer: taking the mutex first and then waiting on the semaphore for a full buffer deadlocks (the mutex holder sleeps, the consumer cannot get the mutex).</li>
+  <li>Writing lock-free code because "8 bytes are atomic on x86": compilers and types make relying on it wrong.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 4 threads each do an unprotected <code>counter++</code> 1000 times. What can the final value be at most? Why does it come out below 4000?</p>
+<div class="hint"><p>At most 4000 (if there is never an overlap). In practice less, because the read-add-write steps interleave and updates are lost (the table above). The theoretical lower bound is very small (a bad interleaving can bring it down to 2); in the exam what matters is explaining why: updates are lost and the result is nondeterministic.</p></div>
+<p><strong>2.</strong> In producer-consumer the consumer is written in this order: <code>l.acquire(); resAvail.acquire(); …</code>. What happens?</p>
+<div class="hint"><p>With an empty buffer the consumer takes the mutex, then sleeps on <code>resAvail</code> <strong>while holding the mutex</strong>. The producer cannot take the mutex to add an item → nobody can progress: <strong>deadlock</strong>. The right order is semaphore first, then mutex.</p></div>
+<p><strong>3.</strong> A web server can open at most 8 database connections at once. Which synchronisation tool do you use? Write the skeleton of the code.</p>
+<div class="hint"><p>A <strong>counting semaphore</strong> with initial value 8: each request takes a connection with <code>sem.acquire();</code> and calls <code>sem.release();</code> when done. The 9th request waits until a connection is freed.</p></div>
+<p><strong>4.</strong> Compare deadlock and livelock in terms of CPU usage and give a real-life example of each.</p>
+<div class="hint"><p>Deadlock: threads sleep waiting for each other's resources, CPU usage is <strong>low</strong> (two cars facing each other on a narrow bridge, neither backs off). Livelock: threads are not blocked but busy responding to each other, CPU usage is <strong>high</strong> but there is no progress (two people in a corridor dodging the same way).</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

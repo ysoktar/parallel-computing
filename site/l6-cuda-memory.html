@@ -10,6 +10,7 @@
 <script src="js/theme-init.js"></script>
 <script type="module" src="js/layout.js"></script>
 <script type="module" src="js/learning-widgets.js"></script>
+<script type="module" src="js/widgets.js"></script>
 </head>
 <body data-page="l6-cuda-memory">
 <main><div class="content">
@@ -22,8 +23,13 @@
     <li>Runtime API ile driver API'yi ayırt etmek; PTX, cubin ve JIT derlemeyi açıklamak.</li>
     <li>Bir <code>-gencode</code> satırından hangi GPU'ya hangi kodun yükleneceğini söylemek.</li>
     <li>Register ve shared bellek sınırlarından SM başına blok/thread sayısını hesaplamak.</li>
-    <li>Local ve constant belleğin ne olduğunu ve en iyi erişim desenlerini söylemek (texture bu vizede yok).</li>
+    <li>Local ve constant belleğin ne olduğunu ve en iyi erişim desenlerini söylemek; bank conflict derecesini hesaplamak.</li>
   </ul>
+</div>
+
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Bellek hiyerarşisi bir atölye gibidir.</strong> Elinizdeki alet (register) anında kullanılır ama elinize sığan sayıda. Tezgâhınız (shared memory) birkaç adım ötede, ekipçe paylaşılır ama küçüktür. Raf (L2 önbellek) biraz daha uzakta. Depo (global bellek) her şeyi tutar ama gidip gelmek yüzlerce çevrim sürer. Hızlı kod, en sık kullanılan şeyleri ele ve tezgâha yakın tutan, depoya da toplu (coalesced) seferler yapan koddur.</p>
+  <p>Bu dersin iki yarısı var: önce kodun nasıl derlendiği ve hangi GPU'da çalışacağı (nvcc, PTX, cubin, compute capability), sonra bellek türlerinin her biri: sınırlar (register, shared), global (coalescing, pitch), local, shared (bank'lar), constant ve texture.</p>
 </div>
 
 <h2>Programlama arayüzü: runtime ve driver API</h2>
@@ -136,18 +142,41 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
   <li>Global bellek erişiminin aksine, shared erişimi gecikmeyi gizlemek için başka bir hazır warp'ın çalışmasına yol açmaz.</li>
   <li>Kullanımı ve tiled matmul: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a>.</li>
 </ul>
-<section class="is-beyond">
-<h3>Bank'lar ve bank conflict'ler <span class="badge-beyond">finalde</span></h3>
-<div class="callout beyond">
-  <p>Duyuru: "Shared memory bank optimization bu sınava dahil değil." Bilgi için kısa özet:</p>
-  <ul>
-    <li>Yüksek bant genişliği için shared bellek eşit boyutlu, aynı anda erişilebilen <strong>32 bank</strong>'a bölünür; ardışık 4 baytlık (yeni mimarilerde 8 bayt) parçalar ardışık bank'lara atanır.</li>
-    <li>n farklı bank'a düşen n adres aynı anda servis edilir. İki adres aynı bank'a düşerse <strong>bank conflict</strong>: istek çakışmasız parçalara bölünüp seri yapılır (n-yollu conflict → throughput / n).</li>
-    <li>Stride 1 ve stride 3 (tek sayı) çakışmasız; stride 2 iki-yollu conflict. Aynı kelimeyi okuyan thread'ler çakışma yaratmaz (broadcast).</li>
-    <li>Çözüm: padding (ör. <code>tile[32][33]</code>).</li>
-  </ul>
-</div>
-</section>
+<h3>Bank'lar ve bank conflict'ler</h3>
+<p><strong>Benzetme:</strong> shared memory 32 kasası olan bir market gibidir. Her müşteri (thread) kendi ürününün bulunduğu kasaya gider. 32 müşteri 32 farklı kasaya dağılırsa herkes aynı anda ödeme yapar. Hepsi aynı kasaya yığılırsa sırayla beklerler. İstisna: aynı ürünü (aynı kelimeyi) isteyenler tek seferde servis edilir (yayın, broadcast).</p>
+<ul>
+  <li>Shared memory, aynı anda erişilebilen <strong>32 bank</strong>'a bölünmüştür. Ardışık 4 baytlık kelimeler ardışık bank'lara düşer (yeni mimarilerde 8 bayt modu da var):</li>
+</ul>
+<div class="formula-box">bank = (bayt adresi / 4) % 32  =  (float/int dizi indeksi) % 32
+s[0] → bank 0, s[1] → bank 1, …, s[31] → bank 31, s[32] → bank 0 tekrar</div>
+<ul>
+  <li>Bir warp'ın isteğindeki adresler 32 farklı bank'a düşüyorsa istek <strong>tek turda</strong> karşılanır.</li>
+  <li>Aynı bank'a <strong>farklı</strong> kelimeler düşüyorsa <strong>bank conflict</strong>: donanım isteği çakışmasız parçalara böler ve sırayla yapar. Bir bank'a en çok n farklı kelime düşüyorsa n-yollu conflict, throughput / n.</li>
+  <li>Aynı kelimeyi okuyan thread'ler çakışma yaratmaz (yayın).</li>
+  <li>Global bellekten farklı olarak shared bellek beklerken başka warp'a geçilerek gecikme gizlenmez; conflict doğrudan yavaşlatır.</li>
+</ul>
+<h4>Örnekler (32 thread, 4 baytlık eleman)</h4>
+<table class="simple">
+  <thead><tr><th>Erişim</th><th>Thread i'nin bank'ı</th><th>Sonuç</th></tr></thead>
+  <tbody>
+    <tr><td><code>s[tid]</code></td><td>i % 32: hepsi farklı</td><td>conflict yok</td></tr>
+    <tr><td><code>s[2*tid]</code></td><td>0, 2, 4, …, 30, 0, 2, …: thread i ve i+16 aynı bank, farklı kelime</td><td>2-yollu</td></tr>
+    <tr><td><code>s[3*tid]</code></td><td>0, 3, 6, …: 3 ile 32 aralarında asal → hepsi farklı</td><td>conflict yok</td></tr>
+    <tr><td><code>s[4*tid]</code></td><td>sadece 8 bank kullanılır, her birine 4 kelime</td><td>4-yollu</td></tr>
+    <tr><td><code>s[32*tid]</code></td><td>hepsi bank 0</td><td>32-yollu (en kötü)</td></tr>
+    <tr><td><code>s[0]</code></td><td>hepsi aynı kelime</td><td>conflict yok (yayın)</td></tr>
+  </tbody>
+</table>
+<p>Genel kural: <code>s[stride*tid]</code> için conflict derecesi <strong>EBOB(stride, 32)</strong>. Tek sayılı stride her zaman çakışmasızdır.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="s2"></div>
+<h4>2D dizide sütun okumak ve padding</h4>
+<p><code>__shared__ float tile[32][32];</code> dizisinde <code>tile[r][c]</code> elemanının indeksi <code>r·32 + c</code>, bank'ı <code>(r·32 + c) % 32 = c</code>. Yani <strong>bir sütunun tüm elemanları aynı bank'ta</strong>. Transpose'ta yazma aşaması <code>tile[threadIdx.x][j]</code> ile sütun okur: warp'taki 32 thread aynı bank'tan 32 farklı kelime ister → <strong>32-yollu conflict</strong>.</p>
+<p>Çözüm: satırları bir eleman uzatmak (padding):</p>
+<div class="formula-box">__shared__ float tile[32][33];           // her satır 33 eleman
+tile[r][c] → indeks r·33 + c → bank (r·33 + c) % 32 = (r + c) % 32
+sütun c'de r = 0..31 → bank'lar c, c+1, …, c+31 (mod 32): hepsi farklı → conflict yok</div>
+<p>Bedel: 32 float'lık (128 B) fazladan shared bellek. NVIDIA'nın transpose ölçümlerinde bu tek satır, coalesced transpose'u 51 GB/s'den 99,5 GB/s'ye çıkarır (copy'nin %95'i): <a href="coalescing.html#matris-transpose">Coalescing sayfası</a>.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="col32"></div>
 
 <h2>L2 önbellek kontrolü</h2>
 <p>Bir kernel global bellekteki bir bölgeye tekrar tekrar erişiyorsa bu erişimler <strong>persisting</strong>, bir kez erişiyorsa <strong>streaming</strong>'dir. CUDA 11.0 ve compute capability 8.0+ ile L2'nin bir kısmı persisting erişimlere ayrılabilir; normal/streaming erişimler o kısmı ancak boşsa kullanır.</p>
@@ -164,9 +193,8 @@ float data[256];                             // host tarafındaki tampon
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // kernel'den önce kopyala
 </pre>
 
-<section class="is-beyond">
-<h2 data-toc="Texture memory">Texture memory <span class="badge-beyond">2. vizede yok</span></h2>
-<div class="callout beyond"><p>Texture memory 2. vize kapsamında değil. Bu bölüm sadece bilgi ve sonrası için.</p></div>
+<h2>Texture memory</h2>
+<div class="callout key"><p><strong>Texture ne zaman?</strong> Erişim deseni düzensiz ama 2D'de yerel olduğunda (görüntü döndürme, ölçekleme, çarpıtma: komşu pikseller birlikte okunur), koordinatlar kesirli olduğunda (bilineer interpolasyon bedava) ve sınır dışı okumaların otomatik ele alınması istendiğinde (clamp/border/wrap/mirror). Bedel: veriyi bir CUDA array'e kopyalamak ve salt okunurluk.</p></div>
 
 <ul>
   <li>GPU'nun grafik için kullandığı texture donanımının bir alt kümesi. Texture <strong>salt okunur</strong>; surface yazılabilen texture gibidir.</li>
@@ -221,8 +249,6 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Device tarafında okuma: doğrusal bellek texture'ları <code>tex1Dfetch()</code>, array texture'ları <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Yönetim fonksiyonları: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. Eski <em>texture reference API</em>'de tip, boyut ve okuma modu derleme zamanında sabit; normalize, filtre ve adres modu çalışma zamanında değiştirilebilir (sadece CUDA array texture'ları).</p>
 
-</section>
-
 <h2>Bellek özeti</h2>
 <table class="simple">
   <thead><tr><th>Bellek</th><th>Kapsam</th><th>Gecikme</th><th>Not</th></tr></thead>
@@ -232,13 +258,39 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
     <tr><td>Local</td><td>Thread</td><td>400–600 çevrim</td><td>Aslında global bellek.</td></tr>
     <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 çevrim</td><td>Her zaman L2'de önbelleklenir; coalescing şart.</td></tr>
     <tr><td>Constant</td><td>Kernel</td><td>400–600 çevrim</td><td>Constant cache; aynı adres → yayın.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize (2. vizede yok).</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize.</td></tr>
   </tbody>
 </table>
 <ul>
   <li>Okumaların hem birleşik L1/texture cache'te hem L2'de mi, yoksa sadece L2'de mi önbelleklendiği load komutunun niteleyicileriyle kısmen ayarlanabilir. Pointer'ları <strong><code>const</code> ve <code>__restrict__</code></strong> ile işaretlemek derleyicinin salt-okunur durumu fark etme ihtimalini artırır.</li>
   <li>Shared memory'yi açıkça kullanmadığınız sürece verinizin önbelleğe alınacağını ya da hangi önbelleğin kullanılacağını <strong>asla varsaymayın</strong>.</li>
 </ul>
+
+<h2>Özet</h2>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (sanal ISA) → ptxas → SASS (cubin). cubin X.y sadece X.z (z ≥ y) üzerinde çalışır; gelecekteki GPU'lar için PTX + JIT gerekir. <code>-arch</code> PTX'i, <code>-code</code> ikiliyi seçer.</li>
+  <li>Kernel başlatma asenkrondur: süre ölçerken <code>cudaDeviceSynchronize()</code>; ilk çağrı başlatma maliyetini içerir.</li>
+  <li>Register ve shared sınırları SM başına thread/blok sayısını belirler; aşırı register → spill → local memory (global kadar yavaş).</li>
+  <li>Global: coalescing (32/64/128 B hizalı segmentler), 2D'de pitch. Local: değişken indeksli diziler ve spill.</li>
+  <li>Shared: 32 bank, bank = kelime indeksi % 32; aynı bank'a farklı kelimeler = conflict; <code>s[stride·tid]</code> için derece EBOB(stride, 32); sütun okumada <code>[32][33]</code> padding.</li>
+  <li>Constant: herkes <strong>aynı</strong> adresi okursa en iyi (yayın). Texture: 2D yerellik, interpolasyon, sınır işleme; salt okunur, CUDA array gerekir.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Coalescing ile bank conflict'i karıştırmak: coalescing <strong>global</strong> bellekte ardışık adreslerle ilgilidir; bank conflict <strong>shared</strong> bellekte aynı bank'a düşen farklı kelimelerle. <code>s[2*tid]</code> global'de yarı verim, shared'da 2-yollu conflict demektir.</li>
+  <li>Pitch'i eleman sayısı sanmak: pitch <strong>bayttır</strong>, satır başı <code>(char*)p + r*pitch</code>.</li>
+  <li>Constant belleğe ardışık thread'lerle ardışık adres okutmak: constant için bu kötü desen (32 ayrı istek).</li>
+  <li><code>-code=sm_70</code> ile derlenen ikilinin 8.x GPU'da çalışacağını sanmak (major değişince çalışmaz, PTX yoksa JIT de yok).</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 32 thread <code>__shared__ float s[1024]</code>'ten <code>s[8*threadIdx.x + 1]</code> okuyor. Kaç-yollu bank conflict olur?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → sadece 4 bank kullanılır, her birine 8 farklı kelime → <strong>8-yollu</strong> (EBOB(8, 32) = 8; offset dereceyi değiştirmez).</p></div>
+<p><strong>2.</strong> Transpose'ta <code>__shared__ float tile[32][32]</code> yerine <code>tile[32][33]</code> neden kullanılır? Bank hesabıyla gösterin.</p>
+<div class="hint"><p>32 genişlikte <code>tile[r][c]</code>'nin bank'ı <code>(32r + c) % 32 = c</code>: bir sütunun 32 elemanı aynı bank'ta, sütun okuyan warp 32-yollu conflict yapar. 33 genişlikte bank <code>(33r + c) % 32 = (r + c) % 32</code>: r = 0..31 için 32 farklı bank → conflict yok. Bedel 32 float.</p></div>
+<p><strong>3.</strong> Bir kernel thread başına 40 register kullanıyor ve SM'de 65.536 register var. Blok başına 256 thread ile SM'ye en fazla kaç blok sığar (register'a göre)?</p>
+<div class="hint"><p>Blok başına 256·40 = 10.240 register; 65.536 / 10.240 = 6,4 → <strong>6 blok</strong> (1536 thread). Register sayısını 32'ye indirmek 8 blok (2048 thread) sağlar: register kullanımı occupancy'yi doğrudan belirler.</p></div>
+<p><strong>4.</strong> Hangi durumda constant, hangi durumda texture bellek seçersiniz? Birer örnek.</p>
+<div class="hint"><p>Constant: tüm thread'lerin aynı anda aynı küçük veriyi okuduğu durumlar, ör. konvolüsyon filtresinin katsayıları (her thread aynı katsayıyı aynı anda okur → yayın). Texture: 2D'de yerel ama düzensiz okumalar ve kesirli koordinatlar, ör. görüntü döndürme (<code>texRotate.cu</code>): komşu pikseller önbellekten gelir, bilineer interpolasyon ve kenar işleme donanımda.</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="2">

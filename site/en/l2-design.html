@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>Think of building a house.</strong> First you split the job into pieces (foundation, walls, wiring, paint), then you work out which job waits for which (paint after the walls), you give tightly connected jobs to the same crew (one plumber does both the kitchen and the bathroom), and you spread the crews so that each has a fair share. Parallel program design is the same four steps: <strong>PCAM</strong>.</p>
+  <p>Then come two families of "ready-made patterns": decomposition patterns that say <strong>how to split</strong> the work (geometric, pipeline, divide and conquer…) and program structure patterns that say <strong>how to structure</strong> the program (SPMD, master-worker, fork/join…). Every CUDA kernel you write is in fact an example of geometric decomposition + SPMD.</p>
+</div>
+
 <h2>Ask first: is parallel necessary and achievable?</h2>
 <ul>
   <li>The algorithm may not allow a parallel implementation; time/engineering resources may be missing.</li>
@@ -44,6 +49,15 @@
 </table>
 <p>Duplicating computations can improve performance by removing the need to communicate their results. Examples: matrix addition (fully independent), 2D convolution (needs neighbour data).</p>
 
+<h3>Worked example: designing a 2D convolution with PCAM</h3>
+<p>Problem: apply a 3×3 filter to an N×N image (Exercises 2 and 4). Each output pixel is computed from itself and its 8 neighbours in the input.</p>
+<ol>
+  <li><strong>Partitioning:</strong> the finest piece is <strong>one output pixel</strong> → N² tasks. The tasks can be computed independently (outputs do not wait for each other): data decomposition.</li>
+  <li><strong>Communication:</strong> each task reads its neighbours' input values. In shared memory that is a "read"; in distributed memory it needs messages to neighbouring tasks. In the dependency graph each node has edges to its 8 neighbours.</li>
+  <li><strong>Agglomeration:</strong> N² tiny tasks mean too much communication. Group pixels into <strong>strips or tiles</strong>: neighbours inside a group become free, only the rows/columns on the <strong>border</strong> (the halo) are needed from outside. The bigger the tile, the smaller the halo-to-interior ratio.</li>
+  <li><strong>Mapping:</strong> keep the groups the same size (load balance) and give each core one or a few groups. On a GPU: tile = thread block, halo = extra rows around the tile, and the tile is loaded into shared memory.</li>
+</ol>
+<p>The same reasoning appears in matrix multiplication: one output element = one task, grouping = block/tile, reducing communication = tiling with shared memory (L5).</p>
 <h2>Decomposition patterns</h2>
 <p>The six patterns of Mattson et al.; functional and data decomposition are joined by <strong>data flow</strong> decomposition. There is no strict separation; a problem can be decomposed in several ways.</p>
 <h3>Task parallelism</h3>
@@ -75,6 +89,18 @@ DnC(A) {
 <h3>Event-based coordination</h3>
 <p>The communication flow is not fixed; tasks interact dynamically at run time; the execution profile cannot be known in advance. Example: discrete-event simulation (event = time-stamped message).</p>
 
+<h3>Which pattern when?</h3>
+<table class="simple">
+  <thead><tr><th>Problem</th><th>Suitable pattern</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Image filtering, matrix addition/multiplication</td><td>Geometric</td><td>The data is a regular grid; regions are independent (a halo if there are neighbours).</td></tr>
+    <tr><td>Merge sort, quicksort, tree search</td><td>Divide-and-conquer</td><td>The problem splits into self-similar subproblems; tasks are dynamic.</td></tr>
+    <tr><td>Video decoding: read → decode → filter → display</td><td>Pipeline</td><td>The data flows through fixed stages; the stages work on different frames at the same time.</td></tr>
+    <tr><td>Partial sums, linked-list operations</td><td>Recursive data</td><td>The structure is irregular; the algorithm is turned into binary-tree-like steps.</td></tr>
+    <tr><td>Game loop (input, drawing, sound, AI)</td><td>Task parallelism</td><td>A few different tasks; does not scale but is simple.</td></tr>
+    <tr><td>Traffic, network, factory simulation</td><td>Event-based</td><td>Interactions are only known at run time.</td></tr>
+  </tbody>
+</table>
 <h2>Program structure patterns</h2>
 <div class="two-col">
   <div>
@@ -98,6 +124,28 @@ DnC(A) {
   </tbody>
 </table>
 <p>Platforms impose patterns: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
+
+<h2>Summary</h2>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (as many pieces as possible, 10–100 times the number of processors), <strong>C</strong>ommunication (dependency graph), <strong>A</strong>gglomeration (group to reduce communication, ~10 times), <strong>M</strong>apping (load balance + communication; NP-complete in general).</li>
+  <li>Decomposition: functional (by steps), data (by data), data flow (pipeline, event).</li>
+  <li>The <strong>slowest stage</strong> sets a pipeline's speed; there is a benefit only if the stages run concurrently.</li>
+  <li>In divide-and-conquer, parallelism is read from the <strong>dependency graph</strong>, not the call graph.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Thinking task parallelism scales: the number of tasks is fixed, so it cannot follow the number of cores.</li>
+  <li>Confusing a pipeline's total latency with its throughput: in a 2+5+3 ms pipeline one item takes 10 ms, but in steady state there is one output every 5 ms.</li>
+  <li>Forgetting agglomeration: N² tiny tasks are very parallel in theory, slow in practice because of communication and task management costs.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Design a histogram computation (Exercise 1) with the PCAM steps. In which step does a race appear, and how do you solve it?</p>
+<div class="hint"><p>P: each pixel a task (data decomposition). C: each task updates one of 256 bins: all tasks write to the same small array, i.e. heavy communication and a <strong>race</strong>. A: group pixels into chunks per thread; each thread first keeps <strong>its own local histogram</strong>, and the local histograms are summed at the end (communication moves to the end). M: equal-size chunks. If the shared histogram is written directly, an atomic or a mutex is needed (L3); on a GPU, a per-block shared-memory histogram + atomicAdd.</p></div>
+<p><strong>2.</strong> A 4-stage pipeline has stage times 4, 4, 8, 4 ms. How long do 100 items take? How do you remove the bottleneck?</p>
+<div class="hint"><p>The first output at 20 ms (fill), then one every 8 ms: about 20 + 99·8 = <strong>812 ms</strong>. The bottleneck is the 8 ms stage: split it in two (4+4) or run two copies of that stage in parallel; then there is an output every 4 ms (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> Explain the difference between SPMD and master-worker with one example each.</p>
+<div class="hint"><p>SPMD: everyone runs the same program and processes different data according to their unique ID (a CUDA kernel, MPI). Master-worker: the roles differ: the master hands out work and collects results, the workers do the work; since idle workers get new work, load balancing happens by itself (e.g. distributing frames in a render farm).</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="3">

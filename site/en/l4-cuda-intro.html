@@ -26,6 +26,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="The big picture">
+  <p><strong>A CPU is a handful of highly skilled masters, a GPU thousands of apprentices.</strong> A master (CPU core) finishes complex, step-by-step different jobs fast; with big caches and branch prediction it hardly ever waits. Apprentices (GPU threads) are slow one by one, but in groups of 32 (<strong>warps</strong>) they apply the same instruction to different data at the same time. A foreman (the SM) runs whichever group is ready: while one group waits for data from memory another runs, so the waiting is hidden.</p>
+  <p>This lecture builds CUDA's skeleton: the <strong>host</strong> (CPU) prepares the work and sends it to the <strong>device</strong> (GPU); the work is split over thousands of threads in a <strong>grid → block → thread</strong> hierarchy; each thread finds its own data with <code>blockIdx</code>/<code>threadIdx</code>. Blocks are independent, which is why the same program runs on a 2-SM GPU and on a 100-SM GPU.</p>
+</div>
+
 <h2>GPUs and CUDA</h2>
 <ul>
   <li><strong>GPU</strong>: designed for visual tasks (2D/3D graphics, games, CAD, effects); pushed by the consumer market to very high FP throughput and memory bandwidth. Programmable since around 2001.</li>
@@ -48,6 +53,32 @@
   <li>Data-parallel programming: data elements → parallel threads. 3D rendering, image/video processing, encoding, stereo vision, object recognition, physics simulation, finance, biology…</li>
 </ul>
 
+<h3>Thread divergence: how does a warp run an <code>if/else</code>?</h3>
+<p>The 32 threads of a warp execute <strong>one instruction</strong> at a time. If threads take different paths at an <code>if</code> (divergence), the warp runs the two paths <strong>one after the other</strong>: first the <code>if</code> branch (the others wait, masked off), then the <code>else</code> branch. The time is the sum of both branches.</p>
+<pre class="code" data-run="divergence.cu">
+__global__ void divergent(float* a) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadIdx.x % 2 == 0)      // even and odd threads are in the SAME warp → both branches in turn
+        a[i] = sinf(a[i]);
+    else
+        a[i] = cosf(a[i]);
+}
+__global__ void uniform(float* a) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if ((threadIdx.x / 32) % 2 == 0)  // the condition is the same for the whole warp → no divergence
+        a[i] = sinf(a[i]);
+    else
+        a[i] = cosf(a[i]);
+}
+</pre>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Within one warp</th><th>Cost</th></tr></thead>
+  <tbody>
+    <tr><td><code>divergent</code></td><td>16 threads want <code>sinf</code>, 16 want <code>cosf</code></td><td>a <code>sinf</code> pass + a <code>cosf</code> pass (half idle in each)</td></tr>
+    <tr><td><code>uniform</code></td><td>all 32 threads take the same branch</td><td>one pass</td></tr>
+  </tbody>
+</table>
+<p>Rule: try to write conditions that are <strong>the same across a warp</strong> (e.g. based on <code>threadIdx.x / 32</code>). Divergence does not give wrong results, it only slows down. For the same reason, putting <code>__syncthreads()</code> in an <code>if</code> that only some threads enter is undefined (L5).</p>
 <h2>Why multi-core?</h2>
 <ul>
   <li><strong>Moore's law</strong>: the number of transistors on an integrated circuit doubles every ~2 years (the rate is slowing).</li>
@@ -135,6 +166,30 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 
 <h2>Compute capability</h2>
 <p>Major.minor. The same major = the same core architecture (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = incremental improvement, new features. Newer architecture, better CUDA capabilities.</p>
+
+<h2>Summary</h2>
+<ul>
+  <li>On a GPU the silicon goes to <strong>arithmetic units</strong> instead of control and caches; GPUs are throughput-oriented, CPUs latency-oriented.</li>
+  <li>CUDA = SIMT: same instruction, many threads. Divergence (different paths within a warp) slows down.</li>
+  <li>The host prepares the work (allocate, copy, launch), the device executes. Flow: profile → find the parallel part → copy → compute → copy back → verify (FP is not associative) → iterate.</li>
+  <li>Hierarchy: grid → block (≤ 1024 threads, on one SM) → warp (32 consecutive threads) → thread. Linear index: <code>tz·bx·by + ty·bx + tx</code>, warp = index/32.</li>
+  <li>Blocks are <strong>independent</strong> and unordered → scalability. Cooperation within a block: shared memory + <code>__syncthreads()</code>.</li>
+  <li>Memory: local per thread, shared per block, global for everyone; read-only constant and texture.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Mixing up <code>blockDim</code> (threads per block) and <code>gridDim</code> (blocks per grid).</li>
+  <li>Thinking a warp can span two blocks: warps are always inside one block; a 48-thread block = 2 warps (the second half full).</li>
+  <li>Assuming block 0 runs before block 1.</li>
+  <li>Expecting CPU and GPU results to match bit for bit (different summation order).</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> A kernel uses 100-thread blocks. How many warps per block, and how many thread slots are wasted?</p>
+<div class="hint"><p>⌈100/32⌉ = <strong>4 warps</strong>; 4·32 = 128 slots, 28 empty (only 4 threads active in the last warp). Choosing block sizes that are multiples of 32 avoids this waste.</p></div>
+<p><strong>2.</strong> <code>if (threadIdx.x &lt; 48) A(); else B();</code> in a 128-thread block: how many warps diverge?</p>
+<div class="hint"><p>Warp 0 (0–31): all A, no divergence. Warp 1 (32–63): 32–47 A, 48–63 B → <strong>diverges</strong>. Warps 2, 3: all B. So only <strong>1 warp</strong>.</p></div>
+<p><strong>3.</strong> Why must blocks be independent? What would we lose if they were not?</p>
+<div class="hint"><p>So that the runtime can distribute blocks to any SM in any order. If blocks waited for each other (order assumptions, synchronisation across blocks), the same program might not run, or might deadlock, on GPUs with different numbers of SMs: <strong>scalability</strong> would be lost.</p></div>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="3">

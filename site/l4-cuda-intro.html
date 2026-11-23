@@ -26,6 +26,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>CPU bir avuç çok yetenekli usta, GPU binlerce çırak gibidir.</strong> Usta (CPU çekirdeği) karmaşık, her adımı farklı işleri hızlı bitirir; büyük önbellekler ve dallanma tahminiyle hiç beklemez. Çıraklar (GPU thread'leri) tek tek yavaştır ama 32'lik gruplar (<strong>warp</strong>) hâlinde aynı komutu aynı anda farklı veriye uygularlar. Bir ustabaşı (SM) her an hazır olan grubu çalıştırır: bir grup bellekten veri beklerken diğeri çalışır, böylece bekleme gizlenir.</p>
+  <p>Bu derste CUDA'nın iskeleti kuruluyor: <strong>host</strong> (CPU) işi hazırlar ve <strong>device</strong>'a (GPU) gönderir; iş, <strong>grid → blok → thread</strong> hiyerarşisinde binlerce thread'e bölünür; her thread kendi verisini <code>blockIdx</code>/<code>threadIdx</code> ile bulur. Bloklar bağımsızdır, bu yüzden aynı program 2 SM'li GPU'da da 100 SM'li GPU'da da çalışır.</p>
+</div>
+
 <h2>GPU ve CUDA</h2>
 <ul>
   <li><strong>GPU</strong>: görsel işler (2D/3D grafik, oyun, CAD, efektler) için tasarlanmış; tüketici pazarının baskısıyla çok yüksek FP throughput ve bellek bant genişliği. 2001 civarından beri programlanabilir.</li>
@@ -48,6 +53,32 @@
   <li>Veri paralel programlama: veri elemanları → paralel thread'ler. 3D render, görüntü/video işleme, kodlama, stereo görme, nesne tanıma, fizik simülasyonu, finans, biyoloji…</li>
 </ul>
 
+<h3>Thread divergence: bir warp <code>if/else</code>'i nasıl çalıştırır?</h3>
+<p>Bir warp'ın 32 thread'i aynı anda <strong>tek bir komut</strong> çalıştırır. Thread'ler bir <code>if</code>'te farklı yollara saparsa (divergence) warp iki yolu <strong>sırayla</strong> çalıştırır: önce <code>if</code> kolunu (diğerleri bekler, maskelenir), sonra <code>else</code> kolunu. Süre iki kolun toplamı olur.</p>
+<pre class="code" data-run="divergence.cu">
+__global__ void divergent(float* a) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadIdx.x % 2 == 0)      // çift ve tek thread'ler AYNI warp'ta → iki kol sırayla
+        a[i] = sinf(a[i]);
+    else
+        a[i] = cosf(a[i]);
+}
+__global__ void uniform(float* a) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if ((threadIdx.x / 32) % 2 == 0)  // koşul warp içinde herkes için aynı → divergence yok
+        a[i] = sinf(a[i]);
+    else
+        a[i] = cosf(a[i]);
+}
+</pre>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Bir warp içinde</th><th>Maliyet</th></tr></thead>
+  <tbody>
+    <tr><td><code>divergent</code></td><td>16 thread <code>sinf</code>, 16 thread <code>cosf</code> ister</td><td><code>sinf</code> turu + <code>cosf</code> turu (her turda yarısı boşta)</td></tr>
+    <tr><td><code>uniform</code></td><td>32 thread'in hepsi aynı kola gider</td><td>tek tur</td></tr>
+  </tbody>
+</table>
+<p>Kural: koşulu <strong>warp boyunca aynı</strong> olacak şekilde yazmaya çalışın (ör. <code>threadIdx.x / 32</code>'ye göre). Divergence yanlış sonuç vermez, sadece yavaşlatır. Aynı nedenle <code>__syncthreads()</code>'i bazı thread'lerin girdiği bir <code>if</code>'e koymak tanımsızdır (L5).</p>
 <h2>Neden çok çekirdek?</h2>
 <ul>
   <li><strong>Moore yasası</strong>: entegre devredeki transistör sayısı ~2 yılda iki katına çıkar (hız azalıyor).</li>
@@ -135,6 +166,30 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 
 <h2>Compute capability</h2>
 <p>Major.minor. Aynı major = aynı çekirdek mimarisi (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = artımlı iyileştirme, yeni özellikler. Yeni mimari, daha iyi CUDA yetenekleri.</p>
+
+<h2>Özet</h2>
+<ul>
+  <li>GPU'da silikon kontrol ve önbellek yerine <strong>hesap birimlerine</strong> gider; GPU throughput, CPU gecikme odaklıdır.</li>
+  <li>CUDA = SIMT: aynı komut, çok thread. Divergence (warp içinde farklı yol) yavaşlatır.</li>
+  <li>Host işi hazırlar (ayır, kopyala, başlat), device yürütür. Akış: profil → paralel kısmı bul → kopyala → hesapla → geri kopyala → doğrula (FP birleşmeli değil) → tekrarla.</li>
+  <li>Hiyerarşi: grid → blok (≤ 1024 thread, aynı SM'de) → warp (32 ardışık thread) → thread. Lineer indeks: <code>tz·bx·by + ty·bx + tx</code>, warp = indeks/32.</li>
+  <li>Bloklar <strong>bağımsız</strong> ve sırasızdır → ölçeklenebilirlik. Blok içinde işbirliği: shared memory + <code>__syncthreads()</code>.</li>
+  <li>Bellek: thread başına local, blok başına shared, herkes için global; salt okunur constant ve texture.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li><code>blockDim</code> (blok başına thread) ile <code>gridDim</code>'i (grid başına blok) karıştırmak.</li>
+  <li>Bir warp'ın iki bloğa yayılabileceğini sanmak: warp'lar her zaman tek bir bloğun içindedir; 48 thread'lik blok = 2 warp (ikincisi yarı dolu).</li>
+  <li>Blok 0'ın blok 1'den önce çalışacağını varsaymak.</li>
+  <li>CPU ve GPU sonuçlarının bit bit aynı çıkmasını beklemek (toplama sırası farklı).</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 100 thread'lik bloklarla çalışan bir kernel'de blok başına kaç warp vardır, kaç thread slotu boşa gider?</p>
+<div class="hint"><p>⌈100/32⌉ = <strong>4 warp</strong>; 4·32 = 128 slot, 28'i boş (son warp'ta sadece 4 thread aktif). Blok boyutunu 32'nin katı seçmek bu israfı önler.</p></div>
+<p><strong>2.</strong> <code>if (threadIdx.x &lt; 48) A(); else B();</code> 128 thread'lik bir blokta kaç warp diverge olur?</p>
+<div class="hint"><p>Warp 0 (0–31): hepsi A, divergence yok. Warp 1 (32–63): 32–47 A, 48–63 B → <strong>diverge</strong>. Warp 2, 3: hepsi B. Yani sadece <strong>1 warp</strong>.</p></div>
+<p><strong>3.</strong> Bloklar neden bağımsız olmak zorunda? Bağımsız olmasalardı ne kaybederdik?</p>
+<div class="hint"><p>Çalışma zamanı blokları istediği SM'ye, istediği sırada dağıtabilsin diye. Bloklar birbirini bekleseydi (sıra varsayımı, bloklar arası senkronizasyon) aynı program farklı sayıda SM'li GPU'larda çalışmayabilir ya da kilitlenebilirdi: <strong>ölçeklenebilirlik</strong> kaybolurdu.</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="3">

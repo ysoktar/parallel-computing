@@ -25,6 +25,11 @@
   </ul>
 </div>
 
+<div class="callout why" data-label="Büyük resim">
+  <p><strong>Ortak bir defter düşünün.</strong> Birkaç kişi aynı defterdeki bir sayıyı güncelliyor: herkes sayıyı okuyor, kafasında bir ekliyor, yazıyor. İkisi aynı anda okursa ikisi de aynı eski sayıyı görür ve biri diğerinin güncellemesini ezer. Paylaşımlı bellekte thread'ler tam olarak budur: hızlıdırlar çünkü aynı belleği görürler, ama tam da bu yüzden <strong>sıra</strong> kontrol edilmezse sonuç bozulur.</p>
+  <p>Bu derste önce sorunu (data race, race condition) sonra araçları görüyoruz: <strong>mutex</strong> (deftere bir anda tek kişi), <strong>semafor</strong> (en fazla N kişi), <strong>atomik</strong> (donanımın bölünmez tek işlem), <strong>monitör / condition variable</strong> (bir koşul gerçekleşene kadar uyu). Son olarak bu araçlar yanlış kullanılınca çıkanlar: deadlock, livelock, starvation.</p>
+</div>
+
 <h2>Thread nedir?</h2>
 <ul>
   <li><strong>Process:</strong> kendi adres uzayı, açık dosyaları, PID'si olan çalışan program (<code>fork()</code> process'i kopyalar: pahalı). <strong>Thread:</strong> process içinde ayrı bir yürütme akışı; kendi program sayacı, stack'i, register'ları ve durumu var, ama adres uzayını process'teki diğer thread'lerle <strong>paylaşır</strong>. "Hafif process": oluşturma ve geçiş maliyeti daha az.</li>
@@ -54,6 +59,20 @@ int main() {
 
 <h3>Uygula: kaybolan güncelleme</h3>
 <div data-learning="race"></div>
+<h3>Adım adım: <code>counter++</code> neden bozulur?</h3>
+<p><code>counter++</code> tek satır ama işlemci için üç adımdır: <strong>oku</strong> (load), <strong>bir ekle</strong>, <strong>yaz</strong> (store). İki thread, counter = 5 iken aynı anda çalışırsa olası bir sıra:</p>
+<table class="simple">
+  <thead><tr><th>Zaman</th><th>Thread 1</th><th>Thread 2</th><th>counter (bellek)</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>oku → 5</td><td></td><td>5</td></tr>
+    <tr><td>2</td><td></td><td>oku → 5</td><td>5</td></tr>
+    <tr><td>3</td><td>5 + 1 = 6</td><td></td><td>5</td></tr>
+    <tr><td>4</td><td></td><td>5 + 1 = 6</td><td>5</td></tr>
+    <tr><td>5</td><td>yaz 6</td><td></td><td>6</td></tr>
+    <tr><td>6</td><td></td><td>yaz 6</td><td><strong>6</strong> (7 olmalıydı)</td></tr>
+  </tbody>
+</table>
+<p>Bir güncelleme kayboldu (<em>lost update</em>). Çözümün özü: oku-değiştir-yaz üçlüsünü <strong>bölünmez</strong> yapmak. Ya üçlünün etrafına kilit konur (mutex: aynı anda tek thread bu satıra girer) ya da donanımın tek komutluk atomik işlemi kullanılır (<code>std::atomic&lt;int&gt;</code>'in <code>++</code>'sı, GPU'da <code>atomicAdd</code>).</p>
 <h2>Lock, mutex, semafor</h2>
 <table class="simple">
   <thead><tr><th>Araç</th><th>Özellik</th></tr></thead>
@@ -81,6 +100,18 @@ acquire() {                       release() {
   <li><strong>Recursive lock:</strong> normal mutex'i aynı thread iki kez alırsa deadlock; recursive mutex buna izin verir.</li>
 </ul>
 
+<h3>Hangi araç ne zaman?</h3>
+<table class="simple">
+  <thead><tr><th>İhtiyaç</th><th>Araç</th><th>Örnek</th></tr></thead>
+  <tbody>
+    <tr><td>Bir veri yapısını aynı anda tek thread değiştirsin</td><td>mutex (+ <code>lock_guard</code>)</td><td>paylaşılan bir <code>std::map</code>'e ekleme</td></tr>
+    <tr><td>Tek bir sayı/bayrak bölünmez güncellensin</td><td><code>std::atomic</code></td><td>sayaç, "bitti" bayrağı, histogram kutusu</td></tr>
+    <tr><td>Aynı anda en fazla N thread bir kaynağı kullansın</td><td>counting semafor</td><td>en fazla 4 eş zamanlı dosya indirme</td></tr>
+    <tr><td>Bir koşul gerçekleşene kadar beklensin (meşgul bekleme olmadan)</td><td>condition variable (monitör)</td><td>tüketici, kuyruk boş değilken uyansın</td></tr>
+    <tr><td>Bir olay bir kez sinyallensin</td><td>binary semafor / future</td><td>"veri hazır" sinyali</td></tr>
+    <tr><td>Herkes bir noktaya gelmeden kimse devam etmesin</td><td>bariyer</td><td>iteratif simülasyonun her adımı; GPU'da <code>__syncthreads()</code></td></tr>
+  </tbody>
+</table>
 <h2>Tutarlılık modelleri</h2>
 <ul>
   <li>Tasarım kaygıları: önbellek <strong>tutarlılığı</strong> (coherence, aynı adres) ve bellek <strong>tutarlılık modeli</strong> (consistency, farklı adreslere işlemlerin görünme sırası).</li>
@@ -98,6 +129,9 @@ acquire() {                       release() {
   </tbody>
 </table>
 
+<div class="callout key">
+  <p><strong>Deadlock nasıl önlenir?</strong> <span class="badge-class">ek bilgi</span> Deadlock için dört koşulun birlikte olması gerekir: karşılıklı dışlama, tut ve bekle (bir kaynağı tutarken diğerini beklemek), elden alınamama ve <strong>döngüsel bekleme</strong>. En pratik önlem döngüyü kırmaktır: tüm thread'ler kilitleri <strong>aynı sırada</strong> alsın (önce R1, sonra R2). C++17'de <code>std::scoped_lock lk(m1, m2);</code> birden çok mutex'i deadlock'suz alır.</p>
+</div>
 <h2>Producer-consumer</h2>
 <p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>
 <pre class="code" data-run="prodcons.cpp" data-run-note="Sözde kod; çalışan hâli 2 üretici, 3 tüketici, BUFFSIZE = 100." data-title="Senkronizasyonlu sözde kod">
@@ -156,6 +190,33 @@ public:
 <div class="callout key">
   <p><strong>CPU ↔ GPU köprüsü:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel başlatma + <code>cudaDeviceSynchronize()</code>; bariyer ≈ <code>__syncthreads()</code> (ama sadece blok içi); <code>std::atomic</code> ≈ <code>atomicAdd</code>; histogram alıştırması iki dünyada da aynı yarış problemini gösterir.</p>
 </div>
+
+<h2>Özet</h2>
+<ul>
+  <li>Thread'ler process'in adres uzayını paylaşır: iletişim ucuz, ama paylaşılan veriye erişim senkronize edilmeli.</li>
+  <li><strong>Data race</strong>: en az biri yazan eş zamanlı erişim (C++'ta tanımsız davranış). <strong>Race condition</strong>: sıralama yüzünden yanlış sonuç.</li>
+  <li>Oku-değiştir-yaz bölünmez olmalı: mutex ya da atomik.</li>
+  <li>Mutex = tek thread + sahiplik; semafor = N thread, sayaç; condition variable = bir koşulu kilidi bırakarak beklemek.</li>
+  <li>Deadlock (kimse ilerlemez, CPU boşta), livelock (kimse ilerlemez, CPU meşgul), starvation (biri hiç sıra alamaz).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (boş yer), <code>resAvail</code> (dolu yer) semaforları + indeksleri koruyan mutex.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) ve LL/SC: atomiklerin ve kilitsiz yapıların donanım temeli.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Sadece yazan tarafı kilitleyip okuyan tarafı kilitlememek: okuma da yazmayla yarışır.</li>
+  <li>Condition variable'da <code>if</code> ile beklemek: uyanınca koşul tekrar kontrol edilmeli (<code>while</code> ya da <code>wait(lock, predicate)</code>).</li>
+  <li>Producer-consumer'da semafor ve mutex sırasını ters çevirmek: önce mutex'i alıp sonra dolu tampon için semafor beklemek deadlock'a yol açar (mutex'i tutan uyur, tüketici mutex'i alamaz).</li>
+  <li>"x86'da 8 bayt atomik" diye kilitsiz yazmak: derleyici ve tipler buna güvenmeyi yanlış yapar.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 4 thread her biri 1000 kez korumasız <code>counter++</code> yapıyor. Son değer en az kaç, en çok kaç olabilir? Neden 4000'den az çıkar?</p>
+<div class="hint"><p>En çok 4000 (hiç çakışma olmazsa). Pratikte daha az çünkü oku-ekle-yaz adımları iç içe geçer ve güncellemeler kaybolur (yukarıdaki tablo). Teorik alt sınır çok küçüktür (kötü bir sıralamayla 2'ye kadar inebilir); sınavda önemli olan nedenini açıklamaktır: güncellemeler kaybolur, sonuç belirsizdir.</p></div>
+<p><strong>2.</strong> Producer-consumer'da tüketici şu sırayla yazılmış: <code>l.acquire(); resAvail.acquire(); …</code>. Ne olur?</p>
+<div class="hint"><p>Tampon boşken tüketici mutex'i alır, sonra <code>resAvail</code>'de uyur, <strong>mutex'i tutarak</strong>. Üretici öğe koymak için mutex'i alamaz → kimse ilerleyemez: <strong>deadlock</strong>. Doğrusu önce semafor, sonra mutex.</p></div>
+<p><strong>3.</strong> Bir web sunucusu aynı anda en fazla 8 veritabanı bağlantısı açabiliyor. Hangi senkronizasyon aracını kullanırsınız? Kodun iskeletini yazın.</p>
+<div class="hint"><p>Başlangıç değeri 8 olan bir <strong>counting semafor</strong>: her istek <code>sem.acquire();</code> ile bağlantı alır, işi bitince <code>sem.release();</code>. 9. istek bir bağlantı boşalana kadar bekler.</p></div>
+<p><strong>4.</strong> Deadlock ile livelock'u CPU kullanımı açısından karşılaştırın ve birer gerçek hayat örneği verin.</p>
+<div class="hint"><p>Deadlock: thread'ler birbirinin kaynağını bekleyerek uyur, CPU kullanımı <strong>düşük</strong> (iki araba dar köprüde karşı karşıya, ikisi de geri çekilmiyor). Livelock: thread'ler bloklu değil, birbirine tepki vermekle meşgul, CPU kullanımı <strong>yüksek</strong> ama ilerleme yok (koridorda aynı yöne kaçan iki kişi).</p></div>
 
 <h2>Sınama</h2>
 <div class="quiz" data-answer="2">
