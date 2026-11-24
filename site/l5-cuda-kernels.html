@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar şehrin öbür ucundaki büyük kütüphanede (global bellek: büyük ama uzak, yüzlerce çevrim). Herkes her sayfa için kütüphaneye giderse yollar tıkanır. Akıllıcası: öğrenciler işi bölüşüp gereken sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama hemen yanınızda) kopyalar, herkes masadan okur. "Herkes kopyalamayı bitirdi mi?" diye beklemek <code>__syncthreads()</code>'tir.</p>
+  <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar şehrin öbür ucundaki büyük kütüphanede (global bellek: büyük ama uzak; oradan bir değer okumak yüzlerce saat çevrimi sürer). Herkes her sayfa için kütüphaneye giderse yollar tıkanır. Akıllıcası: öğrenciler işi bölüşüp gereken sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama hemen yanınızda) kopyalar, herkes masadan okur. "Herkes kopyalamayı bitirdi mi?" diye beklemek <code>__syncthreads()</code>'tir.</p>
   <p>Bu ders üç adımda ilerler: (1) bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım, (2) her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması, (3) basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
 </div>
 
@@ -229,7 +229,7 @@ Daha yüksek performans için CGMA artırılmalı.</div>
     <tr><td>Otomatik skaler değişken (<code>int i;</code>)</td><td>Register</td><td>Thread</td><td>Kernel/thread</td><td>Çok hızlı, on-chip. Sınırlı: aşılırsa spill.</td></tr>
     <tr><td>Otomatik dizi (<code>float a[N];</code>)</td><td>Local (global'de)</td><td>Thread</td><td>Kernel/thread</td><td>Global kadar yavaş (sabit indeksliyse register'a konabilir).</td></tr>
     <tr><td><code>__shared__ float s[N];</code></td><td>Shared</td><td>Blok</td><td>Kernel/blok</td><td>Çok hızlı, on-chip, blok içi işbirliği.</td></tr>
-    <tr><td><code>__device__ float g;</code> / <code>cudaMalloc</code></td><td>Global</td><td>Grid (+host API)</td><td>Uygulama</td><td>Büyük, yavaş (DRAM, 400–600 çevrim).</td></tr>
+    <tr><td><code>__device__ float g;</code> / <code>cudaMalloc</code></td><td>Global</td><td>Grid (+host API)</td><td>Uygulama</td><td>Büyük, yavaş: DRAM'den bir okuma ≈ 400–600 saat çevrimi sürer.</td></tr>
     <tr><td><code>__constant__ float c[N];</code> (fonksiyon dışında)</td><td>Constant</td><td>Tüm grid'ler</td><td>Uygulama</td><td>Global'de ama önbellekli; herkes aynı adresi okursa çok hızlı. Toplam ~64 KB. Kernel'den salt okunur.</td></tr>
   </tbody>
 </table>
