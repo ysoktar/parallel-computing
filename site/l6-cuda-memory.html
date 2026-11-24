@@ -109,9 +109,9 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
     <rect class="mm-box" x="24" y="44" width="330" height="150" rx="8"/>
     <text class="mm-t" x="36" y="64">SM 0</text>
     <rect class="mm-reg" x="36" y="74" width="140" height="50" rx="6"/>
-    <text class="mm-t" x="46" y="94">register</text><text class="mm-s" x="46" y="112">thread başına, ~1 çevrim</text>
+    <text class="mm-t" x="46" y="94">register</text><text class="mm-s" x="46" y="112">thread başına · okuma ≈ 1 çevrim</text>
     <rect class="mm-sh" x="186" y="74" width="156" height="50" rx="6"/>
-    <text class="mm-t" x="196" y="94">shared memory</text><text class="mm-s" x="196" y="112">blok başına, ~birkaç çevrim</text>
+    <text class="mm-t" x="196" y="94">shared memory</text><text class="mm-s" x="196" y="112">blok başına · okuma ≈ birkaç çevrim</text>
     <rect class="mm-c" x="36" y="134" width="306" height="48" rx="6"/>
     <text class="mm-t" x="46" y="154">L1 · constant cache · texture cache</text><text class="mm-s" x="46" y="172">SM'ye yakın önbellekler (otomatik)</text>
   </g>
@@ -127,7 +127,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <text class="mm-t" x="36" y="226">L2 önbellek: tüm SM'lerin ortak önbelleği</text><text class="mm-s" x="36" y="242">global/local erişimleri buradan geçer</text>
   <path d="M380 260 L380 300" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
   <path d="M400 300 L400 260" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
-  <text class="mm-s" x="414" y="286">bellek yolu: geniş ama uzak (~400–600 çevrim)</text>
+  <text class="mm-s" x="414" y="286">DRAM'den bir okuma ≈ 400–600 çevrim (gecikme)</text>
   <defs><marker id="mmarr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--text-2)"/></marker></defs>
   <rect class="mm-dram" x="10" y="302" width="740" height="118" rx="12"/>
   <text class="mm-h" x="24" y="324">Cihaz belleği (off-chip DRAM): büyük, yavaş</text>
@@ -136,7 +136,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <rect class="mm-box" x="384" y="334" width="170" height="74" rx="6"/><text class="mm-t" x="394" y="354">constant</text><text class="mm-s" x="394" y="372">tüm grid, salt okunur</text><text class="mm-s" x="394" y="388">__constant__, 64 KB</text>
   <rect class="mm-box" x="564" y="334" width="172" height="74" rx="6"/><text class="mm-t" x="574" y="354">texture / surface</text><text class="mm-s" x="574" y="372">salt okunur (surface: yazılır)</text><text class="mm-s" x="574" y="388">2D önbellek, filtre</text>
 </svg>
-<figcaption>Yukarıda yongadaki hızlı ama küçük bellekler, aşağıda yonga dışındaki büyük ama yavaş DRAM. Constant ve texture verisi DRAM'dedir; hızlı olmalarının sebebi SM'deki özel önbellekleridir. Local memory adı yanıltıcıdır: thread'e özeldir ama fiziksel olarak DRAM'dedir.</figcaption>
+<figcaption>Yukarıda yongadaki hızlı ama küçük bellekler, aşağıda yonga dışındaki büyük ama yavaş DRAM. Constant ve texture verisi DRAM'dedir; hızlı olmalarının sebebi SM'deki özel önbellekleridir. Local memory adı yanıltıcıdır: thread'e özeldir ama fiziksel olarak DRAM'dedir. Sayılar bir <strong>okumanın gecikmesidir</strong>, birimi saat çevrimidir (GPU saatinin bir "tik"i; 1,5 GHz'de ≈ 0,67 ns).</figcaption>
 </figure>
 <h3>Tek tabloda bütün bellekler</h3>
 <table class="simple">
@@ -358,14 +358,14 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 
 <h2>Bellek özeti</h2>
 <table class="simple">
-  <thead><tr><th>Bellek</th><th>Kapsam</th><th>Gecikme</th><th>Not</th></tr></thead>
+  <thead><tr><th>Bellek</th><th>Kapsam</th><th>Bir okumanın gecikmesi</th><th>Not</th></tr></thead>
   <tbody>
-    <tr><td>Register</td><td>Thread</td><td>Çok hızlı</td><td>Sınırlı; aşılırsa spill.</td></tr>
-    <tr><td>Shared</td><td>Blok</td><td>Çok hızlı</td><td>On-chip; senkronizasyon gerekir.</td></tr>
+    <tr><td>Register</td><td>Thread</td><td>≈ 1 çevrim (çok hızlı)</td><td>Sınırlı; aşılırsa spill.</td></tr>
+    <tr><td>Shared</td><td>Blok</td><td>birkaç çevrim (conflict yoksa)</td><td>On-chip; senkronizasyon gerekir.</td></tr>
     <tr><td>Local</td><td>Thread</td><td>400–600 çevrim</td><td>Aslında global bellek.</td></tr>
     <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 çevrim</td><td>Her zaman L2'de önbelleklenir; coalescing şart.</td></tr>
-    <tr><td>Constant</td><td>Kernel</td><td>400–600 çevrim</td><td>Constant cache; aynı adres → yayın.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim</td><td>Texture cache, 2D için optimize.</td></tr>
+    <tr><td>Constant</td><td>Kernel</td><td>400–600 çevrim (önbellekte varsa çok daha az)</td><td>Constant cache; aynı adres → yayın.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 çevrim (önbellekte varsa daha az)</td><td>Texture cache, 2D için optimize.</td></tr>
   </tbody>
 </table>
 <ul>

@@ -3,6 +3,7 @@
 import { h, $, $$, CALLOUT_ICONS, highlightC, dedent } from "./lib/ui.js";
 import { t as tl, tx, EN } from "./lib/i18n.js";
 import { attachRunner } from "./lib/runner.js";
+import { annotateGlossary } from "./lib/glossary.js";
 
 export const REPO = "https://github.com/ysoktar/parallel-computing";
 /** Midterm 2: Wednesday 11 November 2026, 15:30–17:30 (Türkiye, UTC+3), room 306. */
@@ -14,6 +15,7 @@ export const EXAM = { start: new Date("2026-11-11T15:30:00+03:00"), end: new Dat
 export const NAV = [
   { part: "Başlangıç", part_en: "Start", items: [
     { id: "index", title: "Genel bakış", title_en: "Overview", desc: "Dersin konuları ve sitenin kullanımı.", desc_en: "The course topics and how to use the site." },
+    { id: "glossary", title: "Sözlük", title_en: "Glossary", desc: "Dersin bütün terimleri, kısa tanımlarla; sayfalarda altı kesikli çizili terimler buraya bağlanır.", desc_en: "Every term of the course with short definitions; the dashed-underlined terms on the pages link here." },
   ] },
   { part: "Dersler", part_en: "Lectures", short: "Lecture 1–7", items: [
     { id: "l1-intro", title: "Paralel hesaplamaya giriş", title_en: "Introduction", lec: "L1", desc: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson.", desc_en: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson." },
@@ -272,6 +274,7 @@ function init() {
   enhanceCallouts(content);
   enhanceQuizzes(content);
   labelTables(content);
+  if (id !== "glossary") annotateGlossary(content);
   const nav = () => buildPageNav(content, id);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => setTimeout(nav, 0));
   else setTimeout(nav, 0);
