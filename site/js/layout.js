@@ -29,6 +29,7 @@ export const NAV = [
     { id: "lab", title: "İndeks ve coalescing lab", title_en: "Index & coalescing lab", desc: "Hangi thread hangi elemana dokunur? Kaç transaction?", desc_en: "Which thread touches which element? How many transactions?" },
   ] },
   { part: "Sınav", part_en: "Exams", short: "2. vize", short_en: "Midterm 2", items: [
+    { id: "quiz-cuda", title: "CUDA quiz: çözümlü sorular", title_en: "CUDA quiz: solved questions", desc: "31 soru, son konulardan başlayarak; çözümleri gizli.", desc_en: "31 questions, latest topics first; hidden solutions." },
     { id: "exam-midterm2", title: "2. vize çalışma rehberi", title_en: "Midterm 2 study guide", desc: "Ne bilinmeli, çözümlü sınav tipi sorular, deneme seti.", desc_en: "What to know, worked exam-style problems, a practice set." },
     { id: "mock-exam", title: "Kod yazmalı deneme sınavı", title_en: "Coding mock exam", desc: "CUDA kod boşlukları, for döngüsü ve matris çizimi, mutex/semaphore soruları.", desc_en: "CUDA code blanks, for-loop matrix traces, mutex/semaphore questions." },
     { id: "cheatsheet", title: "Hazır A4 kopya kâğıdı", title_en: "Ready A4 cheat sheet", desc: "Elle geçirilecek, iki yüzü doldurulmuş A4.", desc_en: "A ready-made two-sided A4 to copy by hand." },
