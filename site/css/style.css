@@ -1362,3 +1362,7 @@ pre.learning-code code { min-width:0; width:100%; white-space:pre-wrap; }
   .copy-sheet-page[data-sheet="front"] .copy-sheet-card p { margin-top:3px; line-height:1.18; }
   .copy-sheet-page[data-sheet="front"] .copy-sheet-code { line-height:1.12; }
 }
+
+/* ---------- memory map (L6) ---------- */
+figure.memmap { margin: 1rem 0 1.5rem; max-width: 780px; }
+figure.memmap figcaption { font-size: 0.86rem; color: var(--text-2); margin-top: 6px; }
