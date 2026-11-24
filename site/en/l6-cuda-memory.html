@@ -90,7 +90,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li><strong>For speed, how should the warp's 32 threads access it?</strong> Each memory has its own "rule"; speed depends on following it.</li>
 </ol>
 <figure class="memmap" role="img" aria-label="GPU memory hierarchy diagram">
-<svg viewBox="0 0 760 430" width="100%" style="max-width:760px">
+<svg viewBox="0 0 760 452" width="100%" style="max-width:760px">
   <style>
     .mm-box{fill:var(--surface);stroke:var(--border-strong);stroke-width:1.5}
     .mm-chip{fill:color-mix(in srgb,var(--accent) 7%,var(--surface));stroke:var(--accent);stroke-width:2}
@@ -103,38 +103,34 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
     .mm-s{font:11px var(--font);fill:var(--text-2)}
     .mm-h{font:700 13px var(--font);fill:var(--text)}
   </style>
-  <rect class="mm-chip" x="10" y="10" width="740" height="250" rx="12"/>
+  <rect class="mm-chip" x="10" y="10" width="740" height="270" rx="12"/>
   <text class="mm-h" x="24" y="32">GPU chip (on-chip): fast, small</text>
-  <g>
-    <rect class="mm-box" x="24" y="44" width="330" height="150" rx="8"/>
-    <text class="mm-t" x="36" y="64">SM 0</text>
-    <rect class="mm-reg" x="36" y="74" width="140" height="50" rx="6"/>
-    <text class="mm-t" x="46" y="94">registers</text><text class="mm-s" x="46" y="112">per thread · a read ≈ 1 cycle</text>
-    <rect class="mm-sh" x="186" y="74" width="156" height="50" rx="6"/>
-    <text class="mm-t" x="196" y="94">shared memory</text><text class="mm-s" x="196" y="112">per block · a read ≈ a few cycles</text>
-    <rect class="mm-c" x="36" y="134" width="306" height="48" rx="6"/>
-    <text class="mm-t" x="46" y="154">L1 · constant cache · texture cache</text><text class="mm-s" x="46" y="172">caches next to the SM (automatic)</text>
-  </g>
-  <g>
-    <rect class="mm-box" x="368" y="44" width="300" height="150" rx="8"/>
-    <text class="mm-t" x="380" y="64">SM 1</text>
-    <rect class="mm-reg" x="380" y="74" width="120" height="50" rx="6"/><text class="mm-t" x="390" y="104">registers</text>
-    <rect class="mm-sh" x="510" y="74" width="146" height="50" rx="6"/><text class="mm-t" x="520" y="104">shared memory</text>
-    <rect class="mm-c" x="380" y="134" width="276" height="48" rx="6"/><text class="mm-t" x="390" y="162">L1 · constant cache · texture cache</text>
-  </g>
-  <text class="mm-h" x="690" y="124">…</text>
-  <rect class="mm-l2" x="24" y="206" width="712" height="42" rx="8"/>
-  <text class="mm-t" x="36" y="226">L2 cache: shared by all SMs</text><text class="mm-s" x="36" y="242">global/local accesses go through it</text>
-  <path d="M380 260 L380 300" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
-  <path d="M400 300 L400 260" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
-  <text class="mm-s" x="414" y="286">one read from DRAM ≈ 400–600 cycles (latency)</text>
+  <rect class="mm-box" x="24" y="44" width="360" height="170" rx="8"/>
+  <text class="mm-t" x="36" y="64">SM 0</text>
+  <rect class="mm-reg" x="36" y="74" width="150" height="66" rx="6"/>
+  <text class="mm-t" x="46" y="93">registers</text><text class="mm-s" x="46" y="111">per thread</text><text class="mm-s" x="46" y="128">a read ≈ 1 clock cycle</text>
+  <rect class="mm-sh" x="196" y="74" width="176" height="66" rx="6"/>
+  <text class="mm-t" x="206" y="93">shared memory</text><text class="mm-s" x="206" y="111">per block</text><text class="mm-s" x="206" y="128">a read ≈ a few clock cycles</text>
+  <rect class="mm-c" x="36" y="150" width="336" height="52" rx="6"/>
+  <text class="mm-t" x="46" y="171">L1 · constant cache · texture cache</text><text class="mm-s" x="46" y="190">caches next to the SM (automatic)</text>
+  <rect class="mm-box" x="398" y="44" width="290" height="170" rx="8"/>
+  <text class="mm-t" x="410" y="64">SM 1</text>
+  <rect class="mm-reg" x="410" y="74" width="120" height="66" rx="6"/><text class="mm-t" x="420" y="111">registers</text>
+  <rect class="mm-sh" x="540" y="74" width="136" height="66" rx="6"/><text class="mm-t" x="550" y="111">shared memory</text>
+  <rect class="mm-c" x="410" y="150" width="266" height="52" rx="6"/><text class="mm-t" x="420" y="180">L1 · constant cache · texture cache</text>
+  <text class="mm-h" x="708" y="134">…</text>
+  <rect class="mm-l2" x="24" y="226" width="712" height="42" rx="8"/>
+  <text class="mm-t" x="36" y="245">L2 cache: shared by all SMs</text><text class="mm-s" x="36" y="261">global/local accesses go through it</text>
   <defs><marker id="mmarr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--text-2)"/></marker></defs>
-  <rect class="mm-dram" x="10" y="302" width="740" height="118" rx="12"/>
-  <text class="mm-h" x="24" y="324">Device memory (off-chip DRAM): large, slow</text>
-  <rect class="mm-box" x="24" y="334" width="170" height="74" rx="6"/><text class="mm-t" x="34" y="354">global</text><text class="mm-s" x="34" y="372">whole grid + host</text><text class="mm-s" x="34" y="388">cudaMalloc, read/write</text>
-  <rect class="mm-box" x="204" y="334" width="170" height="74" rx="6"/><text class="mm-t" x="214" y="354">local</text><text class="mm-s" x="214" y="372">private to a thread</text><text class="mm-s" x="214" y="388">spills, large arrays</text>
-  <rect class="mm-box" x="384" y="334" width="170" height="74" rx="6"/><text class="mm-t" x="394" y="354">constant</text><text class="mm-s" x="394" y="372">whole grid, read-only</text><text class="mm-s" x="394" y="388">__constant__, 64 KB</text>
-  <rect class="mm-box" x="564" y="334" width="172" height="74" rx="6"/><text class="mm-t" x="574" y="354">texture / surface</text><text class="mm-s" x="574" y="372">read-only (surface: writable)</text><text class="mm-s" x="574" y="388">2D cache, filtering</text>
+  <path d="M380 280 L380 320" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
+  <path d="M400 320 L400 280" stroke="var(--text-2)" stroke-width="3" marker-end="url(#mmarr)"/>
+  <text class="mm-s" x="414" y="305">one read from DRAM ≈ 400–600 clock cycles (latency)</text>
+  <rect class="mm-dram" x="10" y="324" width="740" height="118" rx="12"/>
+  <text class="mm-h" x="24" y="346">Device memory (off-chip DRAM): large, slow</text>
+  <rect class="mm-box" x="24" y="356" width="170" height="74" rx="6"/><text class="mm-t" x="34" y="376">global</text><text class="mm-s" x="34" y="394">whole grid + host</text><text class="mm-s" x="34" y="410">cudaMalloc, read/write</text>
+  <rect class="mm-box" x="204" y="356" width="170" height="74" rx="6"/><text class="mm-t" x="214" y="376">local</text><text class="mm-s" x="214" y="394">private to a thread</text><text class="mm-s" x="214" y="410">spills, large arrays</text>
+  <rect class="mm-box" x="384" y="356" width="170" height="74" rx="6"/><text class="mm-t" x="394" y="376">constant</text><text class="mm-s" x="394" y="394">whole grid, read-only</text><text class="mm-s" x="394" y="410">__constant__, 64 KB</text>
+  <rect class="mm-box" x="564" y="356" width="172" height="74" rx="6"/><text class="mm-t" x="574" y="376">texture / surface</text><text class="mm-s" x="574" y="394">read-only (surface: writable)</text><text class="mm-s" x="574" y="410">2D cache, filtering</text>
 </svg>
 <figcaption>At the top the fast but small memories on the chip, at the bottom the large but slow DRAM off the chip. Constant and texture data live in DRAM; they are fast because of their special caches in the SM. The name local memory is misleading: it is private to a thread but physically in DRAM. The numbers are the <strong>latency of one read</strong>, in clock cycles (one "tick" of the GPU clock; ≈ 0.67 ns at 1.5 GHz).</figcaption>
 </figure>
@@ -358,14 +354,14 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 
 <h2>Memory overview</h2>
 <table class="simple">
-  <thead><tr><th>Memory</th><th>Scope</th><th>Latency of one read</th><th>Note</th></tr></thead>
+  <thead><tr><th>Memory</th><th>Scope</th><th>Latency of one read (clock cycles)</th><th>Note</th></tr></thead>
   <tbody>
-    <tr><td>Register</td><td>Thread</td><td>≈ 1 cycle (very fast)</td><td>Limited; spills if exceeded.</td></tr>
-    <tr><td>Shared</td><td>Block</td><td>a few cycles (without conflicts)</td><td>On-chip; needs synchronisation.</td></tr>
-    <tr><td>Local</td><td>Thread</td><td>400–600 cycles</td><td>Actually global memory.</td></tr>
-    <tr><td>Global</td><td>Kernel (grid)</td><td>400–600 cycles</td><td>Always cached in L2; coalescing essential.</td></tr>
-    <tr><td>Constant</td><td>Kernel</td><td>400–600 cycles (much less on a cache hit)</td><td>Constant cache; same address → broadcast.</td></tr>
-    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 cycles (less on a cache hit)</td><td>Texture cache, optimised for 2D.</td></tr>
+    <tr><td>Register</td><td>Thread</td><td>≈ 1 (very fast)</td><td>Limited; spills if exceeded.</td></tr>
+    <tr><td>Shared</td><td>Block</td><td>a few (without conflicts)</td><td>On-chip; needs synchronisation.</td></tr>
+    <tr><td>Local</td><td>Thread</td><td>400–600</td><td>Actually global memory.</td></tr>
+    <tr><td>Global</td><td>Kernel (grid)</td><td>400–600</td><td>Always cached in L2; coalescing essential.</td></tr>
+    <tr><td>Constant</td><td>Kernel</td><td>400–600 (much less on a cache hit)</td><td>Constant cache; same address → broadcast.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 (less on a cache hit)</td><td>Texture cache, optimised for 2D.</td></tr>
   </tbody>
 </table>
 <ul>

@@ -517,7 +517,7 @@ pitch (256 hizalama): 5/50/250 → 256 ; 500 → 512 ; 700 → 768</div>
     <tr><td>register</td><td>otomatik skaler</td><td>thread / thread</td><td>en hızlı; aşılırsa spill → local</td></tr>
     <tr><td>local</td><td>otomatik dizi</td><td>thread / thread</td><td>global'de, yavaş; değişken indeksli diziler, spill</td></tr>
     <tr><td>shared</td><td><code>__shared__</code></td><td>blok / blok</td><td>on-chip, sync gerekir</td></tr>
-    <tr><td>global</td><td><code>__device__</code>, cudaMalloc</td><td>grid + host / uygulama</td><td>DRAM, 400–600 çevrim, coalesce</td></tr>
+    <tr><td>global</td><td><code>__device__</code>, cudaMalloc</td><td>grid + host / uygulama</td><td>DRAM, 400–600 saat çevrimi, coalesce</td></tr>
     <tr><td>constant</td><td><code>__constant__</code> (fonk. dışı)</td><td>tüm grid'ler / uygulama</td><td>64 KB, cache, herkes aynı adres = en iyi; <code>cudaMemcpyToSymbol</code></td></tr>
   </tbody>
 </table>
