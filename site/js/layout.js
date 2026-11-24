@@ -15,7 +15,7 @@ export const NAV = [
   { part: "Başlangıç", part_en: "Start", items: [
     { id: "index", title: "Genel bakış", title_en: "Overview", desc: "Dersin konuları ve sitenin kullanımı.", desc_en: "The course topics and how to use the site." },
   ] },
-  { part: "Dersler", part_en: "Lectures", short: "Lecture 1–6", items: [
+  { part: "Dersler", part_en: "Lectures", short: "Lecture 1–7", items: [
     { id: "l1-intro", title: "Paralel hesaplamaya giriş", title_en: "Introduction", lec: "L1", desc: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson.", desc_en: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson." },
     { id: "l2-design", title: "Paralel program tasarımı", title_en: "Parallel program design", lec: "L2", desc: "PCAM, ayrıştırma desenleri, program yapısı desenleri.", desc_en: "PCAM, decomposition patterns, program structure patterns." },
     { id: "l3-threads", title: "Thread'ler ve senkronizasyon", title_en: "Threads and synchronization", lec: "L3", desc: "C++11 thread, mutex, semafor, atomik, monitör, future.", desc_en: "C++11 threads, mutexes, semaphores, atomics, monitors, futures." },
@@ -23,6 +23,7 @@ export const NAV = [
     { id: "l5-cuda-kernels", title: "Kernel, indeks, shared memory", title_en: "Kernels, indexing, shared memory", lec: "L5", desc: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul.", desc_en: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul." },
     { id: "l6-cuda-memory", title: "Derleme ve bellek türleri", title_en: "Compilation and memory types", lec: "L6", desc: "nvcc/PTX, register/shared limitleri, pitch, local, constant, texture.", desc_en: "nvcc/PTX, register/shared limits, pitch, local, constant, texture." },
     { id: "coalescing", title: "Coalescing, transpose, unrolling", title_en: "Coalescing, transpose, unrolling", lec: "L6", desc: "Global bellek transaction'ları, naive/shared transpose, loop unrolling.", desc_en: "Global memory transactions, naive/shared transpose, loop unrolling." },
+    { id: "l7-cuda-control", title: "Hata kontrolü ve kontrol akışı", title_en: "Error checking and control flow", lec: "L7", desc: "cudaGetLastError, asenkron hatalar, divergence, predication, unrolling, signed sayaç.", desc_en: "cudaGetLastError, asynchronous errors, divergence, predication, unrolling, signed counters." },
   ] },
   { part: "Uygulama", part_en: "Practice", items: [
     { id: "lab", title: "İndeks ve coalescing lab", title_en: "Index & coalescing lab", desc: "Hangi thread hangi elemana dokunur? Kaç transaction?", desc_en: "Which thread touches which element? How many transactions?" },
@@ -131,9 +132,9 @@ function buildPager(current) {
 function buildFooter() {
   const f = h("footer", { class: "site-footer" });
   f.innerHTML = EN
-    ? `<p>An unofficial study site for BİL 455/533 Parallel Computing (TOBB ETÜ, Fall 2026), following the course slides (Lectures 1–6),
+    ? `<p>An unofficial study site for BİL 455/533 Parallel Computing (TOBB ETÜ, Fall 2026), following the course slides (Lectures 1–7),
       the exercises and class notes. Where the site goes beyond the slides it says so.</p><p><a href="${REPO}">Source code on GitHub</a>.</p>`
-    : `<p>BİL 455/533 Paralel Hesaplama (TOBB ETÜ, 2026 Güz) için hazırlanmış gayriresmî bir çalışma sitesi: ders slaytları (Lecture 1–6),
+    : `<p>BİL 455/533 Paralel Hesaplama (TOBB ETÜ, 2026 Güz) için hazırlanmış gayriresmî bir çalışma sitesi: ders slaytları (Lecture 1–7),
       alıştırmalar ve ders notları. Slaytların dışına çıkılan yerler ayrıca belirtilir.</p><p><a href="${REPO}">GitHub'daki kaynak kod</a>.</p>`;
   return f;
 }
