@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Texture and memory overview · Lecture 6 · Compilation and memory · Parallel Computing</title>
+<title>Texture memory and a summary of memory types · Lecture 6 · Compilation and memory · Parallel Computing</title>
 <meta name="description" content="Lecture 6: runtime and driver API, compiling with nvcc (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), initialisation and timing, register/shared limits, local, shared, constant and texture memory.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="l6-texture">
 <main><div class="content">
 
-<h1>Texture and memory overview</h1>
+<h1>Texture memory and a summary of memory types</h1>
 
 <h2>Texture memory</h2>
 <div class="callout key"><p><strong>When texture?</strong> When the access pattern is irregular but local in 2D (rotating, scaling, warping an image: neighbouring pixels are read together), when coordinates are fractional (bilinear interpolation for free), and when out-of-range reads should be handled automatically (clamp/border/wrap/mirror). The cost: copying the data into a CUDA array, and read-only access.</p></div>

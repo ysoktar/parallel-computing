@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Matris transpose · Lecture 6 · Coalescing · Paralel Hesaplama</title>
+<title>Matris transpose: naive ve shared memory · Lecture 6 · Coalescing · Paralel Hesaplama</title>
 <meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing-transpose">
 <main><div class="content">
 
-<h1>Matris transpose</h1>
+<h1>Matris transpose: naive ve shared memory</h1>
 
 <h2 id="matris-transpose" data-toc="Matris transpose">Matris transpose <span class="badge-class">derste</span></h2>
 <p>Hocanın derste verdiği örnek; NVIDIA'nın <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a> yazısındaki kernel serisi. Transpose hiç hesap yapmaz, sadece veri taşır: performansı tamamen bellek erişim desenine bağlıdır. Bu yüzden coalescing'i göstermek için en iyi örnek.</p>

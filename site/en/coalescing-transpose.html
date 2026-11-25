@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Matrix transpose · Lecture 6 · Coalescing · Parallel Computing</title>
+<title>Matrix transpose: naive vs shared memory · Lecture 6 · Coalescing · Parallel Computing</title>
 <meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing-transpose">
 <main><div class="content">
 
-<h1>Matrix transpose</h1>
+<h1>Matrix transpose: naive vs shared memory</h1>
 
 <h2 id="matrix-transpose" data-toc="Matrix transpose">Matrix transpose <span class="badge-class">class</span></h2>
 <p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>

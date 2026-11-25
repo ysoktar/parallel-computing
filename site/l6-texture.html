@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Texture ve bellek özeti · Lecture 6 · Derleme ve bellek · Paralel Hesaplama</title>
+<title>Texture bellek ve bellek türleri özeti · Lecture 6 · Derleme ve bellek · Paralel Hesaplama</title>
 <meta name="description" content="Lecture 6: runtime ve driver API, nvcc ile derleme (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), başlatma ve zaman ölçümü, register/shared sınırları, local, shared, constant ve texture bellek.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="l6-texture">
 <main><div class="content">
 
-<h1>Texture ve bellek özeti</h1>
+<h1>Texture bellek ve bellek türleri özeti</h1>
 
 <h2>Texture memory</h2>
 <div class="callout key"><p><strong>Texture ne zaman?</strong> Erişim deseni düzensiz ama 2D'de yerel olduğunda (görüntü döndürme, ölçekleme, çarpıtma: komşu pikseller birlikte okunur), koordinatlar kesirli olduğunda (bilineer interpolasyon bedava) ve sınır dışı okumaların otomatik ele alınması istendiğinde (clamp/border/wrap/mirror). Bedel: veriyi bir CUDA array'e kopyalamak ve salt okunurluk.</p></div>

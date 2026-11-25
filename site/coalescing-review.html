@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Loop unrolling, özet ve sınama · Lecture 6 · Coalescing · Paralel Hesaplama</title>
+<title>Loop unrolling; coalescing özeti ve sınama · Lecture 6 · Coalescing · Paralel Hesaplama</title>
 <meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing-review">
 <main><div class="content">
 
-<h1>Loop unrolling, özet ve sınama</h1>
+<h1>Loop unrolling; coalescing özeti ve sınama</h1>
 
 <h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">derste</span></h2>
 <p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>

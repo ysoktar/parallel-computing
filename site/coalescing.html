@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Global bellek transaction'ları · Lecture 6 · Coalescing · Paralel Hesaplama</title>
+<title>Coalescing: global bellek transaction'ları · Lecture 6 · Coalescing · Paralel Hesaplama</title>
 <meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing">
 <main><div class="content">
 
-<h1>Global bellek transaction'ları</h1>
+<h1>Coalescing: global bellek transaction'ları</h1>
 <p class="lead">Bir warp'ın 32 thread'i global belleğe aynı anda gider. Adresleri yan yana ise donanım hepsini tek bir büyük okumada karşılar; dağınıksa aynı veri için defalarca okuma yapar. 2. vizenin en önemli performans konusu bu.</p>
 
 <div class="callout goals">

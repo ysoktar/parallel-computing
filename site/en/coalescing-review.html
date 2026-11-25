@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Loop unrolling, summary and quiz · Lecture 6 · Coalescing · Parallel Computing</title>
+<title>Loop unrolling; coalescing summary and quiz · Lecture 6 · Coalescing · Parallel Computing</title>
 <meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing-review">
 <main><div class="content">
 
-<h1>Loop unrolling, summary and quiz</h1>
+<h1>Loop unrolling; coalescing summary and quiz</h1>
 
 <h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
 <p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
