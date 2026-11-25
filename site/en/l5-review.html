@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 5 · CUDA programming · Parallel Computing</title>
+<meta name="description" content="Lecture 5: vector/matrix addition, matrix multiplication, cudaMalloc/cudaMemcpy/cudaFree, kernels and function qualifiers, blockIdx/threadIdx, __syncthreads, warps and latency hiding, CGMA, memory types, tiled matmul.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l5-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>Kernel = the body of the loop; the outer loops become threads. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global index = <code>blockIdx·blockDim + threadIdx</code> (on each axis); row-major address <code>row·width + col</code>; round the grid up, check the bounds.</li>
+  <li><code>__syncthreads()</code>: barrier within a block, everyone in the block must execute it.</li>
+  <li>Blocks are assigned to SMs block by block; warp = 32 threads, the scheduling unit; many warps = latency hiding.</li>
+  <li>Naive matmul has CGMA = 1 → bandwidth-bound (~6% efficiency). Tiling: load a tile into shared memory once, use it T times → T times less global traffic, CGMA = T.</li>
+  <li>Two barriers in the tiled kernel: after loading (tile filled) and after computing (not overwritten).</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Passing a number of elements to <code>cudaMalloc</code>/<code>cudaMemcpy</code>: sizes are always in <strong>bytes</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Using x for the row and y for the column: consecutive threads go to distant elements (coalescing breaks) and the matrix is computed transposed.</li>
+  <li>Forgetting the second <code>__syncthreads()</code> in the tiled kernel: a fast thread writes the next phase's tile while others are reading.</li>
+  <li>Timing right after the kernel: the launch is asynchronous, call <code>cudaDeviceSynchronize()</code> first.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Write a kernel that multiplies an <code>n</code>-element array by <code>s</code>, and the host code that launches it (256 threads per block, <code>n</code> may not be a multiple of 256).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // the extra threads do nothing
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> What is the CGMA ratio of tiled matmul with TILE_WIDTH = T? Show it.</p>
+<div class="hint"><p>In each phase a thread does <strong>2 global reads</strong> (one element each into Mds and Nds) and, in the inner loop, T multiplications + T additions = <strong>2T FP operations</strong>. CGMA = 2T / 2 = <strong>T</strong>. With T = 16, a 16 times improvement: on the G80 the 21.6 GFLOPS bound rises to ~345 GFLOPS (close to the 367 peak).</p></div>
+<p><strong>3.</strong> Compute the shared memory use of 16×16 tiled matmul and how many blocks fit on a G80 SM. What is the limit?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/block</strong>; 16 KB/SM → 8 blocks by shared memory. But with 256 threads/block, 768/256 = <strong>3 blocks</strong>. The limit: threads per SM (not shared memory).</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>Why is <code>&amp;Md</code> passed in <code>cudaMalloc((void**)&amp;Md, size)</code>?</p>
+  <ol>
+    <li data-why="Md is not a host buffer; it is a variable that will hold a device address.">Because Md will be allocated in host memory.</li>
+    <li data-why="size is already in bytes; unrelated to &amp;.">To give the size in bytes.</li>
+    <li data-why="True: the function writes the device address it allocated into this pointer variable.">So that the function can write the allocated address into the variable Md.</li>
+    <li data-why="cudaMalloc only allocates; copying is cudaMemcpy's job.">To copy data into Md.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>With 256-thread blocks and 3 blocks on an SM, how many warps are on the SM?</p>
+  <ol>
+    <li data-why="That is the warp count of a single block.">8</li>
+    <li data-why="256/32 = 8 warps/block × 3 = 24.">24</li>
+    <li data-why="768 is the number of threads, not warps.">768</li>
+    <li data-why="A warp is 32 threads; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Why is the CGMA ratio of naive matmul 1?</p>
+  <ol>
+    <li data-why="The naive kernel does not use shared memory.">There is one FP operation per shared memory access.</li>
+    <li data-why="Each thread does 2·width reads in total; the ratio is per iteration.">Each thread reads one element.</li>
+    <li data-why="CGMA is FP operations / global accesses; registers are unrelated.">Each thread uses one register.</li>
+    <li data-why="True: per loop iteration 2 global reads (M and N) and 2 FP operations (multiply + add).">Each iteration does 2 global reads and 2 FP operations (multiply, add).</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What can happen if the <strong>second</strong> <code>__syncthreads()</code> in the tiled kernel is removed?</p>
+  <ol>
+    <li data-why="True: a fast thread may write the next phase's data into Mds/Nds while a slow thread is still reading the old phase's values.">A thread may load the next phase's tile while another thread is still reading the previous phase's values.</li>
+    <li data-why="The compiler does not catch a missing barrier.">A compile error.</li>
+    <li data-why="The global write is after the loop; the problem is in shared memory.">The write to Pd is no longer coalesced.</li>
+    <li data-why="A race gives undefined results; there is no guarantee it is always right.">Nothing; the second barrier is unnecessary.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is true for <code>__constant__</code> variables?</p>
+  <ol>
+    <li data-why="Constant memory is not on-chip; it is in global memory, cached.">They live in a separate on-chip memory, no cache needed.</li>
+    <li data-why="The declaration must be outside function bodies.">They are declared inside the kernel.</li>
+    <li data-why="True: scope all grids, lifetime the application, stored in global memory but cached.">All grids see the same version; stored in global memory but cached.</li>
+    <li data-why="Read-only from kernels; the host writes with cudaMemcpyToSymbol.">Kernels can write to them.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

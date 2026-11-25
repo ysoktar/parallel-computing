@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayrıştırma ve program desenleri · Lecture 2 · Tasarım · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), ayrıştırma desenleri (task, divide-and-conquer, geometrik, özyinelemeli veri, pipeline, olay tabanlı), program yapısı desenleri (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l2-patterns">
+<main><div class="content">
+
+<h1>Ayrıştırma ve program desenleri</h1>
+
+<h2>Ayrıştırma desenleri</h2>
+<p>Mattson ve diğerlerinin altı deseni; fonksiyonel ve veri ayrıştırmasına <strong>veri akışı</strong> (data flow) ayrıştırması eklenir. Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
+<h3>Task parallelism</h3>
+<p>Modüller farklı düğümlere: ör. oyun döngüsündeki <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> ayrı görevler, her turun sonunda <code>barrier()</code>. Karmaşık bağımlılık yoksa çalışır ama <strong>ölçeklenmez</strong>: düğüm sayısı görev sayısını aşamaz.</p>
+<h3>Divide-and-conquer</h3>
+<pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Sözde kod; çalışan hâli: iki yarısı ayrı görevlerde (std::async) sıralanan merge sort.">
+DnC(A) {
+    if (A is a base case) return solution(A);
+    split A into N subproblems B[N];
+    for (int i = 0; i < N; i++) sol[i] = DnC(B[i]);
+    return mergeSolution(sol);
+}
+</pre>
+<ul>
+  <li>Örnek: merge sort. <strong>Bağımlılık grafı, çağrı grafıyla aynı değildir.</strong> 8 elemanlı merge sort'ta en fazla eşzamanlılık 4 görev (boyutu 1 olan çağrılar iş yapmaz).</li>
+  <li>Görevler çalışma zamanında dinamik üretilir (GPU'larda uzun süre imkânsızdı). Belli bir boyuta ya da işlemci sayısına ulaşınca durulur; ebeveyn görev boş beklemek yerine alt problemlerden birini kendisi çözebilir (N − 1 yeni görev).</li>
+</ul>
+<h3>Geometrik ayrıştırma</h3>
+<p>Diziler/matrisler bir veya daha fazla boyut boyunca bölünüp görevlere atanır. Veriler arası bağımlılık yoksa <strong>embarrassingly parallel</strong>. Örnek: 5 noktalı Laplace filtresi <code>[0 1 0; 1 −4 1; 0 1 0]</code>: her çıktı için 5 değer gerekir → bölge sınırlarında komşu (halo) satırları gerekir. GPU'daki blok/karo yaklaşımı budur.</p>
+<h3>Uygula: veri bölüşümü ve halo</h3>
+<div data-learning="halo"></div>
+<h3>Özyinelemeli veri ayrıştırması</h3>
+<p>Ağaç, liste, graf gibi yapılar elemanlarına ayrıştırılıp düğümlere atanır; algoritma değiştirilebilir (dinamik programlamaya benzer). Örnek: kısmi toplamlar (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: önce 2'li, sonra 4'lü, 8'li grupların toplamları.</p>
+<h3>Pipeline</h3>
+<ul>
+  <li>Montaj hattı: her aşama veriye bir işlem uygular. CPU komut pipeline'ı, sinyal işleme (FFT → katsayı işleme → ters FFT), grafik pipeline'ı, Unix kabuk boruları.</li>
+  <li>Fayda ancak aşamalar <strong>farklı veriler üzerinde eş zamanlı</strong> çalışırsa. Aşama süreleri yakın olmalı: <strong>en yavaş aşama pipeline'ın hızını belirler</strong> (throughput ≤ 1 / en uzun aşama süresi).</li>
+</ul>
+<h3>Olay tabanlı koordinasyon</h3>
+<p>İletişim akışı sabit değil, görevler çalışma zamanında dinamik etkileşir; yürütme profili önceden bilinemez. Örnek: ayrık olay simülasyonu (olay = zaman damgalı mesaj).</p>
+
+<h3>Hangi deseni ne zaman?</h3>
+<table class="simple">
+  <thead><tr><th>Problem</th><th>Uygun desen</th><th>Neden</th></tr></thead>
+  <tbody>
+    <tr><td>Görüntü filtreleme, matris toplama/çarpma</td><td>Geometrik</td><td>Veri düzenli bir ızgara; bölgeler bağımsız (komşu varsa halo).</td></tr>
+    <tr><td>Merge sort, quicksort, ağaç üzerinde arama</td><td>Divide-and-conquer</td><td>Problem kendine benzer alt problemlere bölünüyor; görevler dinamik.</td></tr>
+    <tr><td>Video kod çözme: oku → çöz → filtrele → göster</td><td>Pipeline</td><td>Veri akışı sabit aşamalardan geçiyor; aşamalar farklı kareler üzerinde eş zamanlı.</td></tr>
+    <tr><td>Kısmi toplamlar, bağlı liste işlemleri</td><td>Özyinelemeli veri</td><td>Yapı düzensiz; algoritma ikili ağaç gibi adımlara dönüştürülüyor.</td></tr>
+    <tr><td>Oyun döngüsü (girdi, çizim, ses, yapay zekâ)</td><td>Task parallelism</td><td>Az sayıda farklı görev; ölçeklenmez ama basit.</td></tr>
+    <tr><td>Trafik, ağ, fabrika simülasyonu</td><td>Olay tabanlı</td><td>Etkileşimler çalışma zamanında belli oluyor.</td></tr>
+  </tbody>
+</table>
+<h2>Program yapısı desenleri</h2>
+<div class="two-col">
+  <div>
+    <p><strong>GPLS</strong> (Globally Parallel, Locally Sequential): birçok görev eş zamanlı, her biri kendi içinde seri.</p>
+    <ul><li>SPMD</li><li>MPMD</li><li>Master-worker</li><li>Map-reduce</li></ul>
+  </div>
+  <div>
+    <p><strong>GSLP</strong> (Globally Sequential, Locally Parallel): program seri çalışır, istenen kısımlar paralel.</p>
+    <ul><li>Fork/join</li><li>Loop parallelism</li></ul>
+  </div>
+</div>
+<table class="simple">
+  <thead><tr><th>Desen</th><th>Özü</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SPMD</strong></td><td>Tüm düğümler aynı programı çalıştırır; farklı veri ve/veya farklı yollar. Adımlar: başlatma → <strong>benzersiz ID alma</strong> (CUDA'da vektör: <code>blockIdx/threadIdx</code>) → ID'ye göre çalıştırma → kapatma ve sonuçları birleştirme. CUDA ve MPI bu desendir.</td></tr>
+    <tr><td><strong>MPMD</strong></td><td>Heterojen platform ya da bellek kısıtı varsa farklı programlar bir uygulamada birleşir.</td></tr>
+    <tr><td><strong>Master-worker</strong></td><td>Master iş dağıtır, sonuç toplar, G/Ç ve kullanıcıyla ilgilenir. Tek master darboğaz olabilir → hiyerarşik master'lar. Boşta kalan işçiye iş verdiği için <strong>örtük yük dengesi</strong>.</td></tr>
+    <tr><td><strong>Map-reduce</strong></td><td>Master-worker türevi (Google). Bağımsız verilere bir fonksiyon uygula (map), kısmi sonuçları ikinci bir fonksiyonla birleştir (reduce). Otomatik araçlar dağıtım ve yük dengesini üstlenir.</td></tr>
+    <tr><td><strong>Fork/join</strong></td><td>Görevler çalışma zamanında dinamik oluşturulur (fork), ebeveyn devam etmeden önce biter (join). Yeni thread ya da <strong>thread havuzu</strong> (oluşturma maliyetini azaltır).</td></tr>
+    <tr><td><strong>Loop parallelism</strong></td><td>Mevcut seri kodun zamanı dolduran döngülerini paralelleştir (OpenMP direktifleri). Az emek, genelde az kazanç.</td></tr>
+  </tbody>
+</table>
+<p>Platformlar desen dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
+
+</div></main>
+</body>
+</html>

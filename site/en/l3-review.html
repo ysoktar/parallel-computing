@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 3 · Threads · Parallel Computing</title>
+<meta name="description" content="Lecture 3: what a thread is, C++11 threads, data races and race conditions, locks/mutexes/semaphores, consistency models, deadlock/livelock/starvation, producer-consumer, atomics, CAS and LL/SC, memory ordering, monitors and condition variables, futures/packaged_task, thread pools, fibers.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l3-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>Threads share the process's address space: communication is cheap, but access to shared data must be synchronised.</li>
+  <li><strong>Data race</strong>: concurrent access with at least one writer (undefined behaviour in C++). <strong>Race condition</strong>: a wrong result because of ordering.</li>
+  <li>Read-modify-write must be indivisible: a mutex or an atomic.</li>
+  <li>Mutex = one thread + ownership; semaphore = N threads, a counter; condition variable = wait for a condition while releasing the lock.</li>
+  <li>Deadlock (nobody progresses, CPU idle), livelock (nobody progresses, CPU busy), starvation (one thread never gets a turn).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (free slots) and <code>resAvail</code> (full slots) semaphores + a mutex protecting the indices.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) and LL/SC: the hardware basis of atomics and lock-free structures.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Locking only the writer and not the reader: a read races with a write too.</li>
+  <li>Waiting on a condition variable with <code>if</code>: after waking, the condition must be checked again (<code>while</code> or <code>wait(lock, predicate)</code>).</li>
+  <li>Swapping the semaphore and mutex order in producer-consumer: taking the mutex first and then waiting on the semaphore for a full buffer deadlocks (the mutex holder sleeps, the consumer cannot get the mutex).</li>
+  <li>Writing lock-free code because "8 bytes are atomic on x86": compilers and types make relying on it wrong.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 4 threads each do an unprotected <code>counter++</code> 1000 times. What can the final value be at most? Why does it come out below 4000?</p>
+<div class="hint"><p>At most 4000 (if there is never an overlap). In practice less, because the read-add-write steps interleave and updates are lost (the table above). The theoretical lower bound is very small (a bad interleaving can bring it down to 2); in the exam what matters is explaining why: updates are lost and the result is nondeterministic.</p></div>
+<p><strong>2.</strong> In producer-consumer the consumer is written in this order: <code>l.acquire(); resAvail.acquire(); …</code>. What happens?</p>
+<div class="hint"><p>With an empty buffer the consumer takes the mutex, then sleeps on <code>resAvail</code> <strong>while holding the mutex</strong>. The producer cannot take the mutex to add an item → nobody can progress: <strong>deadlock</strong>. The right order is semaphore first, then mutex.</p></div>
+<p><strong>3.</strong> A web server can open at most 8 database connections at once. Which synchronisation tool do you use? Write the skeleton of the code.</p>
+<div class="hint"><p>A <strong>counting semaphore</strong> with initial value 8: each request takes a connection with <code>sem.acquire();</code> and calls <code>sem.release();</code> when done. The 9th request waits until a connection is freed.</p></div>
+<p><strong>4.</strong> Compare deadlock and livelock in terms of CPU usage and give a real-life example of each.</p>
+<div class="hint"><p>Deadlock: threads sleep waiting for each other's resources, CPU usage is <strong>low</strong> (two cars facing each other on a narrow bridge, neither backs off). Livelock: threads are not blocked but busy responding to each other, CPU usage is <strong>high</strong> but there is no progress (two people in a corridor dodging the same way).</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>Two threads only read the same <code>int</code>. Is this a data race?</p>
+  <ol>
+    <li data-why="A data race needs at least one write.">Yes, concurrent access is always a data race.</li>
+    <li data-why="True: reads only are no problem.">No, there is no data race unless at least one thread writes.</li>
+    <li data-why="Alignment does not change this.">Only if the variable is misaligned.</li>
+    <li data-why="No atomic needed; there is no write.">Only if it is not atomic.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Threads cannot make progress but CPU usage is high. Which is it?</p>
+  <ol>
+    <li data-why="In a deadlock threads wait/sleep; CPU is low.">Deadlock</li>
+    <li data-why="In starvation other threads progress.">Starvation</li>
+    <li data-why="True: in a livelock threads are busy responding to each other.">Livelock</li>
+    <li data-why="A race condition means wrong results, not lack of progress.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>The key difference between a mutex and a semaphore?</p>
+  <ol>
+    <li data-why="True: a semaphore admits N threads via its counter; a mutex one thread, with ownership.">A semaphore can admit N threads at once; a mutex one.</li>
+    <li data-why="Both can be cross-process.">A semaphore works only within one process.</li>
+    <li data-why="Both are implemented with atomic operations.">A mutex needs no atomic operations.</li>
+    <li data-why="With a mutex the acquiring thread must release (ownership); a semaphore can be released by another thread.">A mutex can be released by another thread.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

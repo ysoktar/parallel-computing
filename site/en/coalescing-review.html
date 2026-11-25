@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop unrolling, summary and quiz · Lecture 6 · Coalescing · Parallel Computing</title>
+<meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="coalescing-review">
+<main><div class="content">
+
+<h1>Loop unrolling, summary and quiz</h1>
+
+<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
+<p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
+<div class="two-col">
+<pre class="code" data-run="unroll.cu" data-title="Normal">
+float sum = 0;
+for (int k = 0; k < 16; ++k)
+    sum += Mds[ty][k] * Nds[k][tx];
+// 16 iterations × (multiply-add + k++ + k<16 + branch)
+</pre>
+<pre class="code" data-run="unroll.cu" data-title="Unrolled 4 times by hand">
+float sum = 0;
+for (int k = 0; k < 16; k += 4) {
+    sum += Mds[ty][k]     * Nds[k][tx];
+    sum += Mds[ty][k + 1] * Nds[k + 1][tx];
+    sum += Mds[ty][k + 2] * Nds[k + 2][tx];
+    sum += Mds[ty][k + 3] * Nds[k + 3][tx];
+}
+// 4 iterations: loop control cut 4 times
+</pre>
+</div>
+<pre class="code" data-run="unroll.cu" data-title="Letting the compiler do it">
+#pragma unroll                 // fully unrolls if the trip count is known at compile time
+for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH is a #define / const → constant
+    sum += Mds[ty][k] * Nds[k][tx];
+
+#pragma unroll 4               // unroll 4 times
+for (int i = 0; i < n; ++i) a[i] *= s;
+
+#pragma unroll 1               // do not unroll
+for (int i = 0; i < n; ++i) a[i] += 1;
+</pre>
+<ul>
+  <li><strong>Gain:</strong> fewer loop-control instructions; when fully unrolled the indices become constants (<code>Mds[ty][3]</code>) and address arithmetic is done at compile time; independent loads can be issued back to back, hiding latency.</li>
+  <li><strong>Cost:</strong> the code grows; more variables are live at the same time → <strong>register usage increases</strong> → if the per-thread register limit is exceeded, register spill (local memory) or fewer threads per SM (lower occupancy).</li>
+  <li>If the trip count is constant (the transpose's <code>j</code> loop: <code>TILE_DIM/BLOCK_ROWS = 4</code> iterations; tiled matmul's <code>k</code> loop: <code>TILE_WIDTH</code> iterations) the compiler usually unrolls it anyway. If the trip count is only known at run time (<code>width/TILE_WIDTH</code>) it cannot be fully unrolled.</li>
+  <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
+</ul>
+
+<h2>Summary</h2>
+<ul>
+  <li>A warp's accesses are gathered into 32/64/128-byte segments aligned to their size; the fewer the segments, the better.</li>
+  <li>Check: is <code>threadIdx.x</code> without a multiplier and rightmost in the address? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>For 2D arrays, <code>cudaMallocPitch</code> so that row starts are aligned; the pitch is in bytes.</li>
+  <li>Transpose: in the naive version the write is ✗; with a shared memory tile read and write are ✓; <code>[32][33]</code> padding removes bank conflicts.</li>
+  <li>Loop unrolling: reduces loop control, increases ILP; the price is registers.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> A warp reads <code>a[threadIdx.x * 2 + 1]</code> from a <code>float</code> array (128 B aligned). How many 32 B segments are moved, and what is the efficiency?</p>
+<div class="hint"><p>Addresses 4, 12, 20, …, 252 (bytes): all 8 segments of the range 0–255 are touched → 8 · 32 = 256 B moved, 128 B used: <strong>50%</strong>.</p></div>
+<p><strong>2.</strong> In the shared-memory transpose, why are both the global read and the global write coalesced? Which access stays scattered, and why is that not a problem?</p>
+<div class="hint"><p>In both the read and the write, <code>threadIdx.x</code> is rightmost in the global address (consecutive along a row). The swapping is done inside shared memory: <code>tile[threadIdx.x][…]</code> reads a column, so the scattered access is in <strong>shared</strong> memory. Shared memory is on-chip and fast, so this is cheap; its only cost is bank conflicts, which <code>[32][33]</code> padding removes.</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>A warp reads <code>a[3*threadIdx.x]</code> from a 128 B-aligned <code>float</code> array. How many 32 B segments are touched?</p>
+  <ol>
+    <li data-why="Consecutive would give 4; with stride 3 it spreads over 384 B.">4</li>
+    <li data-why="Addresses 0, 12, 24, …, 372: all 12 segments of the range 0–383 are touched.">12</li>
+    <li data-why="With stride 3 there are ~2.7 threads per segment; each thread is not a separate segment.">32</li>
+    <li data-why="That is the number of 128 B lines; the question asks about 32 B segments.">3</li>
+  </ol>
+  <div class="explain">Moved 12·32 = 384 B, used 128 B → efficiency 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Why are the transpose kernels' blocks 32×8 threads rather than 32×32?</p>
+  <ol>
+    <li data-why="32×32 = 1024 threads is allowed on today's GPUs; that is not the reason.">A 32×32 block cannot be launched.</li>
+    <li data-why="Unrelated to bank conflicts; padding fixes those.">To avoid bank conflicts.</li>
+    <li data-why="True: each thread processes 4 elements; the index calculation is shared, and coalescing is kept because the loop runs along rows.">So that each thread processes 4 elements of the tile and the index calculation cost is shared.</li>
+    <li data-why="The tile is still 32×32; same shared memory.">To save shared memory.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Why does <code>transposeCoalesced</code> use <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> in the store phase?</p>
+  <ol>
+    <li data-why="True: tile (bx, by) goes to position (by, bx) in the output.">Tile (bx, by) of the input must be written to the transposed position (by, bx) of the output.</li>
+    <li data-why="Padding fixes bank conflicts; this index change decides where the tile goes.">To reduce bank conflicts.</li>
+    <li data-why="threadIdx.x stays on the right, so the write is coalesced; but the question is about the block offset.">To make the read coalesced.</li>
+    <li data-why="Not a typo; without it each tile would be transposed in place and the matrix would be wrong.">A typo; it should be blockIdx.x.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true about <code>#pragma unroll</code>?</p>
+  <ol>
+    <li data-why="Unrolling does not distribute a serial loop over threads; it copies it within the same thread.">It distributes the loop iterations over different threads.</li>
+    <li data-why="Register usage usually increases.">It reduces register usage.</li>
+    <li data-why="The result does not change (same operations, same order).">It may change the result, be careful.</li>
+    <li data-why="True: with a constant trip count the body is copied completely and the control instructions disappear.">It can fully unroll a loop whose trip count is constant at compile time.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

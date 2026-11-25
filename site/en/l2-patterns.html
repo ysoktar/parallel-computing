@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decomposition and program patterns · Lecture 2 · Design · Parallel Computing</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), decomposition patterns (task, divide-and-conquer, geometric, recursive data, pipeline, event-based), program structure patterns (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l2-patterns">
+<main><div class="content">
+
+<h1>Decomposition and program patterns</h1>
+
+<h2>Decomposition patterns</h2>
+<p>The six patterns of Mattson et al.; functional and data decomposition are joined by <strong>data flow</strong> decomposition. There is no strict separation; a problem can be decomposed in several ways.</p>
+<h3>Task parallelism</h3>
+<p>Modules on different nodes: e.g. a game loop's <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> as separate tasks, with a <code>barrier()</code> at the end of each iteration. Works without complex dependencies but <strong>does not scale</strong>: the number of nodes cannot exceed the number of tasks.</p>
+<h3>Divide-and-conquer</h3>
+<pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Pseudocode; the runnable version: a merge sort whose two halves are sorted as separate tasks (std::async).">
+DnC(A) {
+    if (A is a base case) return solution(A);
+    split A into N subproblems B[N];
+    for (int i = 0; i < N; i++) sol[i] = DnC(B[i]);
+    return mergeSolution(sol);
+}
+</pre>
+<ul>
+  <li>Example: merge sort. <strong>The dependency graph is not the call graph.</strong> For an 8-element merge sort the maximum concurrency is 4 tasks (size-1 calls do no work).</li>
+  <li>Tasks are generated dynamically at run time (long impossible on GPUs). Generation stops at a given size or at the number of processors; the parent can solve one subproblem itself instead of idling (N − 1 new tasks).</li>
+</ul>
+<h3>Geometric decomposition</h3>
+<p>Arrays/matrices are split along one or more dimensions and assigned to tasks. With no dependencies between data: <strong>embarrassingly parallel</strong>. Example: the 5-point Laplace filter <code>[0 1 0; 1 −4 1; 0 1 0]</code>: each output needs 5 values → neighbour (halo) rows are needed at region borders. This is the block/tile approach on GPUs.</p>
+<h3>Apply: partitions and halo cells</h3>
+<div data-learning="halo"></div>
+<h3>Recursive data decomposition</h3>
+<p>Trees, lists, graphs are decomposed into elements assigned to nodes; the algorithm may be modified (similar to dynamic programming). Example: partial sums (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: sums of groups of 2, then 4, then 8.</p>
+<h3>Pipeline</h3>
+<ul>
+  <li>An assembly line: each stage applies an operation to an item. CPU instruction pipelines, signal processing (FFT → coefficient manipulation → inverse FFT), graphics pipelines, Unix shell pipes.</li>
+  <li>A benefit only if the stages run <strong>concurrently on different items</strong>. Stage durations should be close: <strong>the slowest stage dictates the pipeline's speed</strong> (throughput ≤ 1 / longest stage duration).</li>
+</ul>
+<h3>Event-based coordination</h3>
+<p>The communication flow is not fixed; tasks interact dynamically at run time; the execution profile cannot be known in advance. Example: discrete-event simulation (event = time-stamped message).</p>
+
+<h3>Which pattern when?</h3>
+<table class="simple">
+  <thead><tr><th>Problem</th><th>Suitable pattern</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Image filtering, matrix addition/multiplication</td><td>Geometric</td><td>The data is a regular grid; regions are independent (a halo if there are neighbours).</td></tr>
+    <tr><td>Merge sort, quicksort, tree search</td><td>Divide-and-conquer</td><td>The problem splits into self-similar subproblems; tasks are dynamic.</td></tr>
+    <tr><td>Video decoding: read → decode → filter → display</td><td>Pipeline</td><td>The data flows through fixed stages; the stages work on different frames at the same time.</td></tr>
+    <tr><td>Partial sums, linked-list operations</td><td>Recursive data</td><td>The structure is irregular; the algorithm is turned into binary-tree-like steps.</td></tr>
+    <tr><td>Game loop (input, drawing, sound, AI)</td><td>Task parallelism</td><td>A few different tasks; does not scale but is simple.</td></tr>
+    <tr><td>Traffic, network, factory simulation</td><td>Event-based</td><td>Interactions are only known at run time.</td></tr>
+  </tbody>
+</table>
+<h2>Program structure patterns</h2>
+<div class="two-col">
+  <div>
+    <p><strong>GPLS</strong> (Globally Parallel, Locally Sequential): many tasks concurrently, each sequential.</p>
+    <ul><li>SPMD</li><li>MPMD</li><li>Master-worker</li><li>Map-reduce</li></ul>
+  </div>
+  <div>
+    <p><strong>GSLP</strong> (Globally Sequential, Locally Parallel): the program runs sequentially, requested parts in parallel.</p>
+    <ul><li>Fork/join</li><li>Loop parallelism</li></ul>
+  </div>
+</div>
+<table class="simple">
+  <thead><tr><th>Pattern</th><th>Essence</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SPMD</strong></td><td>All nodes run the same program; different data and/or different paths. Steps: initialisation → <strong>obtain a unique ID</strong> (a vector in CUDA: <code>blockIdx/threadIdx</code>) → run according to the ID → shut down and combine results. CUDA and MPI follow this pattern.</td></tr>
+    <tr><td><strong>MPMD</strong></td><td>With a heterogeneous platform or tight memory, different programs are assembled into one application.</td></tr>
+    <tr><td><strong>Master-worker</strong></td><td>The master hands out work, collects results, does I/O and user interaction. A single master can be a bottleneck → hierarchical masters. Feeding idle workers gives <strong>implicit load balancing</strong>.</td></tr>
+    <tr><td><strong>Map-reduce</strong></td><td>A master-worker derivative (Google). Apply a function to independent data (map), combine partial results with a second function (reduce). Automated tools handle deployment and load balancing.</td></tr>
+    <tr><td><strong>Fork/join</strong></td><td>Tasks are created dynamically at run time (fork) and finish before the parent resumes (join). New threads or a <strong>thread pool</strong> (reduces creation overhead).</td></tr>
+    <tr><td><strong>Loop parallelism</strong></td><td>Parallelise the loops that dominate an existing sequential code (OpenMP directives). Little effort, usually small gains.</td></tr>
+  </tbody>
+</table>
+<p>Platforms impose patterns: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
+
+</div></main>
+</body>
+</html>

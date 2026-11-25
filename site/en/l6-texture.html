@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texture and memory overview · Lecture 6 · Compilation and memory · Parallel Computing</title>
+<meta name="description" content="Lecture 6: runtime and driver API, compiling with nvcc (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), initialisation and timing, register/shared limits, local, shared, constant and texture memory.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="l6-texture">
+<main><div class="content">
+
+<h1>Texture and memory overview</h1>
+
+<h2>Texture memory</h2>
+<div class="callout key"><p><strong>When texture?</strong> When the access pattern is irregular but local in 2D (rotating, scaling, warping an image: neighbouring pixels are read together), when coordinates are fractional (bilinear interpolation for free), and when out-of-range reads should be handled automatically (clamp/border/wrap/mirror). The cost: copying the data into a CUDA array, and read-only access.</p></div>
+
+<ul>
+  <li>A subset of the texturing hardware the GPU uses for graphics. Textures are <strong>read-only</strong>; a surface is like a texture that can be written.</li>
+  <li>Resides in device memory, cached in the <strong>texture cache</strong>: a fetch costs a device memory read only on a cache miss. The cache is optimised for <strong>2D spatial locality</strong>: a warp reading addresses close together in 2D gets the best performance. Designed for streaming with constant latency: a hit reduces DRAM traffic, not latency.</li>
+  <li>Benefits: higher bandwidth for reads that do not follow global/constant access patterns but have locality; addressing done outside the kernel by dedicated units (fewer registers); packed data broadcast to separate variables in one operation; optional conversion of 8/16-bit integers to floats in [0, 1] / [-1, 1]; free linear filtering and out-of-bounds handling.</li>
+  <li>Drawbacks: cannot be written; linear memory must be copied to a <strong>CUDA array</strong> for texturing, which takes time: the following computation should be worth it.</li>
+</ul>
+<h3>Texture object</h3>
+<p>Reading a texture is called a <strong>texture fetch</strong>; each fetch takes a <strong>texture object</strong>, which specifies:</p>
+<table class="simple">
+  <thead><tr><th>Property</th><th>Options</th></tr></thead>
+  <tbody>
+    <tr><td>Texture</td><td>The piece of texture memory fetched (<code>cudaResourceDesc</code>).</td></tr>
+    <tr><td>Dimensionality</td><td>1D, 2D, 3D (1/2/3 coordinates); elements are called <strong>texels</strong>.</td></tr>
+    <tr><td>Texel type</td><td>Basic integer and floating-point types; 1-, 2-, 4-component vectors of char/short/int/long/longlong/float/double.</td></tr>
+    <tr><td>Read mode</td><td><code>cudaReadModeElementType</code> (no conversion) / <code>cudaReadModeNormalizedFloat</code> (8/16-bit integer → [0, 1] if unsigned, [-1, 1] if signed).</td></tr>
+    <tr><td>Coordinates</td><td>Default [0, N-1]; normalised [0, 1-1/N] (a 64×32 texture: [0, 1) in both directions instead of [0,63]×[0,31]). For applications wanting size-independent coordinates.</td></tr>
+    <tr><td>Addressing mode (out of range)</td><td><code>cudaAddressModeClamp</code> (default; repeat the border pixel), <code>Border</code> (zero), <code>Wrap</code> (wrap around), <code>Mirror</code>. Wrap and mirror only with normalised coordinates. Separate per coordinate (array of 3).</td></tr>
+    <tr><td>Filtering</td><td><code>cudaFilterModePoint</code> (nearest texel) / <code>cudaFilterModeLinear</code> (linear/bilinear/trilinear interpolation of 2/4/8 texels in 1D/2D/3D; floating-point returns only, low precision).</td></tr>
+  </tbody>
+</table>
+<p><strong>CUDA arrays:</strong> <strong>opaque</strong> (no direct access to values) 1D/2D/3D memory layouts optimised for texture fetching; elements with 1, 2 or 4 components (8/16/32-bit integers, 16/32-bit floats). Kernels access them only through texture fetches (read) or surface reads/writes.</p>
+<pre class="code" data-run="texrotate.cu" data-title="texRotate.cu (class example): image rotation with a texture, summary">
+// Host: 1) allocate CUDA array  2) copy data  3) resDesc  4) texDesc  5) create texture object
+cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+cudaArray_t cuArray;
+cudaMallocArray(&cuArray, &ch, width, height);
+cudaMemcpy2DToArray(cuArray, 0, 0, img, width * sizeof(float), width * sizeof(float), height,
+                    cudaMemcpyHostToDevice);
+
+cudaResourceDesc resDesc = {};  resDesc.resType = cudaResourceTypeArray;  resDesc.res.array.array = cuArray;
+cudaTextureDesc texDesc = {};
+texDesc.addressMode[0] = cudaAddressModeWrap;   texDesc.addressMode[1] = cudaAddressModeWrap;
+texDesc.filterMode = cudaFilterModeLinear;      // bilinear interpolation for free
+texDesc.readMode = cudaReadModeElementType;
+texDesc.normalizedCoords = 1;                   // coordinates in [0, 1)
+cudaTextureObject_t texObj = 0;
+cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
+
+// Device: rotate the normalised coordinate by θ about the centre, read from the texture
+__global__ void transformKernel(float* output, cudaTextureObject_t texObj, int width, int height, float theta) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x < width && y < height) {
+        float u = x / (float)width - 0.5f, v = y / (float)height - 0.5f;
+        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
+        float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
+        output[y * width + x] = tex2D<float>(texObj, tu, tv);
+    }
+}
+// dim3 block(16, 16); dim3 grid((width + 15) / 16, (height + 15) / 16);
+</pre>
+<p>Reading on the device: linear-memory textures <code>tex1Dfetch()</code>, array textures <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Management functions: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. In the older <em>texture reference API</em>, type, dimensionality and read mode are fixed at compile time; normalisation, filter and address mode can change at run time (CUDA array textures only).</p>
+
+<h2>Memory overview</h2>
+<table class="simple">
+  <thead><tr><th>Memory</th><th>Scope</th><th>Latency of one read (clock cycles)</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td>Register</td><td>Thread</td><td>≈ 1 (very fast)</td><td>Limited; spills if exceeded.</td></tr>
+    <tr><td>Shared</td><td>Block</td><td>a few (without conflicts)</td><td>On-chip; needs synchronisation.</td></tr>
+    <tr><td>Local</td><td>Thread</td><td>400–600</td><td>Actually global memory.</td></tr>
+    <tr><td>Global</td><td>Kernel (grid)</td><td>400–600</td><td>Always cached in L2; coalescing essential.</td></tr>
+    <tr><td>Constant</td><td>Kernel</td><td>400–600 (much less on a cache hit)</td><td>Constant cache; same address → broadcast.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 (less on a cache hit)</td><td>Texture cache, optimised for 2D.</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Whether reads are cached in both the unified L1/texture cache and L2, or in L2 only, can be partly configured per access with load-instruction modifiers. Marking pointers <strong><code>const</code> and <code>__restrict__</code></strong> increases the likelihood that the compiler detects the read-only condition.</li>
+  <li>Unless you use shared memory explicitly, <strong>never assume</strong> your data will be cached, or which cache will be used.</li>
+</ul>
+
+</div></main>
+</body>
+</html>

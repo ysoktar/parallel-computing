@@ -56,7 +56,7 @@ cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess ise raporla, dur<
 
 <h3>Soru 22 · Shared bank</h3>
 <p>Warp <code>s[lane*k]</code> okuyor. k = 1, 2, 3, 4, 16, 32, 33 için conflict derecesi? Herkes <code>s[0]</code> okursa?</p>
-<div class="hint"><p>EBOB(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: her lane farklı adres ama aynı bank → 32-yollu. k = 33 (padding): bank'lar dağılır. <code>s[0]</code>: aynı adres → yayın, conflict değil. Global segment ile shared bank farklı kavramlardır. Görselleştirme: <a href="l6-cuda-memory.html#bank-lar-ve-bank-conflict-ler">L6 bank'lar</a>.</p></div>
+<div class="hint"><p>EBOB(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: her lane farklı adres ama aynı bank → 32-yollu. k = 33 (padding): bank'lar dağılır. <code>s[0]</code>: aynı adres → yayın, conflict değil. Global segment ile shared bank farklı kavramlardır. Görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">L6 bank'lar</a>.</p></div>
 
 <h3>Soru 26 · Bellek seçimi</h3>
 <p>(a) Thread'in toplayıcısı, (b) blokça paylaşılan karo, (c) tüm warp'ın aynı katsayıyı okuduğu filtre, (d) 2D yakınlık ve bilineer interpolasyon, (e) büyük, thread'e özel dizi: hangi bellek?</p>
@@ -115,7 +115,7 @@ __global__ void matmul(const float* A,const float* B,
 
 <h3>Soru 31 · Transpose optimizasyonu</h3>
 <p>Matris transpose'da global okumalar ardışık, yazmalar stride W. Shared memory ile ne yapılır?</p>
-<div class="hint"><p>Karoyu coalesced oku, bariyer, transpoze indekslerle coalesced yaz. 32×32 karoda shared sütun erişimi stride 32 → 32-yollu bank conflict; <code>[32][33]</code> padding giderir (32·1·4 = 128 B fazla shared). Global coalescing kazancı ile shared bank conflict'i ayrı değerlendirin; sınır kontrollerini bariyerin dışında tasarlayın. Bkz. <a href="coalescing.html#matris-transpose">transpose</a>.</p></div>
+<div class="hint"><p>Karoyu coalesced oku, bariyer, transpoze indekslerle coalesced yaz. 32×32 karoda shared sütun erişimi stride 32 → 32-yollu bank conflict; <code>[32][33]</code> padding giderir (32·1·4 = 128 B fazla shared). Global coalescing kazancı ile shared bank conflict'i ayrı değerlendirin; sınır kontrollerini bariyerin dışında tasarlayın. Bkz. <a href="coalescing-transpose.html#matris-transpose">transpose</a>.</p></div>
 
 <h3>Soru 16 · Slayt 88: 1024×1024, 32×8 blok</h3>
 <p>Her thread bir çıktı; blok 32 sütun × 8 satır. Naive, sadece A shared, sadece B shared, ikisi shared durumlarında blok başına global okuma? (Sadece girdi okumaları, ideal yeniden kullanım.)</p>

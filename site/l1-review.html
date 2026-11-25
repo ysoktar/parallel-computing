@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 1 · Giriş · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 1: Moore yasası, güç duvarı, çok çekirdek, GPGPU, Flynn taksonomisi, paylaşımlı ve dağıtık bellek MIMD, CPU vs GPU, Blackwell, speedup, verim, Amdahl ve Gustafson-Barsis, gecikme ve throughput.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l1-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>Moore yasası <strong>transistör sayısı</strong> hakkındadır, frekans hakkında değil. Frekans güç ve ısı yüzünden ~2005'te 2–4 GHz'de durdu (güç ∝ f³); fazla transistörler çekirdeklere harcandı.</li>
+  <li>Çok çekirdekten performans almak <strong>paralel yazılım</strong> ister; bu dersin konusu bu.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Çok çekirdekli CPU'lar ve GPU'lar MIMD; GPU'nun programlama modeli SIMT.</li>
+  <li>Paylaşımlı bellek (ortak adres uzayı, kolay, sınırlı ölçek; NUMA) ↔ dağıtık bellek (mesajlaşma, zor, çok ölçeklenir).</li>
+  <li>CPU gecikme için (büyük önbellek, karmaşık kontrol), GPU throughput için (çok sayıda basit ALU, geniş bellek yolu) tasarlanır.</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, verim = speedup/N. Amdahl: 1/((1−α) + α/N), tavan 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>α'yı seri kısım sanmak. Bu derste α <strong>paralelleştirilebilen</strong> kısım; seri kısım 1 − α.</li>
+  <li>Speedup ile verimi karıştırmak: 16 çekirdekte speedup 8 ise verim %50'dir, "8 kat verim" diye bir şey yok.</li>
+  <li>NUMA'yı dağıtık bellek sanmak: NUMA'da adresleme ortaktır, sadece uzak bellek daha yavaştır.</li>
+  <li>Seri programı yavaş bir versiyonla karşılaştırmak: altın kural, en hızlı bilinen seri çözümle kıyaslanır.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir programın %95'i paralelleştirilebiliyor. 19 çekirdekte speedup ve verim nedir? Sonsuz çekirdekte en fazla ne olur?</p>
+<div class="hint"><p>1/(0,05 + 0,95/19) = 1/(0,05 + 0,05) = <strong>10</strong>; verim 10/19 ≈ <strong>%53</strong>. Sınır: 1/0,05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> Aynı program için Gustafson'a göre 19 çekirdekte speedup ve verim nedir? Neden Amdahl'dan farklı?</p>
+<div class="hint"><p>0,05 + 19·0,95 = 0,05 + 18,05 = <strong>18,1</strong>; verim 0,05/19 + 0,95 ≈ <strong>%95,3</strong>. Gustafson problem boyutunun çekirdek sayısıyla büyüdüğünü (sabit süre) varsayar, Amdahl problemi sabit tutar.</p></div>
+<p><strong>3.</strong> Saat frekansını artırmaya devam etmek neden mümkün olmadı? İki neden yazın.</p>
+<div class="hint"><p>(1) Güç frekansla çok hızlı (yaklaşık f³) artar: ısı atılamaz. (2) Yüksek frekanslı saat sinyalini üretmek ve yonga boyunca dağıtmak zorlaşır (dalga şekli bozulur). Voltajı düşürmek bir süre yardımcı oldu ama yetmedi.</p></div>
+<p><strong>4.</strong> Bir sunucu çiftliğinde 10.000 düğüm birlikte çalışacak. Paylaşımlı mı dağıtık bellek mi? Neden?</p>
+<div class="hint"><p>Dağıtık bellek: paylaşımlı bellek tek bir ortak ortamda (bellek yolu, önbellek tutarlılığı) darboğaz yapar ve onlarca-yüzlerce çekirdekte tıkanır. Dağıtık bellekte her düğüm kendi belleğine sahiptir, iletişim mesajla olur; pahalıdır ama paylaşılan bir darboğaz olmadığı için çok ölçeklenir.</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir programın %80'i paralelleştirilebiliyor. Amdahl'a göre sonsuz işlemciyle en fazla speedup?</p>
+  <ol>
+    <li data-why="Bu α'nın kendisi; formül 1/(1−α).">0,8</li>
+    <li data-why="1/(1 − 0,8) = 1/0,2 = 5.">5</li>
+    <li data-why="Gustafson'da sınır yok; Amdahl'da var.">Sınırsız</li>
+    <li data-why="1/0,8 = 1,25 seri kısımla paralel kısmı karıştırmak olur.">1,25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Hangisi dağıtık bellek MIMD için doğrudur?</p>
+  <ol>
+    <li data-why="Bu paylaşımlı bellek.">Tüm işlemciler ortak bir adres uzayını paylaşır.</li>
+    <li data-why="Programlaması daha zordur.">Programlaması paylaşımlı belleğe göre daha kolaydır.</li>
+    <li data-why="NUMA paylaşımlı bellek tasarımıdır.">NUMA bir dağıtık bellek tasarımıdır.</li>
+    <li data-why="Doğru: iletişim mesajlaşmayla; paylaşılan ortam olmadığı için çok yüksek ölçeklenir.">İletişim mesajlaşmayla olur ve çok yüksek ölçeklenebilir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>16 çekirdekte speedup 12 ölçüldü. Verim nedir?</p>
+  <ol>
+    <li data-why="12/16 = 0,75.">%75</li>
+    <li data-why="16/12 ters oran.">%133</li>
+    <li data-why="Verim speedup'ın çekirdek sayısına oranı.">%12</li>
+    <li data-why="Doğrusal speedup olsaydı %100 olurdu.">%100</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

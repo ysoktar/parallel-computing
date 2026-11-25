@@ -56,7 +56,7 @@ cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess: report and stop<
 
 <h3>Question 22 · Shared banks</h3>
 <p>A warp reads <code>s[lane*k]</code>. Conflict degree for k = 1, 2, 3, 4, 16, 32, 33? And if everyone reads <code>s[0]</code>?</p>
-<div class="hint"><p>gcd(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: every lane a different address but the same bank → 32-way. k = 33 (padding): the banks spread. <code>s[0]</code>: the same address → broadcast, no conflict. A global segment and a shared bank are different concepts. Visualisation: <a href="l6-cuda-memory.html#banks-and-bank-conflicts">L6 banks</a>.</p></div>
+<div class="hint"><p>gcd(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: every lane a different address but the same bank → 32-way. k = 33 (padding): the banks spread. <code>s[0]</code>: the same address → broadcast, no conflict. A global segment and a shared bank are different concepts. Visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">L6 banks</a>.</p></div>
 
 <h3>Question 26 · Choosing the memory</h3>
 <p>(a) A thread's accumulator, (b) a tile shared by the block, (c) a filter where the whole warp reads the same coefficient, (d) 2D locality and bilinear interpolation, (e) a large thread-private array: which memory?</p>
@@ -115,7 +115,7 @@ __global__ void matmul(const float* A,const float* B,
 
 <h3>Question 31 · Optimising the transpose</h3>
 <p>In a matrix transpose the global reads are consecutive, the writes have stride W. What can be done with shared memory?</p>
-<div class="hint"><p>Read the tile coalesced, barrier, write coalesced with transposed indices. In a 32×32 tile the shared column access has stride 32 → a 32-way bank conflict; <code>[32][33]</code> padding removes it (32·1·4 = 128 B extra shared memory). Judge the global coalescing gain and the shared bank conflict separately; design the bounds checks outside the barrier. See <a href="coalescing.html#matrix-transpose">transpose</a>.</p></div>
+<div class="hint"><p>Read the tile coalesced, barrier, write coalesced with transposed indices. In a 32×32 tile the shared column access has stride 32 → a 32-way bank conflict; <code>[32][33]</code> padding removes it (32·1·4 = 128 B extra shared memory). Judge the global coalescing gain and the shared bank conflict separately; design the bounds checks outside the barrier. See <a href="coalescing-transpose.html#matrix-transpose">transpose</a>.</p></div>
 
 <h3>Question 16 · Slide 88: 1024×1024, 32×8 blocks</h3>
 <p>Each thread one output; block 32 columns × 8 rows. Global reads per block for naive, only A shared, only B shared, both shared? (Input reads only, ideal reuse.)</p>

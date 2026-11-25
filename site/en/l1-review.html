@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 1 · Introduction · Parallel Computing</title>
+<meta name="description" content="Lecture 1: Moore's law, the power wall, multi-core, GPGPU, Flynn's taxonomy, shared and distributed memory MIMD, CPU vs GPU, Blackwell, speedup, efficiency, Amdahl and Gustafson-Barsis, latency and throughput.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l1-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>Moore's law is about the <strong>number of transistors</strong>, not frequency. Frequency stopped at 2–4 GHz around 2005 because of power and heat (power ∝ f³); the extra transistors went into cores.</li>
+  <li>Getting performance from many cores needs <strong>parallel software</strong>; that is what this course is about.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Multi-core CPUs and GPUs are MIMD; the GPU's programming model is SIMT.</li>
+  <li>Shared memory (common address space, easy, limited scale; NUMA) ↔ distributed memory (message passing, harder, scales far).</li>
+  <li>CPUs are designed for latency (big caches, complex control), GPUs for throughput (many simple ALUs, wide memory buses).</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, efficiency = speedup/N. Amdahl: 1/((1−α) + α/N), ceiling 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Taking α to be the serial part. In this course α is the <strong>parallelisable</strong> part; the serial part is 1 − α.</li>
+  <li>Mixing up speedup and efficiency: a speedup of 8 on 16 cores is 50% efficiency; there is no such thing as "8 times efficiency".</li>
+  <li>Thinking NUMA is distributed memory: in NUMA addressing is shared, remote memory is just slower.</li>
+  <li>Comparing against a slow sequential version: the golden rule compares with the fastest known sequential solution.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 95% of a program can be parallelised. What are the speedup and efficiency on 19 cores? What is the most you can get with infinitely many cores?</p>
+<div class="hint"><p>1/(0.05 + 0.95/19) = 1/(0.05 + 0.05) = <strong>10</strong>; efficiency 10/19 ≈ <strong>53%</strong>. Bound: 1/0.05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> For the same program, what are the speedup and efficiency on 19 cores according to Gustafson? Why is it different from Amdahl?</p>
+<div class="hint"><p>0.05 + 19·0.95 = 0.05 + 18.05 = <strong>18.1</strong>; efficiency 0.05/19 + 0.95 ≈ <strong>95.3%</strong>. Gustafson assumes the problem grows with the number of cores (fixed time); Amdahl keeps the problem fixed.</p></div>
+<p><strong>3.</strong> Why was it not possible to keep raising the clock frequency? Give two reasons.</p>
+<div class="hint"><p>(1) Power grows very fast with frequency (about f³): the heat cannot be removed. (2) A high-frequency clock signal is hard to generate and distribute across the chip (the waveform degrades). Lowering the voltage helped for a while but was not enough.</p></div>
+<p><strong>4.</strong> 10,000 nodes in a server farm will work together. Shared or distributed memory? Why?</p>
+<div class="hint"><p>Distributed memory: shared memory becomes a bottleneck in a single common medium (memory bus, cache coherence) and chokes at tens to hundreds of cores. In distributed memory each node has its own memory and communicates by messages; that is expensive, but with no shared bottleneck it scales very far.</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>80% of a program can be parallelised. By Amdahl, what is the maximum speedup with infinitely many processors?</p>
+  <ol>
+    <li data-why="That is α itself; the formula is 1/(1−α).">0.8</li>
+    <li data-why="1/(1 − 0.8) = 1/0.2 = 5.">5</li>
+    <li data-why="Gustafson has no bound; Amdahl does.">Unbounded</li>
+    <li data-why="1/0.8 = 1.25 mixes up the serial and parallel parts.">1.25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true for distributed-memory MIMD?</p>
+  <ol>
+    <li data-why="That is shared memory.">All processors share a common address space.</li>
+    <li data-why="It is harder to program.">It is easier to program than shared memory.</li>
+    <li data-why="NUMA is a shared-memory design.">NUMA is a distributed-memory design.</li>
+    <li data-why="True: communication by messages; with no shared medium it scales very far.">Communication is by message passing and it scales very far.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>A speedup of 12 is measured on 16 cores. What is the efficiency?</p>
+  <ol>
+    <li data-why="12/16 = 0.75.">75%</li>
+    <li data-why="16/12 is the inverse ratio.">133%</li>
+    <li data-why="Efficiency is speedup divided by the number of cores.">12%</li>
+    <li data-why="That would be linear speedup.">100%</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

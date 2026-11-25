@@ -17,15 +17,46 @@ export const NAV = [
     { id: "index", title: "Genel bakış", title_en: "Overview", desc: "Dersin konuları ve sitenin kullanımı.", desc_en: "The course topics and how to use the site." },
     { id: "glossary", title: "Sözlük", title_en: "Glossary", desc: "Dersin bütün terimleri, kısa tanımlarla; sayfalarda altı kesikli çizili terimler buraya bağlanır.", desc_en: "Every term of the course with short definitions; the dashed-underlined terms on the pages link here." },
   ] },
-  { part: "Dersler", part_en: "Lectures", short: "Lecture 1–7", items: [
-    { id: "l1-intro", title: "Paralel hesaplamaya giriş", title_en: "Introduction", lec: "L1", desc: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson.", desc_en: "Moore, power wall, Flynn, SM/DM, Amdahl, Gustafson." },
-    { id: "l2-design", title: "Paralel program tasarımı", title_en: "Parallel program design", lec: "L2", desc: "PCAM, ayrıştırma desenleri, program yapısı desenleri.", desc_en: "PCAM, decomposition patterns, program structure patterns." },
-    { id: "l3-threads", title: "Thread'ler ve senkronizasyon", title_en: "Threads and synchronization", lec: "L3", desc: "C++11 thread, mutex, semafor, atomik, monitör, future.", desc_en: "C++11 threads, mutexes, semaphores, atomics, monitors, futures." },
-    { id: "l4-cuda-intro", title: "GPU ve CUDA'ya giriş", title_en: "GPUs and CUDA", lec: "L4", desc: "SIMT, host/device, thread hiyerarşisi, warp, bellek hiyerarşisi.", desc_en: "SIMT, host/device, thread hierarchy, warps, memory hierarchy." },
-    { id: "l5-cuda-kernels", title: "Kernel, indeks, shared memory", title_en: "Kernels, indexing, shared memory", lec: "L5", desc: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul.", desc_en: "cudaMalloc/Memcpy, blockIdx/threadIdx, __syncthreads, CGMA, tiled matmul." },
-    { id: "l6-cuda-memory", title: "Derleme ve bellek türleri", title_en: "Compilation and memory types", lec: "L6", desc: "nvcc/PTX, register/shared limitleri, pitch, local, constant, texture.", desc_en: "nvcc/PTX, register/shared limits, pitch, local, constant, texture." },
-    { id: "coalescing", title: "Coalescing, transpose, unrolling", title_en: "Coalescing, transpose, unrolling", lec: "L6", desc: "Global bellek transaction'ları, naive/shared transpose, loop unrolling.", desc_en: "Global memory transactions, naive/shared transpose, loop unrolling." },
-    { id: "l7-cuda-control", title: "Hata kontrolü ve kontrol akışı", title_en: "Error checking and control flow", lec: "L7", desc: "cudaGetLastError, asenkron hatalar, divergence, predication, unrolling, signed sayaç.", desc_en: "cudaGetLastError, asynchronous errors, divergence, predication, unrolling, signed counters." },
+  { part: "Lecture 1 · Giriş", part_en: "Lecture 1 · Introduction", lecture: true, items: [
+    { id: "l1-intro", title: "Neden paralel? Makineler", title_en: "Why parallel? Machines", lec: "L1", num: "1.1" },
+    { id: "l1-performance", title: "Performans ve hızlanma", title_en: "Performance and speedup", lec: "L1", num: "1.2" },
+    { id: "l1-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L1", num: "1.3" },
+  ] },
+  { part: "Lecture 2 · Tasarım", part_en: "Lecture 2 · Design", lecture: true, items: [
+    { id: "l2-design", title: "PCAM", title_en: "PCAM", lec: "L2", num: "2.1" },
+    { id: "l2-patterns", title: "Ayrıştırma ve program desenleri", title_en: "Decomposition and program patterns", lec: "L2", num: "2.2" },
+    { id: "l2-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L2", num: "2.3" },
+  ] },
+  { part: "Lecture 3 · Thread'ler", part_en: "Lecture 3 · Threads", lecture: true, items: [
+    { id: "l3-threads", title: "Thread'ler, yarışlar, kilitler", title_en: "Threads, races, locks", lec: "L3", num: "3.1" },
+    { id: "l3-coordination", title: "Deadlock, atomikler, monitörler", title_en: "Deadlock, atomics, monitors", lec: "L3", num: "3.2" },
+    { id: "l3-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L3", num: "3.3" },
+  ] },
+  { part: "Lecture 4 · CUDA'ya giriş", part_en: "Lecture 4 · Introduction to CUDA", lecture: true, items: [
+    { id: "l4-cuda-intro", title: "GPU, SIMT ve CUDA yaklaşımı", title_en: "GPUs, SIMT and the CUDA approach", lec: "L4", num: "4.1" },
+    { id: "l4-hierarchy", title: "Thread hiyerarşisi ve bloklar", title_en: "Thread hierarchy and blocks", lec: "L4", num: "4.2" },
+    { id: "l4-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L4", num: "4.3" },
+  ] },
+  { part: "Lecture 5 · CUDA programlama", part_en: "Lecture 5 · CUDA programming", lecture: true, items: [
+    { id: "l5-cuda-kernels", title: "Döngüden kernel'e", title_en: "From loop to kernel", lec: "L5", num: "5.1" },
+    { id: "l5-indexing", title: "İndeksleme, senkronizasyon, warp'lar", title_en: "Indexing, synchronisation, warps", lec: "L5", num: "5.2" },
+    { id: "l5-tiling", title: "CGMA, bellek türleri, tiling", title_en: "CGMA, memory types, tiling", lec: "L5", num: "5.3" },
+    { id: "l5-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L5", num: "5.4" },
+  ] },
+  { part: "Lecture 6 · Derleme ve bellek", part_en: "Lecture 6 · Compilation and memory", lecture: true, items: [
+    { id: "l6-cuda-memory", title: "Derleme ve başlatma", title_en: "Compilation and initialisation", lec: "L6", num: "6.1" },
+    { id: "l6-memory-map", title: "GPU belleği: tek resim", title_en: "GPU memory: one picture", lec: "L6", num: "6.2" },
+    { id: "l6-memory-types", title: "Global, local, shared, constant", title_en: "Global, local, shared, constant", lec: "L6", num: "6.3" },
+    { id: "l6-texture", title: "Texture ve bellek özeti", title_en: "Texture and memory overview", lec: "L6", num: "6.4" },
+    { id: "l6-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L6", num: "6.5" },
+    { id: "coalescing", title: "Global bellek transaction'ları", title_en: "Global memory transactions", lec: "L6", num: "6.6" },
+    { id: "coalescing-transpose", title: "Matris transpose", title_en: "Matrix transpose", lec: "L6", num: "6.7" },
+    { id: "coalescing-review", title: "Loop unrolling, özet ve sınama", title_en: "Loop unrolling, summary and quiz", lec: "L6", num: "6.8" },
+  ] },
+  { part: "Lecture 7 · Hata kontrolü ve kontrol akışı", part_en: "Lecture 7 · Error checking and control flow", lecture: true, items: [
+    { id: "l7-cuda-control", title: "Hata kontrolü", title_en: "Error checking", lec: "L7", num: "7.1" },
+    { id: "l7-branching", title: "Dallanma ve döngüler", title_en: "Branching and loops", lec: "L7", num: "7.2" },
+    { id: "l7-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L7", num: "7.3" },
   ] },
   { part: "Uygulama", part_en: "Practice", items: [
     { id: "lab", title: "İndeks ve coalescing lab", title_en: "Index & coalescing lab", desc: "Hangi thread hangi elemana dokunur? Kaç transaction?", desc_en: "Which thread touches which element? How many transactions?" },
@@ -113,7 +144,7 @@ function buildSidebar(current) {
     const sec = h("div", { class: "nav-part" }, h("div", { class: "nav-part-title" }, h("span", {}, tx(part, "part")), part.short ? h("span", {}, tx(part, "short")) : null));
     const ol = h("ol");
     for (const it of part.items) {
-      const a = h("a", { href: href(it.id) }, h("span", {}, tx(it, "title")), it.lec ? h("span", { class: "nav-book" }, it.lec) : null);
+      const a = h("a", { href: href(it.id) }, h("span", {}, tx(it, "title")), it.num || it.lec ? h("span", { class: "nav-book" }, it.num || it.lec) : null);
       if (it.id === current) a.setAttribute("aria-current", "page");
       ol.append(h("li", {}, a));
     }
@@ -297,7 +328,6 @@ function buildPageNav(content, id) {
     if (hd.tagName === "H2") tree.push({ hd, subs: [] });
     else if (tree.length) tree[tree.length - 1].subs.push(hd);
   }
-  if (tree.length < 3) return;
   const used = new Set($$("[id]").map((e) => e.id));
   for (const hd of all) {
     if (hd.id) continue;
@@ -307,9 +337,10 @@ function buildPageNav(content, id) {
     hd.id = s;
     used.add(s);
   }
+  if (all.length < 2) return;
   const link = (hd, cls) => h("a", { href: `#${hd.id}`, class: cls || null, "data-target": hd.id }, tocText(hd));
 
-  if (id !== "index" && !$(".page-toc", content)) {
+  if (id !== "index" && tree.length >= 3 && !$(".page-toc", content)) {
     const toc = h("nav", { class: "page-toc", "aria-label": tl("Bu sayfada", "On this page") }, h("div", { class: "page-toc-title" }, tl("Bu sayfada", "On this page")),
       h("ol", {}, ...tree.map((t) => h("li", {}, link(t.hd)))));
     ($(":scope > .lead", content) || $(":scope > h1", content)).after(toc);

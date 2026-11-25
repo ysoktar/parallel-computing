@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coalescing, transpose, unrolling · Parallel Computing</title>
+<title>Global memory transactions · Lecture 6 · Coalescing · Parallel Computing</title>
 <meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing">
 <main><div class="content">
 
-<h1>Coalescing, transpose, unrolling</h1>
+<h1>Global memory transactions</h1>
 <p class="lead">The 32 threads of a warp go to global memory at the same time. If their addresses are next to each other, the hardware serves them all with one large read; if they are scattered, it reads again and again for the same data. This is the most important performance topic of midterm 2.</p>
 
 <div class="callout goals">
@@ -113,201 +113,6 @@ cudaMemcpy2D(devPtr, devPitch,            // destination and its pitch (GPU)
              cudaMemcpyHostToDevice);
 </pre>
 <p>Pitch examples (256 B alignment): width 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
-
-<h2 id="matrix-transpose" data-toc="Matrix transpose">Matrix transpose <span class="badge-class">class</span></h2>
-<p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>
-
-<h3>Set-up: 32×32 tile, 32×8 threads</h3>
-<ul>
-  <li><code>TILE_DIM = 32</code>, <code>BLOCK_ROWS = 8</code>. Each block processes one <strong>32×32 tile</strong> of the matrix but has <strong>32×8 = 256 threads</strong>.</li>
-  <li>So each thread processes <strong>4 elements</strong> of the tile (32/8): rows <code>y, y+8, y+16, y+24</code>. The loop runs over the second index (row), so consecutive threads of a warp still go to consecutive addresses. Benefit: the cost of the index calculation is shared by 4 elements.</li>
-  <li>Grid for an N×N matrix: <code>dim3(N/32, N/32)</code>, block: <code>dim3(TILE_DIM, BLOCK_ROWS) = dim3(32, 8)</code>.</li>
-</ul>
-
-<h3>1) Reference: copy</h3>
-<pre class="code" data-run="transpose.cu" data-title="copy: the speed the transpose aims for (same accesses, no swapping)">
-const int TILE_DIM = 32;
-const int BLOCK_ROWS = 8;
-
-__global__ void copy(float* odata, const float* idata)
-{
-    int x = blockIdx.x * TILE_DIM + threadIdx.x;
-    int y = blockIdx.y * TILE_DIM + threadIdx.y;   // with TILE_DIM, not blockDim.y!
-    int width = gridDim.x * TILE_DIM;
-    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-        odata[(y + j) * width + x] = idata[(y + j) * width + x];
-}
-// dim3 grid(N / TILE_DIM, N / TILE_DIM), block(TILE_DIM, BLOCK_ROWS);
-</pre>
-<p>Both read and write are coalesced: one warp = 32 consecutive floats of a row = 128 B. However fast a transpose is, it cannot beat this kernel; it is the "ceiling" for measurements.</p>
-<div class="callout class">
-  <p>The same idea as the instructor's advice: <strong>first write a copy kernel that does no computation</strong>, check that the output equals the input (and its speed); then add the real operation. For the shared-memory version, too, first write <code>copySharedMem</code> (global → shared → global, same place) and verify the indices.</p>
-</div>
-
-<h3>2) Naive transpose</h3>
-<pre class="code" data-run="transpose.cu" data-title="transposeNaive: the only difference is x and y swapped in the write index">
-__global__ void transposeNaive(float* odata, const float* idata)
-{
-    int x = blockIdx.x * TILE_DIM + threadIdx.x;
-    int y = blockIdx.y * TILE_DIM + threadIdx.y;
-    int width = gridDim.x * TILE_DIM;
-    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-        odata[x * width + (y + j)] = idata[(y + j) * width + x];
-}
-</pre>
-<ul>
-  <li><strong>Read</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> on the right, no multiplier → the warp reads one 128 B line ✓.</li>
-  <li><strong>Write</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> multiplied by <code>width</code> → consecutive threads are <code>width</code> elements apart. In a 1024×1024 matrix the stride is 1024 floats = <strong>4096 B</strong> → the warp's 32 writes hit 32 separate segments. <strong>Not</strong> coalesced.</li>
-  <li>The <code>a[i*1024]</code> example in the lab is exactly this write.</li>
-</ul>
-
-<h3>Apply: from rows and columns in A to B</h3>
-<div data-learning="transpose"></div>
-<h3>3) Coalesced transpose with shared memory</h3>
-<p>Idea: read the tile from global memory <strong>row by row</strong> (coalesced) into shared memory; do the swapping inside shared memory (scattered access is cheap there); then write a <strong>column</strong> of the tile as a <strong>row</strong> of the output (coalesced). The block also has to write to the transposed place.</p>
-<pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">
-__global__ void transposeCoalesced(float* odata, const float* idata)
-{
-    __shared__ float tile[TILE_DIM][TILE_DIM];
-
-    int x = blockIdx.x * TILE_DIM + threadIdx.x;
-    int y = blockIdx.y * TILE_DIM + threadIdx.y;
-    int width = gridDim.x * TILE_DIM;
-
-    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-        tile[threadIdx.y + j][threadIdx.x] = idata[(y + j) * width + x];   // coalesced read
-
-    __syncthreads();   // threads will write DIFFERENT elements than they read: the tile must be full
-
-    x = blockIdx.y * TILE_DIM + threadIdx.x;   // transposed block position: bx ↔ by
-    y = blockIdx.x * TILE_DIM + threadIdx.y;
-
-    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-        odata[(y + j) * width + x] = tile[threadIdx.x][threadIdx.y + j];   // coalesced write
-}
-</pre>
-<div class="callout example">
-  <p><strong>Index trace</strong> (N = 1024, grid 32×32, block 32×8): <code>blockIdx = (1, 2)</code>, <code>threadIdx = (5, 3)</code>.</p>
-  <ul>
-    <li>Load: <code>x = 1·32 + 5 = 37</code>, <code>y = 2·32 + 3 = 67</code>. For j = 0, 8, 16, 24 it reads rows 67, 75, 83, 91 / column 37 of <code>idata</code> into <code>tile[3][5], tile[11][5], tile[19][5], tile[27][5]</code>. This block loads the input tile rows 64–95, columns 32–63.</li>
-    <li>Store: <code>x = 2·32 + 5 = 69</code>, <code>y = 1·32 + 3 = 35</code>. It writes <code>tile[5][3], tile[5][11], tile[5][19], tile[5][27]</code> into rows 35, 43, 51, 59 / column 69 of <code>odata</code>. Check: <code>tile[5][3]</code> = input (row 64+5, column 32+3) = <code>idata[69][35]</code> → <code>odata[35][69]</code> ✓.</li>
-    <li>Consecutive threads of a warp (<code>threadIdx.x</code> = 0..31) go to consecutive global addresses both when reading and when writing; the scattered part (<code>tile[threadIdx.x][…]</code>, reading a column) is in shared memory.</li>
-  </ul>
-</div>
-<div class="callout gotcha">
-  <p>The <code>__syncthreads()</code> here is mandatory: the <code>tile[threadIdx.x][threadIdx.y+j]</code> a thread writes out was loaded by another thread (even another warp). In <code>copySharedMem</code>, which only copies, each thread writes what it loaded itself, so the barrier is technically unnecessary (the article includes it only for comparison); the measurements show the barrier is not the bottleneck.</p>
-</div>
-
-<h3>4) The version without bank conflicts</h3>
-<p>In a 32×32 tile the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank. The store phase reads a column (<code>tile[threadIdx.x][threadIdx.y + j]</code>): the 32 threads of the warp want different words from the same bank → a <strong>32-way bank conflict</strong>. The fix is one line, making each row one element longer:</p>
-<pre class="code" data-run="transpose.cu">
-__shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: all different along a column
-</pre>
-<p>The detailed bank calculation and a visualisation: <a href="l6-cuda-memory.html#banks-and-bank-conflicts">L6, banks</a>.</p>
-
-<h3>Measurements (NVIDIA article, GB/s)</h3>
-<table class="simple">
-  <thead><tr><th>Kernel</th><th>Tesla M2050</th><th>Tesla K20c</th></tr></thead>
-  <tbody>
-    <tr><td>copy</td><td>105.2</td><td>136.0</td></tr>
-    <tr><td>copySharedMem</td><td>104.6</td><td>152.3</td></tr>
-    <tr><td>transposeNaive</td><td><strong>18.8</strong></td><td>55.3</td></tr>
-    <tr><td>transposeCoalesced</td><td>51.3</td><td>97.6</td></tr>
-    <tr><td>transposeNoBankConflicts</td><td>99.5</td><td>144.3</td></tr>
-  </tbody>
-</table>
-<p>Effective bandwidth = 2 × matrix size (one read + one write) / time. Conclusion: <strong>coalescing global memory is the most critical factor</strong>; the cost of shared memory and synchronisation is much smaller.</p>
-
-<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
-<p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
-<div class="two-col">
-<pre class="code" data-run="unroll.cu" data-title="Normal">
-float sum = 0;
-for (int k = 0; k < 16; ++k)
-    sum += Mds[ty][k] * Nds[k][tx];
-// 16 iterations × (multiply-add + k++ + k<16 + branch)
-</pre>
-<pre class="code" data-run="unroll.cu" data-title="Unrolled 4 times by hand">
-float sum = 0;
-for (int k = 0; k < 16; k += 4) {
-    sum += Mds[ty][k]     * Nds[k][tx];
-    sum += Mds[ty][k + 1] * Nds[k + 1][tx];
-    sum += Mds[ty][k + 2] * Nds[k + 2][tx];
-    sum += Mds[ty][k + 3] * Nds[k + 3][tx];
-}
-// 4 iterations: loop control cut 4 times
-</pre>
-</div>
-<pre class="code" data-run="unroll.cu" data-title="Letting the compiler do it">
-#pragma unroll                 // fully unrolls if the trip count is known at compile time
-for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH is a #define / const → constant
-    sum += Mds[ty][k] * Nds[k][tx];
-
-#pragma unroll 4               // unroll 4 times
-for (int i = 0; i < n; ++i) a[i] *= s;
-
-#pragma unroll 1               // do not unroll
-for (int i = 0; i < n; ++i) a[i] += 1;
-</pre>
-<ul>
-  <li><strong>Gain:</strong> fewer loop-control instructions; when fully unrolled the indices become constants (<code>Mds[ty][3]</code>) and address arithmetic is done at compile time; independent loads can be issued back to back, hiding latency.</li>
-  <li><strong>Cost:</strong> the code grows; more variables are live at the same time → <strong>register usage increases</strong> → if the per-thread register limit is exceeded, register spill (local memory) or fewer threads per SM (lower occupancy).</li>
-  <li>If the trip count is constant (the transpose's <code>j</code> loop: <code>TILE_DIM/BLOCK_ROWS = 4</code> iterations; tiled matmul's <code>k</code> loop: <code>TILE_WIDTH</code> iterations) the compiler usually unrolls it anyway. If the trip count is only known at run time (<code>width/TILE_WIDTH</code>) it cannot be fully unrolled.</li>
-  <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
-</ul>
-
-<h2>Summary</h2>
-<ul>
-  <li>A warp's accesses are gathered into 32/64/128-byte segments aligned to their size; the fewer the segments, the better.</li>
-  <li>Check: is <code>threadIdx.x</code> without a multiplier and rightmost in the address? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
-  <li>For 2D arrays, <code>cudaMallocPitch</code> so that row starts are aligned; the pitch is in bytes.</li>
-  <li>Transpose: in the naive version the write is ✗; with a shared memory tile read and write are ✓; <code>[32][33]</code> padding removes bank conflicts.</li>
-  <li>Loop unrolling: reduces loop control, increases ILP; the price is registers.</li>
-</ul>
-<h3>Open-ended questions for the final</h3>
-<p><strong>1.</strong> A warp reads <code>a[threadIdx.x * 2 + 1]</code> from a <code>float</code> array (128 B aligned). How many 32 B segments are moved, and what is the efficiency?</p>
-<div class="hint"><p>Addresses 4, 12, 20, …, 252 (bytes): all 8 segments of the range 0–255 are touched → 8 · 32 = 256 B moved, 128 B used: <strong>50%</strong>.</p></div>
-<p><strong>2.</strong> In the shared-memory transpose, why are both the global read and the global write coalesced? Which access stays scattered, and why is that not a problem?</p>
-<div class="hint"><p>In both the read and the write, <code>threadIdx.x</code> is rightmost in the global address (consecutive along a row). The swapping is done inside shared memory: <code>tile[threadIdx.x][…]</code> reads a column, so the scattered access is in <strong>shared</strong> memory. Shared memory is on-chip and fast, so this is cheap; its only cost is bank conflicts, which <code>[32][33]</code> padding removes.</p></div>
-
-<h2>Check yourself</h2>
-<div class="quiz" data-answer="2">
-  <p>A warp reads <code>a[3*threadIdx.x]</code> from a 128 B-aligned <code>float</code> array. How many 32 B segments are touched?</p>
-  <ol>
-    <li data-why="Consecutive would give 4; with stride 3 it spreads over 384 B.">4</li>
-    <li data-why="Addresses 0, 12, 24, …, 372: all 12 segments of the range 0–383 are touched.">12</li>
-    <li data-why="With stride 3 there are ~2.7 threads per segment; each thread is not a separate segment.">32</li>
-    <li data-why="That is the number of 128 B lines; the question asks about 32 B segments.">3</li>
-  </ol>
-  <div class="explain">Moved 12·32 = 384 B, used 128 B → efficiency 1/3.</div>
-</div>
-<div class="quiz" data-answer="3">
-  <p>Why are the transpose kernels' blocks 32×8 threads rather than 32×32?</p>
-  <ol>
-    <li data-why="32×32 = 1024 threads is allowed on today's GPUs; that is not the reason.">A 32×32 block cannot be launched.</li>
-    <li data-why="Unrelated to bank conflicts; padding fixes those.">To avoid bank conflicts.</li>
-    <li data-why="True: each thread processes 4 elements; the index calculation is shared, and coalescing is kept because the loop runs along rows.">So that each thread processes 4 elements of the tile and the index calculation cost is shared.</li>
-    <li data-why="The tile is still 32×32; same shared memory.">To save shared memory.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="1">
-  <p>Why does <code>transposeCoalesced</code> use <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> in the store phase?</p>
-  <ol>
-    <li data-why="True: tile (bx, by) goes to position (by, bx) in the output.">Tile (bx, by) of the input must be written to the transposed position (by, bx) of the output.</li>
-    <li data-why="Padding fixes bank conflicts; this index change decides where the tile goes.">To reduce bank conflicts.</li>
-    <li data-why="threadIdx.x stays on the right, so the write is coalesced; but the question is about the block offset.">To make the read coalesced.</li>
-    <li data-why="Not a typo; without it each tile would be transposed in place and the matrix would be wrong.">A typo; it should be blockIdx.x.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="4">
-  <p>Which is true about <code>#pragma unroll</code>?</p>
-  <ol>
-    <li data-why="Unrolling does not distribute a serial loop over threads; it copies it within the same thread.">It distributes the loop iterations over different threads.</li>
-    <li data-why="Register usage usually increases.">It reduces register usage.</li>
-    <li data-why="The result does not change (same operations, same order).">It may change the result, be careful.</li>
-    <li data-why="True: with a constant trip count the body is copied completely and the control instructions disappear.">It can fully unroll a loop whose trip count is constant at compile time.</li>
-  </ol>
-</div>
 
 </div></main>
 </body>

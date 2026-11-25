@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texture ve bellek özeti · Lecture 6 · Derleme ve bellek · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 6: runtime ve driver API, nvcc ile derleme (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), başlatma ve zaman ölçümü, register/shared sınırları, local, shared, constant ve texture bellek.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="l6-texture">
+<main><div class="content">
+
+<h1>Texture ve bellek özeti</h1>
+
+<h2>Texture memory</h2>
+<div class="callout key"><p><strong>Texture ne zaman?</strong> Erişim deseni düzensiz ama 2D'de yerel olduğunda (görüntü döndürme, ölçekleme, çarpıtma: komşu pikseller birlikte okunur), koordinatlar kesirli olduğunda (bilineer interpolasyon bedava) ve sınır dışı okumaların otomatik ele alınması istendiğinde (clamp/border/wrap/mirror). Bedel: veriyi bir CUDA array'e kopyalamak ve salt okunurluk.</p></div>
+
+<ul>
+  <li>GPU'nun grafik için kullandığı texture donanımının bir alt kümesi. Texture <strong>salt okunur</strong>; surface yazılabilen texture gibidir.</li>
+  <li>Cihaz belleğinde durur, <strong>texture cache</strong>'te önbelleklenir: fetch sadece cache miss'te bir cihaz belleği okumasına mal olur. Cache <strong>2D uzamsal yerellik</strong> için optimize: 2D'de birbirine yakın adresleri okuyan warp en iyi performansı alır. Sabit gecikmeli akış için tasarlanmıştır: hit DRAM trafiğini azaltır, gecikmeyi değil.</li>
+  <li>Faydalar: global/constant'ın erişim desenine uymayan ama yerelliği olan okumalarda daha yüksek bant genişliği; adres hesapları kernel dışında özel birimlerde (daha az register); paketlenmiş verinin tek işlemde ayrı değişkenlere dağıtılması; 8/16-bit tamsayıların isteğe bağlı olarak [0, 1] / [-1, 1] aralığında float'a çevrilmesi; ücretsiz doğrusal filtreleme ve sınır dışı işleme.</li>
+  <li>Dezavantajlar: yazılamaz; doğrusal belleği texturing için bir <strong>CUDA array</strong>'e kopyalamak gerekir ve bu zaman alır: sonraki hesap buna değmeli.</li>
+</ul>
+<h3>Texture object</h3>
+<p>Texture'dan okumaya <strong>texture fetch</strong> denir; her fetch bir <strong>texture object</strong> alır. Texture object şunları belirtir:</p>
+<table class="simple">
+  <thead><tr><th>Özellik</th><th>Seçenekler</th></tr></thead>
+  <tbody>
+    <tr><td>Texture</td><td>Fetch edilen texture bellek parçası (<code>cudaResourceDesc</code>).</td></tr>
+    <tr><td>Boyut</td><td>1D, 2D, 3D (1/2/3 koordinat); elemanlara <strong>texel</strong> denir.</td></tr>
+    <tr><td>Texel tipi</td><td>Temel tamsayı ve kayan nokta tipleri; char/short/int/long/longlong/float/double'dan 1-, 2-, 4-bileşenli vektörler.</td></tr>
+    <tr><td>Okuma modu</td><td><code>cudaReadModeElementType</code> (dönüşüm yok) / <code>cudaReadModeNormalizedFloat</code> (8/16-bit tamsayı → işaretsizse [0, 1], işaretliyse [-1, 1]).</td></tr>
+    <tr><td>Koordinatlar</td><td>Varsayılan [0, N-1]; normalize edilmişse [0, 1-1/N] (64×32 texture: [0,63]×[0,31] yerine iki yönde de [0, 1)). Boyuttan bağımsız koordinat isteyen uygulamalar için.</td></tr>
+    <tr><td>Adresleme modu (sınır dışı)</td><td><code>cudaAddressModeClamp</code> (varsayılan; kenar pikselini tekrarla), <code>Border</code> (sıfır), <code>Wrap</code> (sar), <code>Mirror</code> (ayna). Wrap ve mirror sadece normalize koordinatlarla. Her koordinat için ayrı (3 elemanlı dizi).</td></tr>
+    <tr><td>Filtreleme</td><td><code>cudaFilterModePoint</code> (en yakın texel) / <code>cudaFilterModeLinear</code> (1D'de 2, 2D'de 4, 3D'de 8 texel'in doğrusal/bilineer/trilineer interpolasyonu; sadece float dönüşte, düşük hassasiyetli).</td></tr>
+  </tbody>
+</table>
+<p><strong>CUDA array:</strong> texture fetch için optimize edilmiş, <strong>opak</strong> (değerlere doğrudan erişilemez) 1D/2D/3D bellek düzeni; 1, 2 veya 4 bileşenli elemanlar (8/16/32-bit tamsayı, 16/32-bit float). Kernel'ler sadece texture fetch (okuma) veya surface okuma/yazma ile erişir.</p>
+<pre class="code" data-run="texrotate.cu" data-title="texRotate.cu (ders örneği): texture ile görüntü döndürme, özet">
+// Host: 1) CUDA array ayır  2) veriyi kopyala  3) resDesc  4) texDesc  5) texture object oluştur
+cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+cudaArray_t cuArray;
+cudaMallocArray(&cuArray, &ch, width, height);
+cudaMemcpy2DToArray(cuArray, 0, 0, img, width * sizeof(float), width * sizeof(float), height,
+                    cudaMemcpyHostToDevice);
+
+cudaResourceDesc resDesc = {};  resDesc.resType = cudaResourceTypeArray;  resDesc.res.array.array = cuArray;
+cudaTextureDesc texDesc = {};
+texDesc.addressMode[0] = cudaAddressModeWrap;   texDesc.addressMode[1] = cudaAddressModeWrap;
+texDesc.filterMode = cudaFilterModeLinear;      // bilineer interpolasyon bedava
+texDesc.readMode = cudaReadModeElementType;
+texDesc.normalizedCoords = 1;                   // koordinatlar [0, 1)
+cudaTextureObject_t texObj = 0;
+cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
+
+// Device: normalize koordinatı merkez etrafında θ kadar döndür, texture'dan oku
+__global__ void transformKernel(float* output, cudaTextureObject_t texObj, int width, int height, float theta) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x < width && y < height) {
+        float u = x / (float)width - 0.5f, v = y / (float)height - 0.5f;
+        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
+        float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
+        output[y * width + x] = tex2D<float>(texObj, tu, tv);
+    }
+}
+// dim3 block(16, 16); dim3 grid((width + 15) / 16, (height + 15) / 16);
+</pre>
+<p>Device tarafında okuma: doğrusal bellek texture'ları <code>tex1Dfetch()</code>, array texture'ları <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Yönetim fonksiyonları: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. Eski <em>texture reference API</em>'de tip, boyut ve okuma modu derleme zamanında sabit; normalize, filtre ve adres modu çalışma zamanında değiştirilebilir (sadece CUDA array texture'ları).</p>
+
+<h2>Bellek özeti</h2>
+<table class="simple">
+  <thead><tr><th>Bellek</th><th>Kapsam</th><th>Bir okumanın gecikmesi (saat çevrimi)</th><th>Not</th></tr></thead>
+  <tbody>
+    <tr><td>Register</td><td>Thread</td><td>≈ 1 (çok hızlı)</td><td>Sınırlı; aşılırsa spill.</td></tr>
+    <tr><td>Shared</td><td>Blok</td><td>birkaç (conflict yoksa)</td><td>On-chip; senkronizasyon gerekir.</td></tr>
+    <tr><td>Local</td><td>Thread</td><td>400–600</td><td>Aslında global bellek.</td></tr>
+    <tr><td>Global</td><td>Kernel (grid)</td><td>400–600</td><td>Her zaman L2'de önbelleklenir; coalescing şart.</td></tr>
+    <tr><td>Constant</td><td>Kernel</td><td>400–600 (önbellekte varsa çok daha az)</td><td>Constant cache; aynı adres → yayın.</td></tr>
+    <tr><td>Texture (surface)</td><td>Kernel</td><td>400–600 (önbellekte varsa daha az)</td><td>Texture cache, 2D için optimize.</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Okumaların hem birleşik L1/texture cache'te hem L2'de mi, yoksa sadece L2'de mi önbelleklendiği load komutunun niteleyicileriyle kısmen ayarlanabilir. Pointer'ları <strong><code>const</code> ve <code>__restrict__</code></strong> ile işaretlemek derleyicinin salt-okunur durumu fark etme ihtimalini artırır.</li>
+  <li>Shared memory'yi açıkça kullanmadığınız sürece verinizin önbelleğe alınacağını ya da hangi önbelleğin kullanılacağını <strong>asla varsaymayın</strong>.</li>
+</ul>
+
+</div></main>
+</body>
+</html>

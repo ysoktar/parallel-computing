@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 7 · Hata kontrolü ve kontrol akışı · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 7: CUDA hata kontrolü (cudaGetLastError, cudaPeekAtLastError, asenkron hatalar), branching ve divergence, branch predication ve prediction, pipelining, loop unrolling, signed ve unsigned döngü sayaçları.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="l7-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>Runtime çağrıları <code>cudaError_t</code> döndürür; kernel başlatma döndürmez. Asenkron hatalar sonraki bir çağrıda (ya da <code>cudaDeviceSynchronize()</code>'da) görünür.</li>
+  <li><code>cudaPeekAtLastError()</code> okur, <code>cudaGetLastError()</code> okur ve sıfırlar. Desen: önce temizle, başlat, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
+  <li>Divergence: bir warp içinde farklı yollar seri çalışır (tek program sayacı). Koşulu <code>threadIdx / 32</code>'ye hizalamak divergence'ı önler.</li>
+  <li>Predication (GPU): komutlar atlanmaz, thread başına predicate ile maskelenir. Prediction (CPU): dal tahmini + spekülatif yürütme.</li>
+  <li><code>#pragma unroll N</code> döngüyü N kez açar (artan turlar için kod eklenir); <code>1</code> açmaz; sayısız: sabit sayıda tam açar.</li>
+  <li>Döngü sayaçlarını <code>int</code> yapın: signed taşma tanımsız olduğu için derleyici daha çok optimize eder.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>"Kernel başlatma hata döndürmedi, demek ki çalıştı" sanmak: başlatma hiçbir zaman hata döndürmez, çalışma hatası sonradan gelir.</li>
+  <li><code>cudaGetLastError()</code>'ı iki kez çağırıp ikincisinde de hatayı beklemek: ilk çağrı sıfırlar.</li>
+  <li>Predication ile prediction'ı karıştırmak, ya da farklı warp'ların farklı dallarını divergence saymak.</li>
+  <li><code>#pragma unroll</code>'u döngüden birkaç satır önce yazmak: hemen önünde olmalı.</li>
+</ul>
+<h3>Quiz için açık uçlu sorular</h3>
+<p><strong>1.</strong> Hata kontrolü olmayan <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code> çağrısını tamamlayın. Peek ve Get farkı nedir?</p>
+<div class="hint"><p>Önce önceki hataları temizle/kontrol et (<code>cudaGetLastError()</code>), başlat, <code>cudaError_t launch = cudaGetLastError();</code> (konfigürasyon/parametre hatası), sonra <code>cudaError_t run = cudaDeviceSynchronize();</code> (yürütme hatası); ikisi de <code>cudaSuccess</code> değilse raporla ve dur. Get okur ve sıfırlar, Peek sıfırlamaz.</p></div>
+<p><strong>2.</strong> 128 thread'lik 1D blokta <code>if (threadIdx.x &lt; 40)</code> ve <code>if (threadIdx.x % 4 == 0)</code> için kaç warp diverge olur?</p>
+<div class="hint"><p><code>&lt; 40</code>: warp 0 hep true, warp 1 (32–63) karışık, warp 2–3 hep false → <strong>1</strong>. <code>% 4 == 0</code>: her warp'ta 8 true, 24 false → <strong>4</strong> (hepsi).</p></div>
+<p><strong>3.</strong> Predication prediction'dan nasıl farklıdır? <code>#pragma unroll 4</code> neden her zaman daha hızlı değildir?</p>
+<div class="hint"><p>Prediction (CPU) dalı tahmin edip spekülatif yürütür, yanlışsa geri alır. Predication (GPU) komutları atlamaz; thread başına predicate ile maskeler, false olanlar sonuç yazmaz ve operand okumaz. Unrolling döngü kontrolünü azaltır ama kod boyutunu ve register kullanımını artırır; register spill ya da düşük occupancy kazancı silebilir.</p></div>
+<p><strong>4.</strong> Bir kernel <code>cudaMemcpy</code> çağrısında "illegal memory access" hatası verdi ama <code>cudaMemcpy</code>'nin parametreleri doğru. Neden?</p>
+<div class="hint"><p>Hata büyük ihtimalle önceki <strong>kernel'de</strong> oluştu (asenkron). Kernel başlatma hata döndürmez; hata bir sonraki ilgisiz çağrıda, burada <code>cudaMemcpy</code>'de raporlandı. Kernel'den hemen sonra <code>cudaDeviceSynchronize()</code>'ın dönüşünü kontrol etmek hatayı doğru yerde gösterir.</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p>Kernel başlatmasından hemen sonra <code>cudaGetLastError()</code> hangi hatayı yakalar?</p>
+  <ol>
+    <li data-why="Yürütme sırasındaki hatalar için senkronizasyon gerekir.">Kernel içindeki sınır dışı erişimi.</li>
+    <li data-why="Get sıfırlar; ama asıl soru hangi tür hatayı yakaladığı.">Hiçbir hatayı; kernel başlatması hata üretmez.</li>
+    <li data-why="Doğru: blok başına 2048 thread gibi başlatma öncesi (konfigürasyon/parametre) hataları.">Geçersiz konfigürasyon gibi başlatma öncesi hataları.</li>
+    <li data-why="Gelecekte olacak hataları hiçbir çağrı bilemez.">Sonraki <code>cudaMemcpy</code>'nin hatalarını.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>cudaPeekAtLastError()</code> ile <code>cudaGetLastError()</code> arasındaki fark?</p>
+  <ol>
+    <li data-why="İkisi de aynı host-thread başına hata değişkenini okur.">Peek cihazdaki, Get host'taki hatayı okur.</li>
+    <li data-why="Doğru: Peek sadece okur, Get okur ve cudaSuccess'a sıfırlar.">Peek değişkeni sıfırlamaz, Get sıfırlar.</li>
+    <li data-why="İkisi de bloklamaz; senkronize olmak için cudaDeviceSynchronize gerekir.">Peek senkronize olur, Get olmaz.</li>
+    <li data-why="Fark var: sıfırlama.">Fark yoktur.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU'nun branch predication'ı için hangisi doğru?</p>
+  <ol>
+    <li data-why="Bu CPU'nun branch prediction'ı.">Dalın sonucunu tahmin edip spekülatif yürütür.</li>
+    <li data-why="Komutlar atlanmaz, hepsi zamanlanır.">Koşul false olan thread'lerin komutları atlanır.</li>
+    <li data-why="False predicate'li komutlar operand okumaz, sonuç yazmaz.">False predicate'li komutlar operand okur ama sonuç yazmaz.</li>
+    <li data-why="Doğru: her komut thread başına bir predicate taşır, sadece true olanlar etkili olur.">Her komut thread başına bir predicate ile ilişkilendirilir; sadece true olanlar yürütülür.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Sayı verilmemiş <code>#pragma unroll</code> neyi yapar?</p>
+  <ol>
+    <li data-why="Doğru: sabit sayıda tam açar, değilse hiç açmaz.">Döngü sayısı sabitse tamamen açar, değilse hiç açmaz.</li>
+    <li data-why="Varsayılan 4 diye bir kural yok.">Döngüyü 4 kez açar.</li>
+    <li data-why="Bu #pragma unroll 1.">Döngünün açılmasını engeller.</li>
+    <li data-why="Pragma sadece hemen arkasındaki döngüye uygulanır.">Dosyadaki tüm döngüleri açar.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

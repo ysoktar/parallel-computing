@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 3 · Thread'ler · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 3: thread nedir, C++11 thread, data race ve race condition, lock/mutex/semafor, tutarlılık modelleri, deadlock/livelock/starvation, producer-consumer, atomikler, CAS ve LL/SC, bellek sıralaması, monitör ve condition variable, future/packaged_task, thread havuzu, fiber.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l3-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>Thread'ler process'in adres uzayını paylaşır: iletişim ucuz, ama paylaşılan veriye erişim senkronize edilmeli.</li>
+  <li><strong>Data race</strong>: en az biri yazan eş zamanlı erişim (C++'ta tanımsız davranış). <strong>Race condition</strong>: sıralama yüzünden yanlış sonuç.</li>
+  <li>Oku-değiştir-yaz bölünmez olmalı: mutex ya da atomik.</li>
+  <li>Mutex = tek thread + sahiplik; semafor = N thread, sayaç; condition variable = bir koşulu kilidi bırakarak beklemek.</li>
+  <li>Deadlock (kimse ilerlemez, CPU boşta), livelock (kimse ilerlemez, CPU meşgul), starvation (biri hiç sıra alamaz).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (boş yer), <code>resAvail</code> (dolu yer) semaforları + indeksleri koruyan mutex.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) ve LL/SC: atomiklerin ve kilitsiz yapıların donanım temeli.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Sadece yazan tarafı kilitleyip okuyan tarafı kilitlememek: okuma da yazmayla yarışır.</li>
+  <li>Condition variable'da <code>if</code> ile beklemek: uyanınca koşul tekrar kontrol edilmeli (<code>while</code> ya da <code>wait(lock, predicate)</code>).</li>
+  <li>Producer-consumer'da semafor ve mutex sırasını ters çevirmek: önce mutex'i alıp sonra dolu tampon için semafor beklemek deadlock'a yol açar (mutex'i tutan uyur, tüketici mutex'i alamaz).</li>
+  <li>"x86'da 8 bayt atomik" diye kilitsiz yazmak: derleyici ve tipler buna güvenmeyi yanlış yapar.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 4 thread her biri 1000 kez korumasız <code>counter++</code> yapıyor. Son değer en az kaç, en çok kaç olabilir? Neden 4000'den az çıkar?</p>
+<div class="hint"><p>En çok 4000 (hiç çakışma olmazsa). Pratikte daha az çünkü oku-ekle-yaz adımları iç içe geçer ve güncellemeler kaybolur (yukarıdaki tablo). Teorik alt sınır çok küçüktür (kötü bir sıralamayla 2'ye kadar inebilir); sınavda önemli olan nedenini açıklamaktır: güncellemeler kaybolur, sonuç belirsizdir.</p></div>
+<p><strong>2.</strong> Producer-consumer'da tüketici şu sırayla yazılmış: <code>l.acquire(); resAvail.acquire(); …</code>. Ne olur?</p>
+<div class="hint"><p>Tampon boşken tüketici mutex'i alır, sonra <code>resAvail</code>'de uyur, <strong>mutex'i tutarak</strong>. Üretici öğe koymak için mutex'i alamaz → kimse ilerleyemez: <strong>deadlock</strong>. Doğrusu önce semafor, sonra mutex.</p></div>
+<p><strong>3.</strong> Bir web sunucusu aynı anda en fazla 8 veritabanı bağlantısı açabiliyor. Hangi senkronizasyon aracını kullanırsınız? Kodun iskeletini yazın.</p>
+<div class="hint"><p>Başlangıç değeri 8 olan bir <strong>counting semafor</strong>: her istek <code>sem.acquire();</code> ile bağlantı alır, işi bitince <code>sem.release();</code>. 9. istek bir bağlantı boşalana kadar bekler.</p></div>
+<p><strong>4.</strong> Deadlock ile livelock'u CPU kullanımı açısından karşılaştırın ve birer gerçek hayat örneği verin.</p>
+<div class="hint"><p>Deadlock: thread'ler birbirinin kaynağını bekleyerek uyur, CPU kullanımı <strong>düşük</strong> (iki araba dar köprüde karşı karşıya, ikisi de geri çekilmiyor). Livelock: thread'ler bloklu değil, birbirine tepki vermekle meşgul, CPU kullanımı <strong>yüksek</strong> ama ilerleme yok (koridorda aynı yöne kaçan iki kişi).</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>İki thread aynı <code>int</code>'i sadece okuyor. Bu bir data race midir?</p>
+  <ol>
+    <li data-why="Data race için en az bir yazma gerekir.">Evet, eş zamanlı erişim her zaman data race'tir.</li>
+    <li data-why="Doğru: sadece okuma varsa sorun yok.">Hayır, en az bir thread yazmadıkça data race yoktur.</li>
+    <li data-why="Hizalama bunu değiştirmez.">Sadece değişken hizasızsa.</li>
+    <li data-why="Atomik gerekmez; yazma yok.">Sadece atomik değilse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Thread'ler ilerleyemiyor ama CPU kullanımı yüksek. Hangisi?</p>
+  <ol>
+    <li data-why="Deadlock'ta thread'ler bekler/uyur; CPU düşük.">Deadlock</li>
+    <li data-why="Starvation'da diğer thread'ler ilerler.">Starvation</li>
+    <li data-why="Doğru: livelock'ta thread'ler birbirine tepki vermekle meşgul.">Livelock</li>
+    <li data-why="Race condition yanlış sonuç demektir, ilerlememe değil.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Mutex ile semafor arasındaki temel fark?</p>
+  <ol>
+    <li data-why="Doğru: semafor sayaçla N thread'e izin verir; mutex tek thread ve sahiplik.">Semafor aynı anda N thread'in girmesine izin verebilir; mutex tek thread'e.</li>
+    <li data-why="İkisi de process'ler arası olabilir.">Semafor sadece tek process içinde çalışır.</li>
+    <li data-why="İkisi de atomik işlemlerle uygulanır.">Mutex atomik işlem gerektirmez.</li>
+    <li data-why="Mutex'te alan thread bırakmalı (sahiplik); semaforda başka thread release edebilir.">Mutex'i başka bir thread bırakabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

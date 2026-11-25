@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 2 · Design · Parallel Computing</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), decomposition patterns (task, divide-and-conquer, geometric, recursive data, pipeline, event-based), program structure patterns (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l2-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (as many pieces as possible, 10–100 times the number of processors), <strong>C</strong>ommunication (dependency graph), <strong>A</strong>gglomeration (group to reduce communication, ~10 times), <strong>M</strong>apping (load balance + communication; NP-complete in general).</li>
+  <li>Decomposition: functional (by steps), data (by data), data flow (pipeline, event).</li>
+  <li>The <strong>slowest stage</strong> sets a pipeline's speed; there is a benefit only if the stages run concurrently.</li>
+  <li>In divide-and-conquer, parallelism is read from the <strong>dependency graph</strong>, not the call graph.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Thinking task parallelism scales: the number of tasks is fixed, so it cannot follow the number of cores.</li>
+  <li>Confusing a pipeline's total latency with its throughput: in a 2+5+3 ms pipeline one item takes 10 ms, but in steady state there is one output every 5 ms.</li>
+  <li>Forgetting agglomeration: N² tiny tasks are very parallel in theory, slow in practice because of communication and task management costs.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Design a histogram computation (Exercise 1) with the PCAM steps. In which step does a race appear, and how do you solve it?</p>
+<div class="hint"><p>P: each pixel a task (data decomposition). C: each task updates one of 256 bins: all tasks write to the same small array, i.e. heavy communication and a <strong>race</strong>. A: group pixels into chunks per thread; each thread first keeps <strong>its own local histogram</strong>, and the local histograms are summed at the end (communication moves to the end). M: equal-size chunks. If the shared histogram is written directly, an atomic or a mutex is needed (L3); on a GPU, a per-block shared-memory histogram + atomicAdd.</p></div>
+<p><strong>2.</strong> A 4-stage pipeline has stage times 4, 4, 8, 4 ms. How long do 100 items take? How do you remove the bottleneck?</p>
+<div class="hint"><p>The first output at 20 ms (fill), then one every 8 ms: about 20 + 99·8 = <strong>812 ms</strong>. The bottleneck is the 8 ms stage: split it in two (4+4) or run two copies of that stage in parallel; then there is an output every 4 ms (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> Explain the difference between SPMD and master-worker with one example each.</p>
+<div class="hint"><p>SPMD: everyone runs the same program and processes different data according to their unique ID (a CUDA kernel, MPI). Master-worker: the roles differ: the master hands out work and collects results, the workers do the work; since idle workers get new work, load balancing happens by itself (e.g. distributing frames in a render farm).</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>In PCAM, which step groups heavily communicating tasks into one group?</p>
+  <ol>
+    <li data-why="Partitioning splits into pieces, it does not group.">Partitioning</li>
+    <li data-why="Communication determines the communication volume.">Communication</li>
+    <li data-why="True: agglomeration groups tasks, removing communication within the group.">Agglomeration</li>
+    <li data-why="Mapping assigns groups to nodes.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What is the steady-state throughput of a 3-stage pipeline with stage times 2, 5, 3 ms?</p>
+  <ol>
+    <li data-why="The slowest stage is 5 ms → one output every 5 ms = 200 outputs/s.">One item every 5 ms</li>
+    <li data-why="The total 10 ms is one item's latency, not the throughput.">One item every 10 ms</li>
+    <li data-why="The average stage time does not decide the pipeline.">One item every 3.33 ms</li>
+    <li data-why="The slowest stage decides, not the fastest.">One item every 2 ms</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which program structure pattern do CUDA kernels fit best?</p>
+  <ol>
+    <li data-why="The number of tasks is limited; CUDA is data-parallel.">Task parallelism</li>
+    <li data-why="Threads do not run different programs.">MPMD</li>
+    <li data-why="Not event-based.">Event-based coordination</li>
+    <li data-why="True: one program (the kernel), each thread different data via its ID.">SPMD</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

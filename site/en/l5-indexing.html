@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indexing, synchronisation, warps · Lecture 5 · CUDA programming · Parallel Computing</title>
+<meta name="description" content="Lecture 5: vector/matrix addition, matrix multiplication, cudaMalloc/cudaMemcpy/cudaFree, kernels and function qualifiers, blockIdx/threadIdx, __syncthreads, warps and latency hiding, CGMA, memory types, tiled matmul.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l5-indexing">
+<main><div class="content">
+
+<h1>Indexing, synchronisation, warps</h1>
+
+<h2>Thread blocks and indexing</h2>
+<ul>
+  <li>When a kernel is launched it executes as a <strong>grid</strong> of parallel threads (thousands to millions of lightweight threads).</li>
+  <li>Two-level hierarchy: grid → one or more <strong>thread blocks</strong>; all blocks of a grid have the same number of threads. Each block has a <code>blockIdx</code> coordinate (2D on compute 1.x, 3D on 2.0+).</li>
+  <li>Each block is a 3D array of up to 512 (compute 1.x) / <strong>1024</strong> (2.0+) threads; a thread's coordinate within the block is <code>threadIdx</code>.</li>
+  <li>1D example (slides 31–33): N blocks of M threads → N·M threads. Thread 3 of block 0: <code>0·M + 3</code>; thread 3 of block 5: <code>5·M + 3</code>. In general: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
+  <li>Input and output mappings can differ: read data with one mapping, process with another, write with a third (different input/output data rates, shared memory preparation, boundary conditions).</li>
+</ul>
+<pre class="code" data-run="matmul_gpu.cu" data-title="Matmul with blocks (slide 39): each thread one element of P">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
+    int col = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[row * width + i] * Nd[i * width + col];
+    Pd[row * width + col] = sum;
+}
+</pre>
+<p>Here <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Try your own configuration: <a href="lab.html">lab</a>.</p>
+<div class="callout discuss">
+  <p><strong>The questions of slide 40.</strong> (1) Can we enforce an execution order on blocks? <strong>No.</strong> (2) Can we assume a block with a smaller ID starts before one with a larger ID? <strong>No.</strong> (3) How does this relate to scalability? Because blocks are independent, the runtime can distribute them to any SM in any order (round-robin); the same program runs on a 2-SM GPU and on an 80-SM GPU.</p>
+</div>
+<p>Limits to take into account: maximum threads per block, maximum blocks per SM, <strong>maximum threads per SM</strong>. Generally aim for as many resident threads on the SMs as possible (occupancy).</p>
+
+<h3>Apply: thread code and matrix cells</h3>
+<div data-learning="cuda-index"></div>
+<h3>Building the index formula step by step</h3>
+<p>Think of a book with 10 lines per page. Which line of the book, counting from the start, is line 7 of page 3? <code>3·10 + 7 = 37</code> (pages and lines start at 0). In CUDA, page = block, line = thread:</p>
+<div class="formula-box">global index = blockIdx.x · blockDim.x + threadIdx.x
+             (which block) · (threads per block) + (position in the block)
+<<<4, 256>>>: thread 37 of block 2 → 2·256 + 37 = 549</div>
+<p>In 2D we do the same on two axes separately: the x axis gives the columns, the y axis the rows; in row-major memory the element is at <code>A[row·width + col]</code>.</p>
+<div class="formula-box">col = blockIdx.x · blockDim.x + threadIdx.x
+row = blockIdx.y · blockDim.y + threadIdx.y
+if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
+<p><strong>Why the bounds check?</strong> The number of blocks is rounded up: 1000 elements with 256-thread blocks launch <code>(1000 + 255)/256 = 4</code> blocks = 1024 threads. The last 24 threads have no element; without the <code>if</code> they write outside the array.</p>
+<h2>Synchronisation: <code>__syncthreads()</code></h2>
+<h3>Apply: trace the barrier in threads and code</h3>
+<div data-learning="barrier"></div>
+<ul>
+  <li>Threads in the same block coordinate their activities with barrier synchronisation. Every calling thread is held at that point until all threads of the block reach it. This ensures everyone has finished one phase before anyone moves on. Typical example: filling shared memory.</li>
+  <li>Real life: four people carpooling to work. They work in parallel at their desks; when leaving, everybody waits until all four are back at the car (barrier).</li>
+  <li><strong>It must be executed by all threads of the block.</strong> Using it in <code>if/else</code> is undefined behaviour; the only exception is when the condition evaluates the same for all threads of the block.</li>
+  <li>It actually synchronises <strong>warps</strong>, not threads.</li>
+  <li>To keep waiting times short, the runtime assigns <strong>all</strong> threads of a block to the same SM together.</li>
+  <li>Synchronising across blocks was almost impossible before CUDA 9 (hacks with <code>__threadfence()</code>, which halts a thread until its previous shared/global writes are visible to others). With CUDA 9 (Pascal): <strong>cooperative groups</strong>.</li>
+</ul>
+
+<h2>Block assignment, warps, latency hiding</h2>
+<ul>
+  <li>When a kernel starts, the runtime creates the grid; threads are assigned to SMs <strong>block by block</strong>. GT200: 30 SMs, at most 8 blocks per SM → 240 blocks at once; a finished block is replaced by a new one from the list.</li>
+  <li>The number of threads an SM can track is limited too: 1024 per SM on the GT200 (e.g. 4 × 256 or 8 × 128) → 30 · 1024 = 30,720 resident threads.</li>
+  <li><strong>Warp:</strong> 32 threads with consecutive <code>threadIdx</code>; the unit of scheduling on an SM. Threads 0–31 are the first warp, 32–63 the second… The mapping is deterministic. A 256-thread block = 8 warps; 3 blocks on an SM = 24 warps.</li>
+  <li>"You don't need to know about warps to write CUDA code; you DO need to know about them to write <strong>high-performance</strong> CUDA code."</li>
+  <li><strong>Latency hiding:</strong> a warp waiting for the result of a long-latency operation (global memory access, pipelined FP arithmetic, branches) is not selected; another ready warp runs instead. The selection adds no idle time: <strong>zero-overhead thread scheduling</strong>. With enough warps the hardware always finds one to run.</li>
+  <li>That is why GPUs do not devote as much area to large caches and branch prediction as CPUs; they give that area to FP units.</li>
+</ul>
+<div class="callout example">
+  <p><strong>Matmul block size for the GT200</strong> (1024 threads/SM, 8 blocks/SM, 512 threads/block):</p>
+  <ul>
+    <li><strong>8×8</strong> = 64 threads → filling the SM would need 16 blocks but the limit is 8 → 8·64 = 512 threads: resources half idle, few warps to hide latency.</li>
+    <li><strong>16×16</strong> = 256 threads → 1024/256 = 4 blocks (under the limit of 8) → full capacity ✓.</li>
+    <li><strong>32×32</strong> = 1024 threads → exceeds the limit of 512 per block ✗.</li>
+  </ul>
+  <p>Result: 16×16. (No shared memory yet; with it the calculation gets more complicated.)</p>
+</div>
+
+</div></main>
+</body>
+</html>

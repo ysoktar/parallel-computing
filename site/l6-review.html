@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 6 · Derleme ve bellek · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 6: runtime ve driver API, nvcc ile derleme (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), başlatma ve zaman ölçümü, register/shared sınırları, local, shared, constant ve texture bellek.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+<script type="module" src="js/widgets.js"></script>
+</head>
+<body data-page="l6-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (sanal ISA) → ptxas → SASS (cubin). cubin X.y sadece X.z (z ≥ y) üzerinde çalışır; gelecekteki GPU'lar için PTX + JIT gerekir. <code>-arch</code> PTX'i, <code>-code</code> ikiliyi seçer.</li>
+  <li>Kernel başlatma asenkrondur: süre ölçerken <code>cudaDeviceSynchronize()</code>; ilk çağrı başlatma maliyetini içerir.</li>
+  <li>Register ve shared sınırları SM başına thread/blok sayısını belirler; aşırı register → spill → local memory (global kadar yavaş).</li>
+  <li>Global: coalescing (32/64/128 B hizalı segmentler), 2D'de pitch. Local: değişken indeksli diziler ve spill.</li>
+  <li>Shared: 32 bank, bank = kelime indeksi % 32; aynı bank'a farklı kelimeler = conflict; <code>s[stride·tid]</code> için derece EBOB(stride, 32); sütun okumada <code>[32][33]</code> padding.</li>
+  <li>Constant: herkes <strong>aynı</strong> adresi okursa en iyi (yayın). Texture: 2D yerellik, interpolasyon, sınır işleme; salt okunur, CUDA array gerekir.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Coalescing ile bank conflict'i karıştırmak: coalescing <strong>global</strong> bellekte ardışık adreslerle ilgilidir; bank conflict <strong>shared</strong> bellekte aynı bank'a düşen farklı kelimelerle. <code>s[2*tid]</code> global'de yarı verim, shared'da 2-yollu conflict demektir.</li>
+  <li>Pitch'i eleman sayısı sanmak: pitch <strong>bayttır</strong>, satır başı <code>(char*)p + r*pitch</code>.</li>
+  <li>Constant belleğe ardışık thread'lerle ardışık adres okutmak: constant için bu kötü desen (32 ayrı istek).</li>
+  <li><code>-code=sm_70</code> ile derlenen ikilinin 8.x GPU'da çalışacağını sanmak (major değişince çalışmaz, PTX yoksa JIT de yok).</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 32 thread <code>__shared__ float s[1024]</code>'ten <code>s[8*threadIdx.x + 1]</code> okuyor. Kaç-yollu bank conflict olur?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → sadece 4 bank kullanılır, her birine 8 farklı kelime → <strong>8-yollu</strong> (EBOB(8, 32) = 8; offset dereceyi değiştirmez).</p></div>
+<p><strong>2.</strong> Transpose'ta <code>__shared__ float tile[32][32]</code> yerine <code>tile[32][33]</code> neden kullanılır? Bank hesabıyla gösterin.</p>
+<div class="hint"><p>32 genişlikte <code>tile[r][c]</code>'nin bank'ı <code>(32r + c) % 32 = c</code>: bir sütunun 32 elemanı aynı bank'ta, sütun okuyan warp 32-yollu conflict yapar. 33 genişlikte bank <code>(33r + c) % 32 = (r + c) % 32</code>: r = 0..31 için 32 farklı bank → conflict yok. Bedel 32 float.</p></div>
+<p><strong>3.</strong> Bir kernel thread başına 40 register kullanıyor ve SM'de 65.536 register var. Blok başına 256 thread ile SM'ye en fazla kaç blok sığar (register'a göre)?</p>
+<div class="hint"><p>Blok başına 256·40 = 10.240 register; 65.536 / 10.240 = 6,4 → <strong>6 blok</strong> (1536 thread). Register sayısını 32'ye indirmek 8 blok (2048 thread) sağlar: register kullanımı occupancy'yi doğrudan belirler.</p></div>
+<p><strong>4.</strong> Hangi durumda constant, hangi durumda texture bellek seçersiniz? Birer örnek.</p>
+<div class="hint"><p>Constant: tüm thread'lerin aynı anda aynı küçük veriyi okuduğu durumlar, ör. konvolüsyon filtresinin katsayıları (her thread aynı katsayıyı aynı anda okur → yayın). Texture: 2D'de yerel ama düzensiz okumalar ve kesirli koordinatlar, ör. görüntü döndürme (<code>texRotate.cu</code>): komşu pikseller önbellekten gelir, bilineer interpolasyon ve kenar işleme donanımda.</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Compute capability 8.6'lı bir GPU, sadece <code>-gencode arch=compute_70,code=sm_70</code> ile derlenmiş bir uygulamayı çalıştırabilir mi?</p>
+  <ol>
+    <li data-why="cubin aynı major içinde ileriye uyumludur; 7.x → 8.x major değişiyor.">Evet, sm_70 ikilisi 8.6'da çalışır.</li>
+    <li data-why="Doğru: ikili sadece 7.z'de çalışır ve PTX gömülmediği için JIT de yapılamaz.">Hayır: ikili major sürümler arasında uyumlu değil ve gömülü PTX yok.</li>
+    <li data-why="JIT için gömülü PTX gerekir; code=sm_70 sadece ikili gömer.">Evet, sürücü sm_70 ikilisini JIT ile yeniden derler.</li>
+    <li data-why="Uyumluluk compute capability'ye göre belirlenir.">Sadece aynı sürücü sürümüyle derlendiyse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Kernel süresini ölçerken neden <code>cudaDeviceSynchronize()</code> gerekir?</p>
+  <ol>
+    <li data-why="Bellek ayırmayla ilgisi yok.">Bellek ayırmayı tamamlamak için.</li>
+    <li data-why="cudaMemcpy zaten senkron; soru kernel'i soruyor.">cudaMemcpy asenkron olduğu için.</li>
+    <li data-why="Bariyer blok içidir; host'u bekletmez.">Blokları birbirine senkronize etmek için.</li>
+    <li data-why="Doğru: başlatma hemen döner; beklemezseniz sadece başlatma süresini ölçersiniz.">Kernel başlatmaları asenkron; bitmesini beklemeden süre alınırsa çok kısa (yanlış) çıkar.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Hangisi local memory'ye konma ihtimali en yüksek değişkendir?</p>
+  <ol>
+    <li data-why="Doğru: derleyici sabit indekslendiğini belirleyemediği diziler local memory'ye gider.">Çalışma zamanında hesaplanan bir indeksle erişilen otomatik dizi.</li>
+    <li data-why="Skaler otomatik değişkenler register'a konur (spill yoksa).">Bir <code>int</code> döngü sayacı.</li>
+    <li data-why="__shared__ açıkça shared bellekte.">Bir <code>__shared__</code> dizi.</li>
+    <li data-why="__constant__ constant bellekte.">Bir <code>__constant__</code> dizi.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMallocPitch</code> ile 700 baytlık satırlar ayrıldı (256 B hizalama). <code>r</code>. satırın başına nasıl ulaşılır?</p>
+  <ol>
+    <li data-why="Satırlar 700 değil, pitch kadar (768 B) aralıklı.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch bayt cinsinden; float* aritmetiği 4 ile çarpar.">p + r * pitch</li>
+    <li data-why="Doğru: pitch = 768 B; önce char*'a çevirip bayt ekle.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="Pitch genişlikten küçük olamaz.">(float*)((char*)p + r * 512)</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

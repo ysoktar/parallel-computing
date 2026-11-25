@@ -13,7 +13,7 @@ test("3D x-fastest linear indexing follows the lecturer's (16,8,2) example",()=>
 });
 test("3D explorer appears next to thread hierarchy in both languages",()=>{
  for(const prefix of ["","en/"]){
-   const source=file(prefix+"l4-cuda-intro.html"),at=source.indexOf('data-learning="dim3-index"');
+   const source=file(prefix+"l4-hierarchy.html"),at=source.indexOf('data-learning="dim3-index"');
    assert.ok(at>source.indexOf("<h2>"),"3D widget missing");
    assert.ok(source.slice(source.lastIndexOf("<h2>",at),at).includes(prefix?"hierarchy":"hiyerarşisi"));
  }

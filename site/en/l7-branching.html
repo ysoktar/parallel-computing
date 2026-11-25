@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branching and loops · Lecture 7 · Error checking and control flow · Parallel Computing</title>
+<meta name="description" content="Lecture 7: CUDA error checking (cudaGetLastError, cudaPeekAtLastError, asynchronous errors), branching and divergence, branch predication vs prediction, pipelining, loop unrolling, signed vs unsigned loop counters.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l7-branching">
+<main><div class="content">
+
+<h1>Branching and loops</h1>
+
+<h2>Branching and divergence</h2>
+<ul>
+  <li>Any flow control instruction (<code>if</code>, <code>switch</code>, <code>do</code>, <code>for</code>, <code>while</code>) can significantly reduce instruction throughput by making threads of the same warp diverge (follow different paths).</li>
+  <li>If this happens, the different paths must be <strong>serialised</strong>, because all threads of a warp share <strong>one program counter</strong>. The total number of instructions executed by the warp increases. When the paths complete, the threads converge back to the same path.</li>
+  <li>When control flow depends on the thread ID, the condition should be written to minimise the number of divergent warps. This is possible because the distribution of warps over the block is deterministic.</li>
+  <li>A trivial example: if the condition depends only on <code>threadIdx / WSIZE</code> (WSIZE = warp size), it is perfectly aligned with the warps and no warp diverges.</li>
+</ul>
+<table class="simple">
+  <thead><tr><th>Condition (1D block, 128 threads = 4 warps)</th><th>Divergent warps</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>threadIdx.x % 2 == 0</code></td><td>4</td><td>half true, half false in every warp</td></tr>
+    <tr><td><code>threadIdx.x &lt; 64</code></td><td>0</td><td>warps 0, 1 all true; 2, 3 all false</td></tr>
+    <tr><td><code>threadIdx.x &lt; 70</code></td><td>1</td><td>only warp 2 (64–95) is mixed</td></tr>
+    <tr><td><code>threadIdx.x / 32 == 1</code></td><td>0</td><td>the condition depends on the warp number</td></tr>
+    <tr><td><code>threadIdx.y % 2 == 0</code> in a 16×16 block</td><td>8 (all)</td><td>each warp is two rows: one even, one odd</td></tr>
+  </tbody>
+</table>
+<p>Different warps taking different paths is <strong>not</strong> divergence; divergence happens <em>within</em> a warp. An example with a timing comparison: <a href="l4-cuda-intro.html">L4, thread divergence</a>.</p>
+
+<h2>Branch predication and branch prediction</h2>
+<p>Similar names, different things: <strong>predication ≠ prediction</strong>.</p>
+<div class="two-col">
+  <div>
+    <h3>CPU: branch prediction</h3>
+    <ul>
+      <li><strong>Guess</strong> whether a conditional branch will be taken.</li>
+      <li>Start <strong>speculative</strong> execution based on the guess (instructions that may or may not be needed).</li>
+      <li>When the condition is evaluated, see the real result: if the guess was right, keep going; if wrong, discard the speculative work and restart with the right branch.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>GPU: branch predication</h3>
+    <ul>
+      <li><strong>None</strong> of the instructions that depend on the condition is skipped.</li>
+      <li>Each is associated with a per-thread <strong>predicate</strong> (condition code) set to true or false by the condition.</li>
+      <li>All are scheduled, but only those with a true predicate actually execute.</li>
+      <li>Instructions with a false predicate do <strong>not write</strong> results, do not evaluate addresses and do not read operands.</li>
+    </ul>
+  </div>
+</div>
+<p>Predication is ideal for short branches: instead of jumping over a few-instruction branch like <code>if (x &lt; 0) x = -x;</code> (a jump + draining the pipeline), the instruction is issued to everyone with a predicate and takes effect only in the threads where the condition holds. No divergence, no jump.</p>
+
+<h2>Branch optimisation and pipelining</h2>
+<ul>
+  <li>Branch optimisations are needed because of <strong>instruction pipelining</strong>.</li>
+  <li>A pipeline (fetch → decode → execute → write back) raises throughput by processing several instructions in different stages at the same time.</li>
+  <li>A branch makes the pipeline wait until the next instruction is known, or fill it with the wrong instructions; it cuts down the gain of pipelining. CPUs soften this with prediction, GPUs with predication and by switching warps.</li>
+</ul>
+
+<h2>Loop unrolling</h2>
+<ul>
+  <li>The compiler may unroll small loops with a known trip count by itself.</li>
+  <li>The programmer controls it with <code>#pragma unroll</code>. It must be placed <strong>immediately before</strong> the loop and applies <strong>only to that loop</strong>.</li>
+  <li>It optionally takes a number: <code>#pragma unroll 5</code> unrolls the loop 5 times. The compiler adds code for correctness (e.g. so that there are only n iterations when n &lt; 5).</li>
+  <li><code>#pragma unroll 1</code>: the compiler never unrolls the loop.</li>
+  <li>Without a number: the loop is completely unrolled if its trip count is constant, otherwise not at all.</li>
+  <li>Choosing the best unroll number is up to the programmer. The smaller the loop body, the bigger the gain.</li>
+</ul>
+<pre class="code" data-run="loops.cu" data-title="#pragma unroll 5 with an n known only at run time">
+float s = 0;
+#pragma unroll 5
+for (int i = 0; i < n; ++i)
+    s += in[i];
+</pre>
+<p>A detailed example and the costs (register pressure): <a href="coalescing-review.html#loop-unrolling">Coalescing page, loop unrolling</a>.</p>
+
+<h2>Loop counters: signed vs unsigned</h2>
+<ul>
+  <li>Since counters are always positive, declaring them <code>unsigned</code> is tempting. But for slightly better performance they should be <strong>signed</strong> (<code>int</code>).</li>
+  <li>Why? Compilers can optimise signed arithmetic more aggressively. Signed overflow is <strong>undefined</strong> in C/C++, so the compiler may assume "<code>i</code> never overflows": instead of recomputing <code>offset + stride*i</code> every iteration it can advance a pointer by <code>stride</code>, and safely switch to 64-bit address arithmetic.</li>
+  <li>With <code>unsigned</code>, overflow is <strong>defined</strong> (it wraps around at 2<sup>32</sup>); the compiler has to preserve that wrap-around possibility and cannot do some transformations.</li>
+</ul>
+<pre class="code" data-run="loops.cu">
+for (int i = 0; i < n; i++) {
+    out[i] = in[offset + stride*i];
+}
+</pre>
+
+</div></main>
+</body>
+</html>

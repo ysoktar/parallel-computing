@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 7 · Error checking and control flow · Parallel Computing</title>
+<meta name="description" content="Lecture 7: CUDA error checking (cudaGetLastError, cudaPeekAtLastError, asynchronous errors), branching and divergence, branch predication vs prediction, pipelining, loop unrolling, signed vs unsigned loop counters.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="l7-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>Runtime calls return <code>cudaError_t</code>; a kernel launch does not. Asynchronous errors appear at a later call (or at <code>cudaDeviceSynchronize()</code>).</li>
+  <li><code>cudaPeekAtLastError()</code> reads, <code>cudaGetLastError()</code> reads and resets. Pattern: clear first, launch, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
+  <li>Divergence: different paths within a warp run one after the other (one program counter). Aligning the condition with <code>threadIdx / 32</code> avoids divergence.</li>
+  <li>Predication (GPU): instructions are not skipped, they are masked with a per-thread predicate. Prediction (CPU): guessing the branch + speculative execution.</li>
+  <li><code>#pragma unroll N</code> unrolls N times (code is added for leftover iterations); <code>1</code> does not unroll; without a number: fully unrolls a constant trip count.</li>
+  <li>Make loop counters <code>int</code>: since signed overflow is undefined, the compiler optimises more.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Thinking "the launch returned no error, so it ran": a launch never returns an error; execution errors come later.</li>
+  <li>Calling <code>cudaGetLastError()</code> twice and expecting the error the second time too: the first call resets it.</li>
+  <li>Mixing up predication and prediction, or counting different warps taking different branches as divergence.</li>
+  <li>Writing <code>#pragma unroll</code> a few lines before the loop: it must be immediately before it.</li>
+</ul>
+<h3>Open-ended questions for the quiz</h3>
+<p><strong>1.</strong> Complete the unchecked call <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code>. What is the difference between Peek and Get?</p>
+<div class="hint"><p>First clear/check earlier errors (<code>cudaGetLastError()</code>), launch, <code>cudaError_t launch = cudaGetLastError();</code> (configuration/parameter errors), then <code>cudaError_t run = cudaDeviceSynchronize();</code> (execution errors); if either is not <code>cudaSuccess</code>, report and stop. Get reads and resets, Peek does not reset.</p></div>
+<p><strong>2.</strong> In a 128-thread 1D block, how many warps diverge for <code>if (threadIdx.x &lt; 40)</code> and for <code>if (threadIdx.x % 4 == 0)</code>?</p>
+<div class="hint"><p><code>&lt; 40</code>: warp 0 all true, warp 1 (32–63) mixed, warps 2–3 all false → <strong>1</strong>. <code>% 4 == 0</code>: 8 true, 24 false in every warp → <strong>4</strong> (all).</p></div>
+<p><strong>3.</strong> How is predication different from prediction? Why is <code>#pragma unroll 4</code> not always faster?</p>
+<div class="hint"><p>Prediction (CPU) guesses the branch and executes speculatively, rolling back if wrong. Predication (GPU) does not skip instructions; it masks them with a per-thread predicate, and false ones neither write results nor read operands. Unrolling reduces loop control but increases code size and register usage; register spills or lower occupancy can erase the gain.</p></div>
+<p><strong>4.</strong> A program reports "illegal memory access" at a <code>cudaMemcpy</code> call, but the <code>cudaMemcpy</code> parameters are correct. Why?</p>
+<div class="hint"><p>The error most likely happened in the previous <strong>kernel</strong> (asynchronously). A kernel launch returns no error; the error was reported at the next unrelated call, here the <code>cudaMemcpy</code>. Checking the return value of <code>cudaDeviceSynchronize()</code> right after the kernel shows the error in the right place.</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>Which error does <code>cudaGetLastError()</code> catch right after a kernel launch?</p>
+  <ol>
+    <li data-why="Errors during execution need a synchronisation.">An out-of-bounds access inside the kernel.</li>
+    <li data-why="Get resets; but the question is which kind of error it catches.">None; a kernel launch produces no errors.</li>
+    <li data-why="True: pre-launch (configuration/parameter) errors such as 2048 threads per block.">Pre-launch errors such as an invalid configuration.</li>
+    <li data-why="No call can know about future errors.">The errors of the next <code>cudaMemcpy</code>.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>The difference between <code>cudaPeekAtLastError()</code> and <code>cudaGetLastError()</code>?</p>
+  <ol>
+    <li data-why="Both read the same per-host-thread error variable.">Peek reads the device's error, Get the host's.</li>
+    <li data-why="True: Peek only reads, Get reads and resets to cudaSuccess.">Peek does not reset the variable, Get does.</li>
+    <li data-why="Neither blocks; synchronising needs cudaDeviceSynchronize.">Peek synchronises, Get does not.</li>
+    <li data-why="There is a difference: the reset.">There is no difference.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true of the GPU's branch predication?</p>
+  <ol>
+    <li data-why="That is the CPU's branch prediction.">It guesses the branch outcome and executes speculatively.</li>
+    <li data-why="Instructions are not skipped; all are scheduled.">The instructions of threads whose condition is false are skipped.</li>
+    <li data-why="Instructions with a false predicate read no operands and write no results.">Instructions with a false predicate read operands but do not write results.</li>
+    <li data-why="True: each instruction carries a per-thread predicate; only true ones take effect.">Each instruction is associated with a per-thread predicate; only true ones execute.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What does <code>#pragma unroll</code> without a number do?</p>
+  <ol>
+    <li data-why="True: fully unrolls a constant trip count, otherwise not at all.">Fully unrolls the loop if its trip count is constant, otherwise not at all.</li>
+    <li data-why="There is no default of 4.">Unrolls the loop 4 times.</li>
+    <li data-why="That is #pragma unroll 1.">Prevents the loop from being unrolled.</li>
+    <li data-why="The pragma applies only to the loop right after it.">Unrolls every loop in the file.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

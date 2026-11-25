@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix transpose · Lecture 6 · Coalescing · Parallel Computing</title>
+<meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="coalescing-transpose">
+<main><div class="content">
+
+<h1>Matrix transpose</h1>
+
+<h2 id="matrix-transpose" data-toc="Matrix transpose">Matrix transpose <span class="badge-class">class</span></h2>
+<p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>
+
+<h3>Set-up: 32×32 tile, 32×8 threads</h3>
+<ul>
+  <li><code>TILE_DIM = 32</code>, <code>BLOCK_ROWS = 8</code>. Each block processes one <strong>32×32 tile</strong> of the matrix but has <strong>32×8 = 256 threads</strong>.</li>
+  <li>So each thread processes <strong>4 elements</strong> of the tile (32/8): rows <code>y, y+8, y+16, y+24</code>. The loop runs over the second index (row), so consecutive threads of a warp still go to consecutive addresses. Benefit: the cost of the index calculation is shared by 4 elements.</li>
+  <li>Grid for an N×N matrix: <code>dim3(N/32, N/32)</code>, block: <code>dim3(TILE_DIM, BLOCK_ROWS) = dim3(32, 8)</code>.</li>
+</ul>
+
+<h3>1) Reference: copy</h3>
+<pre class="code" data-run="transpose.cu" data-title="copy: the speed the transpose aims for (same accesses, no swapping)">
+const int TILE_DIM = 32;
+const int BLOCK_ROWS = 8;
+
+__global__ void copy(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;   // with TILE_DIM, not blockDim.y!
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = idata[(y + j) * width + x];
+}
+// dim3 grid(N / TILE_DIM, N / TILE_DIM), block(TILE_DIM, BLOCK_ROWS);
+</pre>
+<p>Both read and write are coalesced: one warp = 32 consecutive floats of a row = 128 B. However fast a transpose is, it cannot beat this kernel; it is the "ceiling" for measurements.</p>
+<div class="callout class">
+  <p>The same idea as the instructor's advice: <strong>first write a copy kernel that does no computation</strong>, check that the output equals the input (and its speed); then add the real operation. For the shared-memory version, too, first write <code>copySharedMem</code> (global → shared → global, same place) and verify the indices.</p>
+</div>
+
+<h3>2) Naive transpose</h3>
+<pre class="code" data-run="transpose.cu" data-title="transposeNaive: the only difference is x and y swapped in the write index">
+__global__ void transposeNaive(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[x * width + (y + j)] = idata[(y + j) * width + x];
+}
+</pre>
+<ul>
+  <li><strong>Read</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> on the right, no multiplier → the warp reads one 128 B line ✓.</li>
+  <li><strong>Write</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> multiplied by <code>width</code> → consecutive threads are <code>width</code> elements apart. In a 1024×1024 matrix the stride is 1024 floats = <strong>4096 B</strong> → the warp's 32 writes hit 32 separate segments. <strong>Not</strong> coalesced.</li>
+  <li>The <code>a[i*1024]</code> example in the lab is exactly this write.</li>
+</ul>
+
+<h3>Apply: from rows and columns in A to B</h3>
+<div data-learning="transpose"></div>
+<h3>3) Coalesced transpose with shared memory</h3>
+<p>Idea: read the tile from global memory <strong>row by row</strong> (coalesced) into shared memory; do the swapping inside shared memory (scattered access is cheap there); then write a <strong>column</strong> of the tile as a <strong>row</strong> of the output (coalesced). The block also has to write to the transposed place.</p>
+<pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">
+__global__ void transposeCoalesced(float* odata, const float* idata)
+{
+    __shared__ float tile[TILE_DIM][TILE_DIM];
+
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        tile[threadIdx.y + j][threadIdx.x] = idata[(y + j) * width + x];   // coalesced read
+
+    __syncthreads();   // threads will write DIFFERENT elements than they read: the tile must be full
+
+    x = blockIdx.y * TILE_DIM + threadIdx.x;   // transposed block position: bx ↔ by
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = tile[threadIdx.x][threadIdx.y + j];   // coalesced write
+}
+</pre>
+<div class="callout example">
+  <p><strong>Index trace</strong> (N = 1024, grid 32×32, block 32×8): <code>blockIdx = (1, 2)</code>, <code>threadIdx = (5, 3)</code>.</p>
+  <ul>
+    <li>Load: <code>x = 1·32 + 5 = 37</code>, <code>y = 2·32 + 3 = 67</code>. For j = 0, 8, 16, 24 it reads rows 67, 75, 83, 91 / column 37 of <code>idata</code> into <code>tile[3][5], tile[11][5], tile[19][5], tile[27][5]</code>. This block loads the input tile rows 64–95, columns 32–63.</li>
+    <li>Store: <code>x = 2·32 + 5 = 69</code>, <code>y = 1·32 + 3 = 35</code>. It writes <code>tile[5][3], tile[5][11], tile[5][19], tile[5][27]</code> into rows 35, 43, 51, 59 / column 69 of <code>odata</code>. Check: <code>tile[5][3]</code> = input (row 64+5, column 32+3) = <code>idata[69][35]</code> → <code>odata[35][69]</code> ✓.</li>
+    <li>Consecutive threads of a warp (<code>threadIdx.x</code> = 0..31) go to consecutive global addresses both when reading and when writing; the scattered part (<code>tile[threadIdx.x][…]</code>, reading a column) is in shared memory.</li>
+  </ul>
+</div>
+<div class="callout gotcha">
+  <p>The <code>__syncthreads()</code> here is mandatory: the <code>tile[threadIdx.x][threadIdx.y+j]</code> a thread writes out was loaded by another thread (even another warp). In <code>copySharedMem</code>, which only copies, each thread writes what it loaded itself, so the barrier is technically unnecessary (the article includes it only for comparison); the measurements show the barrier is not the bottleneck.</p>
+</div>
+
+<h3>4) The version without bank conflicts</h3>
+<p>In a 32×32 tile the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank. The store phase reads a column (<code>tile[threadIdx.x][threadIdx.y + j]</code>): the 32 threads of the warp want different words from the same bank → a <strong>32-way bank conflict</strong>. The fix is one line, making each row one element longer:</p>
+<pre class="code" data-run="transpose.cu">
+__shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: all different along a column
+</pre>
+<p>The detailed bank calculation and a visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">L6, banks</a>.</p>
+
+<h3>Measurements (NVIDIA article, GB/s)</h3>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Tesla M2050</th><th>Tesla K20c</th></tr></thead>
+  <tbody>
+    <tr><td>copy</td><td>105.2</td><td>136.0</td></tr>
+    <tr><td>copySharedMem</td><td>104.6</td><td>152.3</td></tr>
+    <tr><td>transposeNaive</td><td><strong>18.8</strong></td><td>55.3</td></tr>
+    <tr><td>transposeCoalesced</td><td>51.3</td><td>97.6</td></tr>
+    <tr><td>transposeNoBankConflicts</td><td>99.5</td><td>144.3</td></tr>
+  </tbody>
+</table>
+<p>Effective bandwidth = 2 × matrix size (one read + one write) / time. Conclusion: <strong>coalescing global memory is the most critical factor</strong>; the cost of shared memory and synchronisation is much smaller.</p>
+
+</div></main>
+</body>
+</html>
