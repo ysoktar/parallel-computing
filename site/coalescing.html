@@ -31,7 +31,7 @@
   <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalledense (ardışık adresler) tek otobüs (tek 128 B transaction) yeter; her biri farklı semttense 32 sefer gerekir ve otobüsler boş koltukla gider. Coalescing, adresleri aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği: okuma bir yönde, yazma öbür yönde ardışık; shared memory yönü çevirir.</p>
 </div>
 
-<h2>Global bellek transaction'ları</h2>
+<h2>Bir warp kaç transaction yapar?</h2>
 <p>Lecture 6, slayt 43–48:</p>
 <ul>
   <li>En yüksek performans için global bellek erişimleri <strong>coalesced</strong> (birleştirilmiş) olmalı.</li>

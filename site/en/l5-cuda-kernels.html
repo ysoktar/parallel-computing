@@ -32,7 +32,7 @@
   <p>The lecture moves in three steps: (1) turning a CPU loop into a kernel and the five host-side steps, (2) each thread finding its own data with <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>, (3) why the simple kernel is slow (CGMA = 1) and how tiling with shared memory fixes it.</p>
 </div>
 
-<h2>Data parallelism: from loop to kernel</h2>
+<h2>Data parallelism: one thread per element</h2>
 <p>Data parallelism: the same operation performed on independent data elements simultaneously (vector addition, convolution, matrix-vector and matrix-matrix multiplication). Rule of thumb: <strong>when you see nested <code>for</code> loops with regular indexing, there is a good chance of parallelisation.</strong></p>
 <div class="two-col">
 <pre class="code" data-run="vecadd_cpu.cpp" data-title="C">

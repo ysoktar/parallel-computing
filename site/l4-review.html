@@ -16,7 +16,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>GPU'da silikon kontrol ve önbellek yerine <strong>hesap birimlerine</strong> gider; GPU throughput, CPU gecikme odaklıdır.</li>
   <li>CUDA = SIMT: aynı komut, çok thread. Divergence (warp içinde farklı yol) yavaşlatır.</li>
@@ -40,7 +40,7 @@
 <p><strong>3.</strong> Bloklar neden bağımsız olmak zorunda? Bağımsız olmasalardı ne kaybederdik?</p>
 <div class="hint"><p>Çalışma zamanı blokları istediği SM'ye, istediği sırada dağıtabilsin diye. Bloklar birbirini bekleseydi (sıra varsayımı, bloklar arası senkronizasyon) aynı program farklı sayıda SM'li GPU'larda çalışmayabilir ya da kilitlenebilirdi: <strong>ölçeklenebilirlik</strong> kaybolurdu.</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="3">
   <p><code>dim3 block(32, 4, 2)</code> bloğunda <code>threadIdx = (0, 2, 1)</code> olan thread kaçıncı warp'tadır?</p>
   <ol>

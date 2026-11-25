@@ -29,7 +29,7 @@
 k&lt;&lt;&lt;g,b&gt;&gt;&gt;(...);
 cudaError_t launch = cudaGetLastError();     // != cudaSuccess ise raporla, dur
 cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess ise raporla, dur</pre>
-<p>Launch hata kodu döndürmez. Get son hatayı alır ve <code>cudaSuccess</code>'a sıfırlar; Peek sıfırlamaz. Launch kontrolü konfigürasyon/parametre hatasını, sync kontrolü yürütme sırasında oluşan asenkron hatayı bulur. Bütün runtime çağrılarının dönüşleri de denetlenmeli. Çalışan örnek: <a href="l7-cuda-control.html#hata-kontrolu">L7</a>.</p>
+<p>Launch hata kodu döndürmez. Get son hatayı alır ve <code>cudaSuccess</code>'a sıfırlar; Peek sıfırlamaz. Launch kontrolü konfigürasyon/parametre hatasını, sync kontrolü yürütme sırasında oluşan asenkron hatayı bulur. Bütün runtime çağrılarının dönüşleri de denetlenmeli. Çalışan örnek: <a href="l7-cuda-control.html">L7</a>.</p>
 </div>
 
 <h3>Soru 29 · Predication, unrolling, blok sırası</h3>

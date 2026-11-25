@@ -16,7 +16,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>PCAM: <strong>P</strong>artition (olabildiğince çok parça, işlemci sayısının 10–100 katı), <strong>C</strong>ommunication (bağımlılık grafı), <strong>A</strong>gglomeration (iletişimi azaltmak için grupla, ~10 katı), <strong>M</strong>apping (yük dengesi + iletişim; genel hâli NP-complete).</li>
   <li>Ayrıştırma: fonksiyonel (adımlara göre), veri (veriye göre), veri akışı (pipeline, olay).</li>
@@ -38,7 +38,7 @@
 <p><strong>3.</strong> SPMD ile master-worker arasındaki farkı birer örnekle açıklayın.</p>
 <div class="hint"><p>SPMD: herkes aynı programı çalıştırır, benzersiz ID'sine göre farklı veriyi işler (CUDA kernel'i, MPI). Master-worker: roller farklı: master iş dağıtır ve sonuç toplar, işçiler iş yapar; boşta kalan işçiye yeni iş verildiği için yük dengesi kendiliğinden olur (ör. bir render çiftliğinde kare dağıtmak).</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="3">
   <p>PCAM'da yoğun iletişim kuran görevleri tek bir gruba toplamak hangi adımdır?</p>
   <ol>

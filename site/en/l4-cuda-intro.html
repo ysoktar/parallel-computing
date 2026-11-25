@@ -38,7 +38,7 @@
   <li>Before CUDA: data was wrapped into OpenGL structures to fake graphics operations, since most graphics operations are FP matrix/vector operations.</li>
   <li>GPU cores are called <strong>Streaming Multiprocessors (SMs)</strong>: a combination of scalar processors (SPs), local cache and special function units. An SM executes thread blocks, an SP one thread of a block.</li>
 </ul>
-<h3>The reason for the difference</h3>
+<h3>Why CPUs and GPUs differ</h3>
 <div class="two-col">
   <div><p><strong>CPU:</strong> very complicated control logic + large multilevel caches. Ideal for random-access, independent-task parallel execution; latency-oriented.</p></div>
   <div><p><strong>GPU:</strong> data-level parallelism. Simple control logic, small caches → more transistors for computation. Faster, more optimised memory types. Suited to SIMD/SIMT execution; throughput-oriented.</p></div>
@@ -99,7 +99,7 @@ __global__ void uniform(float* a) {
 </ol>
 <p>Where to expect good gains: code applying the same operation to all data points; mostly <code>float</code> code (double is supported but slow, especially on old architectures); code where the data to move is small compared to the computation per element.</p>
 
-<h2>Terminology</h2>
+<h2>CUDA terminology</h2>
 <table class="simple">
   <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
   <tbody>

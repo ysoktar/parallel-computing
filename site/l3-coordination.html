@@ -16,14 +16,14 @@
 
 <h1>Deadlock, atomikler, monitörler</h1>
 
-<h2>Tutarlılık modelleri</h2>
+<h2>Bellek tutarlılık modelleri</h2>
 <ul>
   <li>Tasarım kaygıları: önbellek <strong>tutarlılığı</strong> (coherence, aynı adres) ve bellek <strong>tutarlılık modeli</strong> (consistency, farklı adreslere işlemlerin görünme sırası).</li>
   <li><strong>Sequential consistency:</strong> paylaşılan nesnelere olaylar tek tek bir sırada oluyormuş gibi görünmeli ve her thread için program sırasında etki etmeli. Farklı thread'lerin olayları kaydırılarak genel geçmiş nesnenin seri belirtimini sağlayabilir.</li>
   <li>Yüksek seviyeli dillerde derleyici optimizasyonları üretilen kodu seri çeviriden çok farklı yapabilir (komut yeniden sıralama), ama sonuç sequential consistency'yi korur (tek thread açısından).</li>
 </ul>
 
-<h2>Ters gidebilecekler</h2>
+<h2>Ters gidebilecekler: deadlock, livelock, starvation</h2>
 <table class="simple">
   <thead><tr><th>Durum</th><th>Tanım</th><th>CPU kullanımı</th></tr></thead>
   <tbody>
@@ -36,7 +36,7 @@
 <div class="callout key">
   <p><strong>Deadlock nasıl önlenir?</strong> <span class="badge-class">ek bilgi</span> Dört koşul birlikte gerekir: karşılıklı dışlama, tut ve bekle, elden alınamama, <strong>döngüsel bekleme</strong>. En pratik önlem döngüyü kırmak: herkes kilitleri <strong>aynı sırada</strong> alsın (önce R1, sonra R2). C++17: <code>std::scoped_lock lk(m1, m2);</code> birden çok mutex'i deadlock'suz alır.</p>
 </div>
-<h2>Producer-consumer</h2>
+<h2>Producer-consumer problemi</h2>
 <p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>
 <pre class="code" data-run="prodcons.cpp" data-run-note="Sözde kod; çalışan hâli 2 üretici, 3 tüketici, BUFFSIZE = 100." data-title="Senkronizasyonlu sözde kod">
 // producer                          // consumer
@@ -49,7 +49,7 @@ resAvail.release();                  slotsAvail.release();
 </pre>
 <p>Senkronizasyon olmazsa: dolu tampona yazma (eski veri kaybolur), boş tampondan okuma, aynı <code>in/out</code> indeksini iki thread'in kullanması. Sonlandırma: paylaşılan bir değişkenle (ör. üretilecek toplam sayı) ya da tüketicilere özel "bitti" mesajı (poison pill) göndererek.</p>
 
-<h2>Atomikler</h2>
+<h2>Atomik işlemler</h2>
 <ul>
   <li><code>std::atomic&lt;T&gt;</code>: işlemler bölünmez; derleyiciye bildirimdir. Atomik okuma <strong>acquire</strong>, atomik yazma <strong>release</strong> semantiğindedir (varsayılan seq_cst).</li>
   <li>Donanım desteği: <strong>CAS</strong> (compare-and-swap/exchange): bir bellek konumunu bir değerle karşılaştırır, eşitse yeni değeri yazar, her durumda okunan değeri döndürür (x86: <code>CMPXCHG</code>). <strong>LL/SC</strong> (load-link / store-conditional): LL değeri okur; SC, o arada konuma kimse yazmadıysa yazar (ARM, PowerPC).</li>
@@ -61,7 +61,7 @@ std::atomic<bool> locked{false};
 void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
 void unlock() { locked.store(false); }
 </pre>
-<h3>Bellek sıralaması</h3>
+<h3>Atomiklerde bellek sıralaması</h3>
 <ul>
   <li><code>memory_order_relaxed</code>: değişiklikler diğer çekirdeklere zorla yayılmaz; thread'ler farklı değer dizileri görebilir. Çok emin değilseniz kullanmayın.</li>
   <li><code>memory_order_acquire</code> / <code>release</code> (+ <code>acq_rel</code>, <code>consume</code>): değişiklikler thread çiftleri arasında yayılır; yazan release, okuyan acquire kullanır. Eski ARM/PowerPC için.</li>

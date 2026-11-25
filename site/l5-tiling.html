@@ -30,7 +30,7 @@
 Daha yüksek performans için CGMA artırılmalı.</div>
 
 <h2>CUDA bellek türleri</h2>
-<p>Bütün bellek türlerinin tek bir şemada, tek bir tabloda ve tek bir örnek kernel üzerinde birlikte anlatımı: <a href="l6-memory-map.html#gpu-bellegi-tek-bir-resim">L6, GPU belleği: tek bir resim</a>.</p>
+<p>Bütün bellek türlerinin tek bir şemada, tek bir tabloda ve tek bir örnek kernel üzerinde birlikte anlatımı: <a href="l6-memory-map.html">L6, GPU belleği: tek bir resim</a>.</p>
 <table class="simple">
   <thead><tr><th>Bildirim</th><th>Bellek</th><th>Kapsam</th><th>Ömür</th><th>Hız / not</th></tr></thead>
   <tbody>
@@ -51,7 +51,7 @@ Daha yüksek performans için CGMA artırılmalı.</div>
 <h2>Tiling ile shared memory</h2>
 <p>Temel ödünleşim: global bellek büyük ama yavaş, shared bellek küçük ama hızlı. Strateji: veriyi her biri shared belleğe sığan <strong>karolara (tile)</strong> böl; karolar üzerindeki hesaplar birbirinden bağımsız yapılabilmeli. (Her veri yapısı her kernel için karolara bölünemez.)</p>
 
-<h3>Örtüşen erişimler</h3>
+<h3>Thread'lerin örtüşen global okumaları</h3>
 <p>Slayttaki küçük örnek: dört 2×2 blokla P hesaplanıyor. Blok (0,0)'ın dört thread'i Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>'i hesaplar. Her thread Md'den 4, Nd'den 4 eleman okur ve thread(0,0) ile thread(1,0) Md'nin 0. satırının tamamını <strong>ikisi de</strong> okur. Blok (0,0) çalışırken her Md ve Nd elemanı tam iki kez okunur: thread'ler işbirliği yapıp her elemanı bir kez yüklerse global trafik yarıya iner.</p>
 <p>Genel: N×N bloklarla olası azalma <strong>N kat</strong>. 16×16 → global trafik 1/16.</p>
 <div class="formula-box">16×16 blok, shared memory YOK:  16·16 thread × (width + width) okuma = 16·16·2·width
@@ -71,7 +71,7 @@ Oran: (16·16·2·width) / (16·width·2) = 16</div>
   </tbody>
 </table>
 <p>İki fazın sonunda her thread 4 terimin hepsini toplamış olur (CPU versiyonuyla aynı). Fark şurada: M'nin satır 0'ının iki elemanı faz başına <strong>bir kez</strong> global'den okunur ve aynı satırdaki iki thread de onu shared memory'den kullanır. T×T karoda her eleman T thread tarafından kullanılır, yani global trafik T kat azalır.</p>
-<h3>Tiled kernel</h3>
+<h3>Tiled matmul kernel'i</h3>
 <p>Thread'ler Md ve Nd elemanlarını <strong>işbirliğiyle</strong> shared belleğe yükler, sonra iç çarpımda bunları kullanır. Shared bellek küçük olduğu için Md ve Nd, shared'a sığan karolara bölünür ve iç çarpım <strong>fazlara</strong> ayrılır: faz <code>m</code>'de her thread M karosundan ve N karosundan birer eleman yükler.</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)

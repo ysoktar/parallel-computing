@@ -17,7 +17,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>Kernel = döngünün gövdesi; dıştaki döngüler thread'lere dönüşür. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
   <li>Global indeks = <code>blockIdx·blockDim + threadIdx</code> (her eksende); row-major adres <code>row·width + col</code>; grid'i yukarı yuvarla, sınırı kontrol et.</li>
@@ -53,7 +53,7 @@ cudaFree(d);
 <p><strong>3.</strong> 16×16 tile matmul'de shared bellek kullanımını ve G80'de SM başına kaç blok sığacağını hesaplayın. Sınırlayan nedir?</p>
 <div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/blok</strong>; 16 KB/SM → shared'a göre 8 blok. Ama 256 thread/blok ile 768/256 = <strong>3 blok</strong>. Sınırlayan: SM başına thread sayısı (shared değil).</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="3">
   <p><code>cudaMalloc((void**)&amp;Md, size)</code> çağrısında neden <code>&amp;Md</code> veriliyor?</p>
   <ol>

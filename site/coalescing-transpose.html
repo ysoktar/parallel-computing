@@ -17,7 +17,7 @@
 
 <h1>Matris transpose: naive ve shared memory</h1>
 
-<h2 id="matris-transpose" data-toc="Matris transpose">Matris transpose <span class="badge-class">derste</span></h2>
+<h2 id="matris-transpose" data-toc="Transpose dört adımda">Transpose dört adımda <span class="badge-class">derste</span></h2>
 <p>Hocanın derste verdiği örnek; NVIDIA'nın <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a> yazısındaki kernel serisi. Transpose hiç hesap yapmaz, sadece veri taşır: performansı tamamen bellek erişim desenine bağlıdır. Bu yüzden coalescing'i göstermek için en iyi örnek.</p>
 
 <h3>Kurulum: 32×32 karo, 32×8 thread</h3>

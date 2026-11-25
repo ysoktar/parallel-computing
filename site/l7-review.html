@@ -15,7 +15,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>Runtime çağrıları <code>cudaError_t</code> döndürür; kernel başlatma döndürmez. Asenkron hatalar sonraki bir çağrıda (ya da <code>cudaDeviceSynchronize()</code>'da) görünür.</li>
   <li><code>cudaPeekAtLastError()</code> okur, <code>cudaGetLastError()</code> okur ve sıfırlar. Desen: önce temizle, başlat, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
@@ -41,7 +41,7 @@
 <p><strong>4.</strong> Bir kernel <code>cudaMemcpy</code> çağrısında "illegal memory access" hatası verdi ama <code>cudaMemcpy</code>'nin parametreleri doğru. Neden?</p>
 <div class="hint"><p>Hata büyük ihtimalle önceki <strong>kernel'de</strong> oluştu (asenkron). Kernel başlatma hata döndürmez; hata bir sonraki ilgisiz çağrıda, burada <code>cudaMemcpy</code>'de raporlandı. Kernel'den hemen sonra <code>cudaDeviceSynchronize()</code>'ın dönüşünü kontrol etmek hatayı doğru yerde gösterir.</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="3">
   <p>Kernel başlatmasından hemen sonra <code>cudaGetLastError()</code> hangi hatayı yakalar?</p>
   <ol>

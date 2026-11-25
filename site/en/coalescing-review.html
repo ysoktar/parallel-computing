@@ -17,7 +17,7 @@
 
 <h1>Loop unrolling; coalescing summary and quiz</h1>
 
-<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">class</span></h2>
+<h2 id="loop-unrolling" data-toc="Loop unrolling: cutting loop overhead">Loop unrolling: cutting loop overhead <span class="badge-class">class</span></h2>
 <p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>
 <div class="two-col">
 <pre class="code" data-run="unroll.cu" data-title="Normal">
@@ -55,7 +55,7 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
 </ul>
 
-<h2>Summary</h2>
+<h2>Key ideas of coalescing</h2>
 <ul>
   <li>A warp's accesses are gathered into 32/64/128-byte segments aligned to their size; the fewer the segments, the better.</li>
   <li>Check: is <code>threadIdx.x</code> without a multiplier and rightmost in the address? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>

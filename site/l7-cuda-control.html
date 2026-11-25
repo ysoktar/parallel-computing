@@ -29,7 +29,7 @@
   <p><strong>GPU, siparişi alıp hemen "tamam" diyen bir mutfaktır.</strong> Kernel başlatınca CPU beklemez (asenkron); kernel içindeki bir hatayı ancak sonra, "bitti mi?" diye sorunca (<code>cudaDeviceSynchronize()</code>) öğrenirsiniz. Bu dersin ilk yarısı hataları doğru yerde yakalamak. İkinci yarısı performans: warp'ın 32 thread'i tek komut sayacını paylaştığı için dallanmalar dikkat ister; döngüler de unrolling ve doğru sayaç tipiyle hızlanır.</p>
 </div>
 
-<h2>Hata kontrolü</h2>
+<h2>Hatalar nerede ve ne zaman yakalanır?</h2>
 <ul>
   <li>Tüm runtime fonksiyonları bir hata kodu (<code>cudaError_t</code>) döndürür.</li>
   <li>Ama <strong>asenkron</strong> bir fonksiyon, cihaz işi bitirmeden döner; bu yüzden döndürdüğü kod cihazda <em>sonradan</em> olacak hataları bildiremez. Sadece iş başlamadan önce host'ta olan hataları (genelde parametre doğrulama) bildirir.</li>

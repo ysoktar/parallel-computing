@@ -16,7 +16,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>Thread'ler process'in adres uzayını paylaşır: iletişim ucuz, ama paylaşılan veriye erişim senkronize edilmeli.</li>
   <li><strong>Data race</strong>: en az biri yazan eş zamanlı erişim (C++'ta tanımsız davranış). <strong>Race condition</strong>: sıralama yüzünden yanlış sonuç.</li>
@@ -43,7 +43,7 @@
 <p><strong>4.</strong> Deadlock ile livelock'u CPU kullanımı açısından karşılaştırın ve birer gerçek hayat örneği verin.</p>
 <div class="hint"><p>Deadlock: thread'ler birbirinin kaynağını bekleyerek uyur, CPU kullanımı <strong>düşük</strong> (iki araba dar köprüde karşı karşıya, ikisi de geri çekilmiyor). Livelock: thread'ler bloklu değil, birbirine tepki vermekle meşgul, CPU kullanımı <strong>yüksek</strong> ama ilerleme yok (koridorda aynı yöne kaçan iki kişi).</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">
   <p>İki thread aynı <code>int</code>'i sadece okuyor. Bu bir data race midir?</p>
   <ol>

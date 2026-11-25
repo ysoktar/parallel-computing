@@ -73,7 +73,7 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Device tarafında okuma: doğrusal bellek texture'ları <code>tex1Dfetch()</code>, array texture'ları <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Yönetim fonksiyonları: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. Eski <em>texture reference API</em>'de tip, boyut ve okuma modu derleme zamanında sabit; normalize, filtre ve adres modu çalışma zamanında değiştirilebilir (sadece CUDA array texture'ları).</p>
 
-<h2>Bellek özeti</h2>
+<h2>Bütün bellek türleri: özet</h2>
 <table class="simple">
   <thead><tr><th>Bellek</th><th>Kapsam</th><th>Bir okumanın gecikmesi (saat çevrimi)</th><th>Not</th></tr></thead>
   <tbody>
