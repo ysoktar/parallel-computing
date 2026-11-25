@@ -46,7 +46,7 @@ export const NAV = [
   { part: "Lecture 6 · Derleme ve bellek", part_en: "Lecture 6 · Compilation and memory", lecture: true, items: [
     { id: "l6-cuda-memory", title: "Derleme ve başlatma", title_en: "Compilation and initialisation", lec: "L6", num: "6.1" },
     { id: "l6-memory-map", title: "GPU belleği: tek resim", title_en: "GPU memory: one picture", lec: "L6", num: "6.2" },
-    { id: "l6-memory-types", title: "Global, local, shared, constant", title_en: "Global, local, shared, constant", lec: "L6", num: "6.3" },
+    { id: "l6-memory-types", title: "Global, local, shared, constant bellek", title_en: "Global, local, shared, constant memory", lec: "L6", num: "6.3" },
     { id: "l6-texture", title: "Texture ve bellek özeti", title_en: "Texture and memory overview", lec: "L6", num: "6.4" },
     { id: "l6-review", title: "Özet ve sınama", title_en: "Summary and quiz", lec: "L6", num: "6.5" },
     { id: "coalescing", title: "Global bellek transaction'ları", title_en: "Global memory transactions", lec: "L6", num: "6.6" },
