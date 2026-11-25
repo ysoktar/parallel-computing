@@ -27,7 +27,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>A CPU is a handful of highly skilled masters, a GPU thousands of apprentices.</strong> A master (CPU core) finishes complex, step-by-step different jobs fast; with big caches and branch prediction it hardly ever waits. Apprentices (GPU threads) are slow one by one, but in groups of 32 (<strong>warps</strong>) they apply the same instruction to different data at the same time. A foreman (the SM) runs whichever group is ready: while one group waits for data from memory another runs, so the waiting is hidden.</p>
+  <p><strong>A CPU is a handful of masters, a GPU thousands of apprentices.</strong> A master (CPU core) finishes complex jobs fast; big caches and branch prediction mean it rarely waits. Apprentices (GPU threads) are slow one by one, but in groups of 32 (<strong>warps</strong>) they apply the same instruction to different data. The foreman (the SM) runs whichever group is ready: while one waits for memory another runs, hiding the wait.</p>
   <p>This lecture builds CUDA's skeleton: the <strong>host</strong> (CPU) prepares the work and sends it to the <strong>device</strong> (GPU); the work is split over thousands of threads in a <strong>grid → block → thread</strong> hierarchy; each thread finds its own data with <code>blockIdx</code>/<code>threadIdx</code>. Blocks are independent, which is why the same program runs on a 2-SM GPU and on a 100-SM GPU.</p>
 </div>
 

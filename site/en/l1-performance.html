@@ -64,7 +64,7 @@ efficiency = speedup / N = (1 − α)/N + α</div>
 </div>
 
 <div class="callout key">
-  <p><strong>Amdahl or Gustafson?</strong> The question is: is the problem size fixed? If you want to solve <strong>the same problem faster</strong> (strong scaling), Amdahl applies and the serial part limits you. If you want to solve <strong>a bigger problem in the same time</strong> (weak scaling: a finer grid, more pixels), Gustafson applies: the parallel part grows with N, the serial part does not, and the speedup is almost N. Supercomputers live in the second scenario.</p>
+  <p><strong>Amdahl or Gustafson?</strong> Ask whether the problem size is fixed:</p><ul><li><strong>The same problem faster</strong> (strong scaling) → Amdahl: the serial part limits you.</li><li><strong>A bigger problem in the same time</strong> (weak scaling: finer grid, more pixels) → Gustafson: the parallel part grows with N, the serial part does not, speedup ≈ N. Supercomputers live here.</li></ul>
 </div>
 <h2>Latency and throughput</h2>
 <p>A work request arrives at t = 0. A <strong>latency-optimised processor</strong> (CPU) produces the first result quickly (low latency). A <strong>throughput-optimised processor</strong> (GPU) produces the first result later (high latency) but much more output per unit time (high throughput).</p>

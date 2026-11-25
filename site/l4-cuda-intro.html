@@ -27,7 +27,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>CPU bir avuç çok yetenekli usta, GPU binlerce çırak gibidir.</strong> Usta (CPU çekirdeği) karmaşık, her adımı farklı işleri hızlı bitirir; büyük önbellekler ve dallanma tahminiyle hiç beklemez. Çıraklar (GPU thread'leri) tek tek yavaştır ama 32'lik gruplar (<strong>warp</strong>) hâlinde aynı komutu aynı anda farklı veriye uygularlar. Bir ustabaşı (SM) her an hazır olan grubu çalıştırır: bir grup bellekten veri beklerken diğeri çalışır, böylece bekleme gizlenir.</p>
+  <p><strong>CPU bir avuç usta, GPU binlerce çıraktır.</strong> Usta (CPU çekirdeği) karmaşık işleri hızlı bitirir; büyük önbellek ve dallanma tahmini sayesinde pek beklemez. Çıraklar (GPU thread'leri) tek tek yavaştır, ama 32'lik gruplar (<strong>warp</strong>) hâlinde aynı komutu farklı veriye uygular. Ustabaşı (SM) hazır olan grubu çalıştırır: biri bellek beklerken diğeri çalışır, bekleme gizlenir.</p>
   <p>Bu derste CUDA'nın iskeleti kuruluyor: <strong>host</strong> (CPU) işi hazırlar ve <strong>device</strong>'a (GPU) gönderir; iş, <strong>grid → blok → thread</strong> hiyerarşisinde binlerce thread'e bölünür; her thread kendi verisini <code>blockIdx</code>/<code>threadIdx</code> ile bulur. Bloklar bağımsızdır, bu yüzden aynı program 2 SM'li GPU'da da 100 SM'li GPU'da da çalışır.</p>
 </div>
 

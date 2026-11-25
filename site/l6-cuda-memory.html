@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Bellek hiyerarşisi bir atölye gibidir.</strong> Elinizdeki alet (register) anında kullanılır ama elinize sığan sayıda. Tezgâhınız (shared memory) birkaç adım ötede, ekipçe paylaşılır ama küçüktür. Raf (L2 önbellek) biraz daha uzakta. Depo (global bellek) her şeyi tutar ama gidip gelmek yüzlerce saat çevrimi sürer. Hızlı kod, en sık kullanılan şeyleri ele ve tezgâha yakın tutan, depoya da toplu (coalesced) seferler yapan koddur.</p>
+  <p><strong>Bellek hiyerarşisi bir atölyedir.</strong> Elinizdeki alet (register) anında kullanılır ama azdır. Tezgâh (shared memory) birkaç adım ötede, ekipçe paylaşılır, küçüktür. Raf (L2) biraz daha uzakta. Depo (global bellek) her şeyi tutar ama gidip gelmek yüzlerce saat çevrimi. Hızlı kod sık kullanılanı elde ve tezgâhta tutar, depoya toplu (coalesced) sefer yapar.</p>
   <p>Bu dersin iki yarısı var: önce kodun nasıl derlendiği ve hangi GPU'da çalışacağı (nvcc, PTX, cubin, compute capability), sonra bellek türlerinin her biri: sınırlar (register, shared), global (coalescing, pitch), local, shared (bank'lar), constant ve texture.</p>
 </div>
 
@@ -55,7 +55,7 @@
 <h3>Uyumluluk</h3>
 <ul>
   <li><strong>İkili (cubin) uyumluluk:</strong> cubin mimariye özeldir; <code>-code=sm_80</code> compute capability 8.0 için kod üretir. X.y için üretilen cubin sadece X.z (z ≥ y) cihazlarda çalışır: <strong>aynı major içinde ileriye</strong> uyumlu; geriye veya major'lar arası değil. (Sadece masaüstü; Tegra'da yok.)</li>
-  <li><strong>PTX uyumluluğu:</strong> bazı PTX komutları sadece yüksek compute capability'lerde var (ör. warp shuffle 5.0+). <code>-arch</code> C++ → PTX derlemede varsayılan compute capability'yi belirtir (maksimum performans için her zaman verin). Belli bir compute capability için üretilen PTX, ona <strong>eşit veya büyük</strong> her ikili koda derlenebilir. Ama eski PTX'ten derlenen ikili yeni donanım özelliklerini kullanamaz (ör. Pascal 6.0 PTX'inden Volta 7.0 ikilisi Tensor Core kullanmaz).</li>
+  <li><strong>PTX uyumluluğu:</strong> bazı PTX komutları sadece yüksek compute capability'lerde var (ör. warp shuffle 5.0+).<ul><li><code>-arch</code>: C++ → PTX derlemede varsayılan compute capability (performans için her zaman verin).</li><li>X için üretilen PTX, X'e <strong>eşit veya büyük</strong> her ikiliye derlenebilir; ama eski PTX'ten gelen ikili yeni donanım özelliklerini kullanamaz (Pascal 6.0 PTX'inden Volta 7.0 ikilisi Tensor Core kullanmaz).</li></ul></li>
   <li><strong>Uygulama uyumluluğu:</strong> gelecekteki (henüz ikili üretilemeyen) mimarilerde çalışmak için uygulama JIT ile derlenecek <strong>PTX</strong> içermeli.</li>
 </ul>
 <pre class="code" data-run="arch_info.cu" data-run-note="Komut satırı; program GPU'nuzun compute capability'sini ve yüklenen kodun __CUDA_ARCH__'ını yazar. -gencode bayraklarını ✎ ile deneyin." data-title="-gencode örneği (slayt 19–20)">

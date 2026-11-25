@@ -34,7 +34,7 @@
 </table>
 
 <div class="callout key">
-  <p><strong>How to prevent deadlock?</strong> <span class="badge-class">extra</span> A deadlock needs four conditions together: mutual exclusion, hold and wait (waiting for one resource while holding another), no preemption, and <strong>circular wait</strong>. The most practical prevention is to break the cycle: all threads take the locks <strong>in the same order</strong> (R1 first, then R2). In C++17, <code>std::scoped_lock lk(m1, m2);</code> takes several mutexes without deadlock.</p>
+  <p><strong>How to prevent deadlock?</strong> <span class="badge-class">extra</span> Four conditions are needed together: mutual exclusion, hold and wait, no preemption, <strong>circular wait</strong>. The most practical fix breaks the cycle: everyone takes the locks <strong>in the same order</strong> (R1, then R2). C++17: <code>std::scoped_lock lk(m1, m2);</code> takes several mutexes without deadlock.</p>
 </div>
 <h2>Producer-consumer</h2>
 <p>Producers put items into a shared buffer (e.g. <code>BUFFSIZE = 100</code>), consumers take them. Three semaphores: <code>slotsAvail</code> (initially BUFFSIZE), <code>resAvail</code> (initially 0), and a mutex (<code>l</code>) protecting the buffer indices.</p>

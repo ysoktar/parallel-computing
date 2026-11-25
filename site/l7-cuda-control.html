@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>GPU, siparişi alıp hemen "tamam" diyen bir mutfak gibidir.</strong> Kernel başlattığınızda CPU beklemez (asenkron); kernel çalışırken bir hata olursa bunu ancak daha sonra, mutfağa "bitti mi?" diye sorduğunuzda (<code>cudaDeviceSynchronize()</code>) öğrenirsiniz. Bu dersin ilk yarısı hataları doğru yerde yakalamak. İkinci yarısı performans: bir warp'ın 32 thread'i tek bir komut sayacını paylaşır, bu yüzden dallanmalar (<code>if</code>, <code>for</code>, <code>while</code>) dikkatli yazılmalı; döngüler de unrolling ve doğru sayaç tipiyle hızlanır.</p>
+  <p><strong>GPU, siparişi alıp hemen "tamam" diyen bir mutfaktır.</strong> Kernel başlatınca CPU beklemez (asenkron); kernel içindeki bir hatayı ancak sonra, "bitti mi?" diye sorunca (<code>cudaDeviceSynchronize()</code>) öğrenirsiniz. Bu dersin ilk yarısı hataları doğru yerde yakalamak. İkinci yarısı performans: warp'ın 32 thread'i tek komut sayacını paylaştığı için dallanmalar dikkat ister; döngüler de unrolling ve doğru sayaç tipiyle hızlanır.</p>
 </div>
 
 <h2>Hata kontrolü</h2>

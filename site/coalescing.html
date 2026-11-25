@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp'ın thread'leri) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalleden (ardışık adresler) ise tek otobüs (tek 128 baytlık transaction) yeter. Her biri farklı semtten ise 32 ayrı sefer gerekir; otobüslerin çoğu boş koltukla gider. Coalescing, thread'lerin adreslerini aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği: okuma bir yönde, yazma diğer yönde ardışık; shared memory bu iki yönü birbirine çevirir.</p>
+  <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalledense (ardışık adresler) tek otobüs (tek 128 B transaction) yeter; her biri farklı semttense 32 sefer gerekir ve otobüsler boş koltukla gider. Coalescing, adresleri aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği: okuma bir yönde, yazma öbür yönde ardışık; shared memory yönü çevirir.</p>
 </div>
 
 <h2>Global bellek transaction'ları</h2>

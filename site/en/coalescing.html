@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>Think of a shuttle bus.</strong> 32 passengers (the threads of a warp) go to the warehouse (global memory) at the same time. If they all live in the same neighbourhood (consecutive addresses), one bus (one 128-byte transaction) is enough. If each lives in a different district, 32 separate trips are needed and most buses run with empty seats. Coalescing means gathering the threads' addresses into the same "neighbourhood". The transpose is the best example: reading is consecutive in one direction, writing in the other; shared memory turns one direction into the other.</p>
+  <p><strong>Think of a shuttle bus.</strong> 32 passengers (a warp) go to the warehouse (global memory) at once. If they all live in one neighbourhood (consecutive addresses), one bus (one 128 B transaction) is enough; if each lives elsewhere, 32 trips are needed and the buses run half empty. Coalescing means gathering the addresses into one "neighbourhood". The transpose is the best example: reads are consecutive in one direction, writes in the other; shared memory turns the direction.</p>
 </div>
 
 <h2>Global memory transactions</h2>
