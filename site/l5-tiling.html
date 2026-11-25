@@ -58,7 +58,7 @@ Daha yüksek performans için CGMA artırılmalı.</div>
 16×16 blok, shared memory VAR:  her eleman bir kez okunur      = 16·width·2
 Oran: (16·16·2·width) / (16·width·2) = 16</div>
 <div class="callout discuss">
-  <p><strong>Slayt 86 ve 88: "16×8 ne olur?", "1024×1024 matris, 32×8 blok?"</strong> BX×BY'lik bir blok P'nin BY satır × BX sütunluk karosunu hesaplar. Shared memory olmadan blok <code>BX·BY·2·width</code> okuma yapar; karolarla M'den <code>BY·width</code>, N'den <code>BX·width</code> okur. Azalma = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10,7×</strong>. 32×8: 512/40 = <strong>12,8×</strong> (matris boyutundan bağımsız). Kare T×T için bu T'ye eşittir.</p>
+  <p><strong>Slayt 86 ve 88: "16×8 ne olur?", "1024×1024 matris, 32×8 blok?"</strong> BX×BY'lik blok, P'nin BY satır × BX sütunluk karosunu hesaplar.</p><ul><li>Shared memory olmadan: <code>BX·BY·2·width</code> okuma.</li><li>Karolarla: M'den <code>BY·width</code> + N'den <code>BX·width</code>.</li><li>Azalma = <code>2·BX·BY / (BX + BY)</code>: 16×8 → 256/24 ≈ <strong>10,7×</strong>; 32×8 → 512/40 = <strong>12,8×</strong> (matris boyutundan bağımsız). Kare T×T için T.</li></ul>
 </div>
 
 <h3>Sezgi: bir fazı sayılarla izlemek</h3>

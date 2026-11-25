@@ -58,7 +58,7 @@ CGMA must be raised for higher performance.</div>
 16×16 block, WITH shared memory: each element read once          = 16·width·2
 Ratio: (16·16·2·width) / (16·width·2) = 16</div>
 <div class="callout discuss">
-  <p><strong>Slides 86 and 88: "What about 16×8?", "1024×1024 matrices, 32×8 blocks?"</strong> A BX×BY block computes a BY-row × BX-column tile of P. Without shared memory the block does <code>BX·BY·2·width</code> reads; with tiles it reads <code>BY·width</code> from M and <code>BX·width</code> from N. Reduction = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10.7×</strong>. 32×8: 512/40 = <strong>12.8×</strong> (independent of the matrix size). For a square T×T it equals T.</p>
+  <p><strong>Slides 86 and 88: "What about 16×8?", "1024×1024 matrices, 32×8 blocks?"</strong> A BX×BY block computes a BY-row × BX-column tile of P.</p><ul><li>Without shared memory: <code>BX·BY·2·width</code> reads.</li><li>With tiles: <code>BY·width</code> from M + <code>BX·width</code> from N.</li><li>Reduction = <code>2·BX·BY / (BX + BY)</code>: 16×8 → 256/24 ≈ <strong>10.7×</strong>; 32×8 → 512/40 = <strong>12.8×</strong> (independent of the matrix size). For a square T×T it is T.</li></ul>
 </div>
 
 <h3>Intuition: tracing one phase with numbers</h3>

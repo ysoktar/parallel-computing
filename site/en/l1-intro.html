@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>Think of a kitchen.</strong> For many years meals got faster because the single cook worked faster every year (clock frequency went up). At some point the cook could not go faster: working faster heats up the kitchen (the power wall). The fix: <strong>put more cooks in the kitchen</strong> (multi-core). But that creates a new problem: some steps of the recipe are sequential (dough first, then the oven), and the cooks have to wait for each other and share ingredients.</p>
+  <p><strong>Think of a kitchen.</strong> For years meals got faster because the cook worked faster every year (clock frequency). Then the cook could not speed up: the kitchen overheats (the power wall). The fix is <strong>more cooks</strong> (multi-core); the price: some steps of the recipe are sequential, and the cooks wait for each other and share ingredients.</p>
   <p>This lecture answers the three questions of that story: <strong>why</strong> we moved to multi-core (Moore, the power wall), how parallel machines <strong>are classified</strong> (Flynn, shared/distributed memory, CPU/GPU), and <strong>how much faster</strong> we get with more cooks (speedup, efficiency, Amdahl, Gustafson).</p>
 </div>
 
@@ -53,7 +53,7 @@
 </table>
 <h3>Shared and distributed memory MIMD</h3>
 <ul>
-  <li><strong>Shared-memory MIMD:</strong> a universally accessible shared memory space. Communication between CPUs is cheap but memory is a bottleneck limiting scalability. Fix: partition memory among CPUs; local memory is fast, remote memory slower, addressing still universal: <strong>NUMA</strong> (up to a few tens of CPUs). Subtypes: <strong>SMP</strong> (all CPUs equivalent) and <strong>master-worker</strong> (some processors run specialised software, like coprocessors: GPU systems resemble this, though most have separate CPU and GPU memory spaces).</li>
+  <li><strong>Shared-memory MIMD:</strong> one memory everyone can access. Communication is cheap, but memory limits scalability.<ul><li><strong>NUMA:</strong> memory is partitioned among CPUs; local is fast, remote slower, addressing shared (up to a few tens of CPUs).</li><li><strong>SMP:</strong> all CPUs equivalent. <strong>Master-worker:</strong> some processors do special work, like coprocessors (GPU systems resemble this, though most have separate CPU and GPU memories).</li></ul></li>
   <li><strong>Distributed-memory (shared-nothing) MIMD:</strong> each processor has private memory; they communicate by <strong>exchanging messages</strong>. Communication is expensive, but with no single contested medium they scale without practical limit (apart from space and energy).</li>
 </ul>
 <table class="simple">

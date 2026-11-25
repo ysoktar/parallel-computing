@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar şehrin öbür ucundaki büyük kütüphanede (global bellek: büyük ama uzak; oradan bir değer okumak yüzlerce saat çevrimi sürer). Herkes her sayfa için kütüphaneye giderse yollar tıkanır. Akıllıcası: öğrenciler işi bölüşüp gereken sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama hemen yanınızda) kopyalar, herkes masadan okur. "Herkes kopyalamayı bitirdi mi?" diye beklemek <code>__syncthreads()</code>'tir.</p>
+  <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar uzaktaki büyük kütüphanede (global bellek: oradan bir değer okumak yüzlerce saat çevrimi). Herkes her sayfa için oraya giderse yollar tıkanır. Akıllıcası: işi bölüşüp sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama yanı başında) kopyalamak. "Herkes kopyaladı mı?" diye beklemek <code>__syncthreads()</code>'tir.</p>
   <p>Bu ders üç adımda ilerler: (1) bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım, (2) her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması, (3) basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
 </div>
 

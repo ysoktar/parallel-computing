@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>The memory hierarchy is like a workshop.</strong> The tool in your hand (a register) is used instantly but only as many as fit in your hands. Your workbench (shared memory) is a few steps away, shared by the team but small. The shelf (the L2 cache) is a little further. The warehouse (global memory) holds everything but a round trip takes hundreds of cycles. Fast code keeps the most used things in hand and on the bench, and makes bulk (coalesced) trips to the warehouse.</p>
+  <p><strong>The memory hierarchy is a workshop.</strong> The tool in your hand (a register) is instant but you hold few. The workbench (shared memory) is a few steps away, shared by the team, small. The shelf (L2) is further. The warehouse (global memory) holds everything but a round trip takes hundreds of clock cycles. Fast code keeps what it uses most in hand and on the bench, and makes bulk (coalesced) trips to the warehouse.</p>
   <p>The lecture has two halves: first how code is compiled and which GPUs it runs on (nvcc, PTX, cubin, compute capability), then each memory type: limits (registers, shared), global (coalescing, pitch), local, shared (banks), constant and texture.</p>
 </div>
 
@@ -55,7 +55,7 @@
 <h3>Compatibility</h3>
 <ul>
   <li><strong>Binary (cubin) compatibility:</strong> a cubin is architecture-specific; <code>-code=sm_80</code> produces code for compute capability 8.0. A cubin for X.y runs only on X.z devices with z ≥ y: <strong>forward within the same major</strong>; not backward or across majors. (Desktop only; not on Tegra.)</li>
-  <li><strong>PTX compatibility:</strong> some PTX instructions exist only on higher compute capabilities (e.g. warp shuffle 5.0+). <code>-arch</code> sets the compute capability assumed when compiling C++ → PTX (always give it for maximum performance). PTX for a given compute capability can always be compiled to binary of <strong>equal or greater</strong> capability. But a binary compiled from older PTX cannot use newer hardware features (e.g. a Volta 7.0 binary from Pascal 6.0 PTX does not use Tensor Cores).</li>
+  <li><strong>PTX compatibility:</strong> some PTX instructions exist only on higher compute capabilities (e.g. warp shuffle 5.0+).<ul><li><code>-arch</code>: the compute capability assumed when compiling C++ → PTX (always give it for performance).</li><li>PTX for X compiles to binary for any capability <strong>equal or greater</strong> than X; but a binary from older PTX cannot use newer hardware features (a Volta 7.0 binary from Pascal 6.0 PTX does not use Tensor Cores).</li></ul></li>
   <li><strong>Application compatibility:</strong> to run on future architectures (for which no binary can be generated yet), an application must contain <strong>PTX</strong> to be JIT-compiled.</li>
 </ul>
 <pre class="code" data-run="arch_info.cu" data-run-note="A command line; the program prints your GPU's compute capability and the loaded code's __CUDA_ARCH__. Try the -gencode flags with ✎." data-title="-gencode example (slides 19–20)">

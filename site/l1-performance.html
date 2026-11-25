@@ -64,7 +64,7 @@ efficiency = speedup / N = (1 − α)/N + α</div>
 </div>
 
 <div class="callout key">
-  <p><strong>Amdahl mı, Gustafson mı?</strong> Soru şu: problem boyutu sabit mi? <strong>Aynı problemi daha hızlı</strong> çözmek istiyorsanız (strong scaling) Amdahl geçerlidir ve seri kısım sizi sınırlar. <strong>Aynı sürede daha büyük problem</strong> çözmek istiyorsanız (weak scaling: daha ince ızgara, daha çok piksel) Gustafson geçerlidir: paralel kısım N ile büyür, seri kısım büyümez, speedup neredeyse N olur. Süper bilgisayarlar ikinci senaryoda yaşar.</p>
+  <p><strong>Amdahl mı, Gustafson mı?</strong> Problem boyutu sabit mi, ona bakın:</p><ul><li><strong>Aynı problemi daha hızlı</strong> (strong scaling) → Amdahl: seri kısım sınırlar.</li><li><strong>Aynı sürede daha büyük problem</strong> (weak scaling: daha ince ızgara, daha çok piksel) → Gustafson: paralel kısım N ile büyür, seri kısım büyümez, speedup ≈ N. Süper bilgisayarlar bu senaryodadır.</li></ul>
 </div>
 <h2>Gecikme ve throughput</h2>
 <p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>

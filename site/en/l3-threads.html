@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>Think of a shared notebook.</strong> Several people update a number in the same notebook: each reads the number, adds one in their head, and writes it back. If two of them read at the same time, both see the same old number and one overwrites the other's update. Threads in shared memory are exactly this: they are fast because they see the same memory, and precisely because of that the result breaks if the <strong>order</strong> is not controlled.</p>
+  <p><strong>Think of a shared notebook.</strong> Several people update the same number: read it, add one, write it back. If two read at once, both see the old number and one overwrites the other's update. Threads are fast because they see the same memory; for exactly that reason the result breaks if the <strong>order</strong> is not controlled.</p>
   <p>This lecture first shows the problem (data races, race conditions), then the tools: a <strong>mutex</strong> (one person at the notebook at a time), a <strong>semaphore</strong> (at most N people), an <strong>atomic</strong> (a single indivisible hardware operation), a <strong>monitor / condition variable</strong> (sleep until a condition holds). Finally, what goes wrong when these tools are misused: deadlock, livelock, starvation.</p>
 </div>
 

@@ -28,7 +28,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>The library analogy.</strong> 256 students (the threads of a block) need different pages of the same books. The books are in the big library across town (global memory: large but far away; reading one value from it takes hundreds of clock cycles). If everyone goes to the library for every page, the roads jam. The smart way: the students split the work, copy the needed pages <strong>once</strong> to a shared desk (shared memory: small but right next to you), and everyone reads from the desk. Waiting until "has everyone finished copying?" is <code>__syncthreads()</code>.</p>
+  <p><strong>The library analogy.</strong> 256 students (a block's threads) need different pages of the same books. The books are in a distant library (global memory: reading one value takes hundreds of clock cycles). If everyone goes there for every page, the roads jam. Smarter: split the work and copy the pages <strong>once</strong> to a shared desk (shared memory: small but right beside you). Waiting until "has everyone copied?" is <code>__syncthreads()</code>.</p>
   <p>The lecture moves in three steps: (1) turning a CPU loop into a kernel and the five host-side steps, (2) each thread finding its own data with <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>, (3) why the simple kernel is slow (CGMA = 1) and how tiling with shared memory fixes it.</p>
 </div>
 

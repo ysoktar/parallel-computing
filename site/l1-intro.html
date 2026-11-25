@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Bir mutfak düşünün.</strong> Uzun yıllar boyunca yemekler, tek aşçı her yıl daha hızlı çalıştığı için hızlandı (saat frekansı arttı). Bir noktada aşçı daha hızlı çalışamaz oldu: fazla hızlanınca mutfak ısınıyor (güç duvarı). Çözüm: <strong>mutfağa daha çok aşçı koymak</strong> (çok çekirdek). Ama yeni bir sorun çıkar: tarifin bazı adımları sıralıdır (önce hamur, sonra fırın) ve aşçılar birbirini beklemek, malzeme paylaşmak zorundadır.</p>
+  <p><strong>Bir mutfak düşünün.</strong> Yıllarca yemekler, aşçı her yıl daha hızlı çalıştığı için hızlandı (saat frekansı). Sonra aşçı hızlanamaz oldu: mutfak fazla ısınıyor (güç duvarı). Çözüm <strong>daha çok aşçı</strong> (çok çekirdek); bedeli de şu: tarifin bazı adımları sıralıdır ve aşçılar birbirini bekleyip malzeme paylaşır.</p>
   <p>Bu ders bu hikâyenin üç sorusunu cevaplar: <strong>neden</strong> çok çekirdeğe geçtik (Moore, güç duvarı), paralel makineler <strong>nasıl sınıflanır</strong> (Flynn, paylaşımlı/dağıtık bellek, CPU/GPU) ve aşçı sayısını artırınca <strong>ne kadar hızlanırız</strong> (speedup, verim, Amdahl, Gustafson).</p>
 </div>
 
@@ -53,7 +53,7 @@
 </table>
 <h3>Paylaşımlı ve dağıtık bellek MIMD</h3>
 <ul>
-  <li><strong>Paylaşımlı bellek MIMD:</strong> herkesin eriştiği ortak bellek uzayı. CPU'lar arası iletişim ucuz ama bellek ölçeklenebilirliği sınırlayan darboğaz. Çözüm: belleği CPU'lar arasında bölmek; yerel bellek hızlı, uzak bellek yavaş ama adresleme ortak: <strong>NUMA</strong> (birkaç on CPU'ya kadar). Alt türler: <strong>SMP</strong> (tüm CPU'lar eşdeğer) ve <strong>master-worker</strong> (bazı işlemciler özel yazılım için, yardımcı işlemci gibi: GPU'lu sistemler bu gruba benzer, ama çoğunda CPU ve GPU bellek uzayları ayrı).</li>
+  <li><strong>Paylaşımlı bellek MIMD:</strong> herkesin eriştiği ortak bellek. İletişim ucuz, ama bellek ölçeklenmeyi sınırlar.<ul><li><strong>NUMA:</strong> bellek CPU'lar arasında bölünür; yerel hızlı, uzak yavaş, adresleme ortak (birkaç on CPU'ya kadar).</li><li><strong>SMP:</strong> tüm CPU'lar eşdeğer. <strong>Master-worker:</strong> bazı işlemciler yardımcı işlemci gibi özel iş yapar (GPU'lu sistemler buna benzer, ama çoğunda CPU ve GPU bellekleri ayrı).</li></ul></li>
   <li><strong>Dağıtık bellek (shared-nothing) MIMD:</strong> her işlemcinin özel belleği var, <strong>mesajlaşarak</strong> iletişim kurarlar. İletişim pahalı, ama tek bir paylaşılan ortam olmadığı için pratikte (alan ve enerji dışında) sınırsız ölçeklenir.</li>
 </ul>
 <table class="simple">

@@ -34,7 +34,7 @@
 </table>
 
 <div class="callout key">
-  <p><strong>Deadlock nasıl önlenir?</strong> <span class="badge-class">ek bilgi</span> Deadlock için dört koşulun birlikte olması gerekir: karşılıklı dışlama, tut ve bekle (bir kaynağı tutarken diğerini beklemek), elden alınamama ve <strong>döngüsel bekleme</strong>. En pratik önlem döngüyü kırmaktır: tüm thread'ler kilitleri <strong>aynı sırada</strong> alsın (önce R1, sonra R2). C++17'de <code>std::scoped_lock lk(m1, m2);</code> birden çok mutex'i deadlock'suz alır.</p>
+  <p><strong>Deadlock nasıl önlenir?</strong> <span class="badge-class">ek bilgi</span> Dört koşul birlikte gerekir: karşılıklı dışlama, tut ve bekle, elden alınamama, <strong>döngüsel bekleme</strong>. En pratik önlem döngüyü kırmak: herkes kilitleri <strong>aynı sırada</strong> alsın (önce R1, sonra R2). C++17: <code>std::scoped_lock lk(m1, m2);</code> birden çok mutex'i deadlock'suz alır.</p>
 </div>
 <h2>Producer-consumer</h2>
 <p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>

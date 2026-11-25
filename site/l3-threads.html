@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Ortak bir defter düşünün.</strong> Birkaç kişi aynı defterdeki bir sayıyı güncelliyor: herkes sayıyı okuyor, kafasında bir ekliyor, yazıyor. İkisi aynı anda okursa ikisi de aynı eski sayıyı görür ve biri diğerinin güncellemesini ezer. Paylaşımlı bellekte thread'ler tam olarak budur: hızlıdırlar çünkü aynı belleği görürler, ama tam da bu yüzden <strong>sıra</strong> kontrol edilmezse sonuç bozulur.</p>
+  <p><strong>Ortak bir defter düşünün.</strong> Birkaç kişi aynı sayıyı güncelliyor: okuyor, bir ekliyor, yazıyor. İkisi aynı anda okursa ikisi de eski sayıyı görür ve biri diğerinin güncellemesini ezer. Thread'ler aynı belleği gördükleri için hızlıdır; tam da bu yüzden <strong>sıra</strong> kontrol edilmezse sonuç bozulur.</p>
   <p>Bu derste önce sorunu (data race, race condition) sonra araçları görüyoruz: <strong>mutex</strong> (deftere bir anda tek kişi), <strong>semafor</strong> (en fazla N kişi), <strong>atomik</strong> (donanımın bölünmez tek işlem), <strong>monitör / condition variable</strong> (bir koşul gerçekleşene kadar uyu). Son olarak bu araçlar yanlış kullanılınca çıkanlar: deadlock, livelock, starvation.</p>
 </div>
 

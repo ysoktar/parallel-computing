@@ -26,7 +26,7 @@
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>A GPU is like a kitchen that takes the order and says "OK" right away.</strong> When you launch a kernel the CPU does not wait (asynchronous); if something goes wrong while the kernel runs, you only find out later, when you ask the kitchen "is it done?" (<code>cudaDeviceSynchronize()</code>). The first half of this lecture is catching errors in the right place. The second half is performance: the 32 threads of a warp share one program counter, so branches (<code>if</code>, <code>for</code>, <code>while</code>) must be written with care; and loops get faster with unrolling and the right counter type.</p>
+  <p><strong>A GPU is a kitchen that takes the order and says "OK" at once.</strong> A kernel launch does not make the CPU wait (asynchronous); you learn about an error inside the kernel only later, when you ask "is it done?" (<code>cudaDeviceSynchronize()</code>). The first half of this lecture is catching errors in the right place. The second half is performance: a warp's 32 threads share one program counter, so branches need care; loops get faster with unrolling and the right counter type.</p>
 </div>
 
 <h2>Error checking</h2>
