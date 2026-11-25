@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Döngüden kernel'e · Lecture 5 · CUDA programlama · Paralel Hesaplama</title>
+<title>Döngüden kernel'e: veri paralelliği ve host kodu · Lecture 5 · CUDA programlama · Paralel Hesaplama</title>
 <meta name="description" content="Lecture 5: vektör/matris toplama, matris çarpımı, cudaMalloc/cudaMemcpy/cudaFree, kernel ve fonksiyon niteleyicileri, blockIdx/threadIdx, __syncthreads, warp ve latency hiding, CGMA, bellek türleri, tiled matmul.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="l5-cuda-kernels">
 <main><div class="content">
 
-<h1>Döngüden kernel'e</h1>
+<h1>Döngüden kernel'e: veri paralelliği ve host kodu</h1>
 <p class="lead">İç içe <code>for</code> döngüleri GPU'da nereye gider? Her thread kendi verisini nasıl bulur? Ve aynı veriyi tekrar tekrar global bellekten okumak neden kernel'i %6 verime mahkûm eder?</p>
 
 <div class="callout goals">

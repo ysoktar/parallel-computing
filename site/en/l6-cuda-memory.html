@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Compilation and initialisation · Lecture 6 · Compilation and memory · Parallel Computing</title>
+<title>Compiling with nvcc and CUDA initialisation · Lecture 6 · Compilation and memory · Parallel Computing</title>
 <meta name="description" content="Lecture 6: runtime and driver API, compiling with nvcc (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), initialisation and timing, register/shared limits, local, shared, constant and texture memory.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="l6-cuda-memory">
 <main><div class="content">
 
-<h1>Compilation and initialisation</h1>
+<h1>Compiling with nvcc and CUDA initialisation</h1>
 <p class="lead">How does a <code>.cu</code> file become code that runs on the GPU, and on which GPUs does it run? And when and how is each memory type (register, local, shared, global, constant, texture) used? The coalescing part of Lecture 6 is on <a href="coalescing.html">its own page</a>.</p>
 
 <div class="callout goals">

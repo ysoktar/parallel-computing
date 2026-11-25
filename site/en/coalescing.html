@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Global memory transactions · Lecture 6 · Coalescing · Parallel Computing</title>
+<title>Coalescing: global memory transactions · Lecture 6 · Coalescing · Parallel Computing</title>
 <meta name="description" content="Global memory coalescing (32/64/128 B transactions, alignment, 2D access, pitch), naive and shared-memory matrix transpose, for-loop unrolling.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -15,7 +15,7 @@
 <body data-page="coalescing">
 <main><div class="content">
 
-<h1>Global memory transactions</h1>
+<h1>Coalescing: global memory transactions</h1>
 <p class="lead">The 32 threads of a warp go to global memory at the same time. If their addresses are next to each other, the hardware serves them all with one large read; if they are scattered, it reads again and again for the same data. This is the most important performance topic of midterm 2.</p>
 
 <div class="callout goals">
