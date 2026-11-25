@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Thread and memory hierarchy</h1>
+<p class="lead">In 4.1 the work was split over thousands of threads; this page shows how those threads are organised (grid → block → thread) and which memory they see.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute the linear thread index in a 1D/2D/3D block and which warp a thread belongs to.</li>
+    <li>Say why blocks must be independent and how that relates to scalability.</li>
+    <li>State the scope of registers, shared and global memory, and what compute capability describes.</li>
+  </ul>
+</div>
 
 <h2>Thread hierarchy</h2>
 <ul>
@@ -70,6 +79,26 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 
 <h2>Compute capability</h2>
 <p>Major.minor. The same major = the same core architecture (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = incremental improvement, new features. Newer architecture, better CUDA capabilities.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>In a block with <code>blockDim = (16, 8)</code>, which warp is thread <code>threadIdx = (5, 3)</code> in?</p>
+  <ol>
+    <li data-why="The linear index is 3·16 + 5 = 53; 53/32 = 1, not warp 0.">Warp 0</li>
+    <li data-why="Correct: linear index y·blockDim.x + x = 3·16 + 5 = 53, warp = 53/32 = 1.">Warp 1</li>
+    <li data-why="Warp 2 needs an index between 64 and 95.">Warp 2</li>
+    <li data-why="x·blockDim.y + y = 5·8 + 3 = 43 is the wrong formula: x varies fastest.">The warp computed with x and y swapped</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Through which memory can the threads of a block share data and wait for each other?</p>
+  <ol>
+    <li data-why="Registers are private to a thread.">Registers</li>
+    <li data-why="Local memory is also private to a thread (the name is misleading).">Local memory</li>
+    <li data-why="Correct: shared memory belongs to the block; waiting is done with __syncthreads().">Shared memory</li>
+    <li data-why="Constant memory is read-only for the kernel; it cannot be used to exchange data.">Constant memory</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Global, local, shared, constant memory</h1>
+<p class="lead">We zoom in on the pieces of the map in 6.2. For each memory look at the same three things: where it lives, who sees it, and how a warp's 32 accesses are served.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>State why alignment and pitch are needed in global memory.</li>
+    <li>Explain when local memory is used (spills, dynamically indexed arrays).</li>
+    <li>Compute the degree of a shared-memory bank conflict; explain constant memory's broadcast.</li>
+  </ul>
+</div>
 
 <h2>Global memory</h2>
 <p>Four key points for efficient access (slide 35):</p>
@@ -113,6 +122,26 @@ __constant__ float constData[256];          // outside any function
 float data[256];                             // host-side buffer
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel launch
 </pre>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>In 32-bank shared memory a warp reads <code>s[2*threadIdx.x]</code> (<code>float s[64]</code>). What is the degree of the bank conflict?</p>
+  <ol>
+    <li data-why="With a stride of 2, two threads land in the same bank.">No conflict</li>
+    <li data-why="Correct: threads t and t+16 fall in the same bank ((2t) % 32) → a 2-way conflict.">2-way</li>
+    <li data-why="16-way would need a stride of 16.">16-way</li>
+    <li data-why="32-way happens when all want different words of the same bank.">32-way</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>All threads of a warp read the same <code>__constant__</code> address. What happens?</p>
+  <ol>
+    <li data-why="Correct: the constant cache serves the value to the whole warp in one read (a broadcast).">One read, broadcast to the warp</li>
+    <li data-why="Different addresses are serialised; the same address is not.">32 reads one after the other</li>
+    <li data-why="The same address is not a bank conflict, and constant memory has no banks.">A 32-way bank conflict</li>
+    <li data-why="A kernel can read constant memory but not write it.">A compile error</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

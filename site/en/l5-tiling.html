@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>CGMA, memory types, tiling with shared memory</h1>
+<p class="lead">The kernel of 5.2 is correct but slow: two global reads for every multiply-add. This page measures that with one number (CGMA) and fixes it with shared-memory tiles.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute the CGMA ratio and show why the simple matmul kernel is memory bound.</li>
+    <li>State the scope and lifetime of the CUDA memory types.</li>
+    <li>Trace which elements a tiled-matmul phase loads; explain why global traffic drops T times.</li>
+  </ul>
+</div>
 
 <h2>Memory access efficiency: CGMA</h2>
 <ul>
@@ -105,6 +114,26 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Apply: M, N and P tile loads beside the code</h3>
 <div data-learning="tile"></div>
 <p>The same idea with a non-square block (e.g. <code>dim3(8,32)</code>): <a href="exam-midterm2.html#the-tiled-shared-memory-version-with-the-same-configuration">the solution in the midterm 2 guide</a>.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>The inner loop of the simple matmul kernel reads one element of Md and one of Nd per step and does one multiply and one add. What is the CGMA?</p>
+  <ol>
+    <li data-why="Two operations per two reads.">0.5</li>
+    <li data-why="Correct: 2 floating-point operations / 2 global reads = 1.">1</li>
+    <li data-why="There are 2 reads, not 1.">2</li>
+    <li data-why="T is the improvement after tiling.">16</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>In tiled matmul, why is <code>__syncthreads()</code> needed after loading a tile and before using it?</p>
+  <ol>
+    <li data-why="Correct: each thread will read tile elements other threads loaded; reading before all are loaded sees stale data.">So that elements loaded by other threads are not read before they are ready</li>
+    <li data-why="Global writes become visible at the end of the kernel; the barrier is not for that.">To order the writes to global memory</li>
+    <li data-why="The barrier is per block; it does not synchronise blocks.">To synchronise all blocks</li>
+    <li data-why="Registers are private to a thread; they are not shared.">To share registers</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

@@ -20,10 +20,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Turn a CPU loop into a kernel: the host side (allocate, copy, launch, copy back, free) and the device side.</li>
-    <li>Compute rows/columns from <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>.</li>
-    <li>The rules of <code>__syncthreads()</code>; warps and latency hiding.</li>
-    <li>Compute CGMA and show why tiling cuts global traffic T times; write the tiled matmul kernel.</li>
+    <li>Turn a CPU loop into a kernel with one thread per element.</li>
+    <li>Write the five host-side steps in order (allocate, copy, launch, copy back, free).</li>
+    <li>Tell apart the <code>__global__</code>, <code>__device__</code> and <code>__host__</code> qualifiers.</li>
   </ul>
 </div>
 
@@ -139,6 +138,26 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
   <p><strong>Where are the loops?</strong> The outer <code>i</code> and <code>j</code> loops are gone: <code>ty</code> (row) and <code>tx</code> (column) replaced them. The dot-product loop remains.</p>
   <p><strong>Its problem:</strong> it uses only one block, so the matrix can have at most as many elements as the threads-per-block limit (512 on old GPUs → 16×16; 1024 on newer ones → 32×32). Even with more blocks, threads in different blocks with the same <code>threadIdx</code> would compute the <strong>same</strong> <code>Pd</code> element, because <code>blockIdx</code> is not used.</p>
 </div>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="1">
+  <p>Which qualifier declares a function called from the host that runs on the device?</p>
+  <ol>
+    <li data-why="Correct: __global__ is a kernel; launched from the host with &lt;&lt;&lt;…&gt;&gt;&gt;, it runs on the device and returns void.">__global__</li>
+    <li data-why="__device__ runs on the device but is called only from the device.">__device__</li>
+    <li data-why="__host__ is an ordinary CPU function.">__host__</li>
+    <li data-why="__shared__ is a variable qualifier, not a function qualifier.">__shared__</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>What does <code>cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice)</code> do?</p>
+  <ol>
+    <li data-why="That is the other direction: DeviceToHost.">Copies d_A on the GPU to h_A on the CPU</li>
+    <li data-why="Correct: copies h_A in CPU memory to d_A in GPU memory (the first argument is the destination).">Copies h_A on the CPU to d_A on the GPU</li>
+    <li data-why="Allocating memory is cudaMalloc&#x27;s job.">Allocates GPU memory for d_A</li>
+    <li data-why="A kernel is launched with &lt;&lt;&lt;…&gt;&gt;&gt;.">Launches the kernel</li>
+  </ol>
 </div>
 
 </div></main>

@@ -16,6 +16,7 @@
 <main><div class="content">
 
 <h1>Loop unrolling; coalescing özeti ve sınama</h1>
+<p class="lead">Lecture 6'nın coalescing kısmını bitirir: önce loop unrolling, sonra coalescing ve transpose'un ana fikirleri, açık uçlu sorular ve karışık bir sınama.</p>
 
 <h2 id="loop-unrolling" data-toc="Loop unrolling: döngü yükünü azaltmak">Loop unrolling: döngü yükünü azaltmak <span class="badge-class">derste</span></h2>
 <p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>

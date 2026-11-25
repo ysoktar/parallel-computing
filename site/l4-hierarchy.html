@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Thread ve bellek hiyerarşisi</h1>
+<p class="lead">4.1'de iş binlerce thread'e bölündü; bu sayfa o thread'lerin nasıl düzenlendiğini (grid → blok → thread) ve hangi belleği gördüklerini anlatıyor.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>1D/2D/3D blokta lineer thread indeksini ve thread'in hangi warp'ta olduğunu hesaplamak.</li>
+    <li>Blokların neden bağımsız olması gerektiğini ve bunun ölçeklenebilirlikle ilişkisini söylemek.</li>
+    <li>Register, shared ve global belleğin kapsamını ve compute capability'nin ne anlattığını söylemek.</li>
+  </ul>
+</div>
 
 <h2>Thread hiyerarşisi</h2>
 <ul>
@@ -70,6 +79,26 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 
 <h2>Compute capability</h2>
 <p>Major.minor. Aynı major = aynı çekirdek mimarisi (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = artımlı iyileştirme, yeni özellikler. Yeni mimari, daha iyi CUDA yetenekleri.</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p><code>blockDim = (16, 8)</code> olan bir blokta <code>threadIdx = (5, 3)</code> thread'i hangi warp'tadır?</p>
+  <ol>
+    <li data-why="Lineer indeks 3·16 + 5 = 53; 53/32 = 1, warp 0 değil.">Warp 0</li>
+    <li data-why="Doğru: lineer indeks y·blockDim.x + x = 3·16 + 5 = 53, warp = 53/32 = 1.">Warp 1</li>
+    <li data-why="Warp 2 için indeksin 64 ile 95 arasında olması gerekir.">Warp 2</li>
+    <li data-why="x·blockDim.y + y = 5·8 + 3 = 43 yanlış formüldür: x en hızlı değişen boyuttur.">x ve y'yi ters çevirip hesaplanan warp</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Bir bloğun thread'leri hangi bellek üzerinden veri paylaşabilir ve birbirini bekleyebilir?</p>
+  <ol>
+    <li data-why="Register thread&#x27;e özeldir.">Register</li>
+    <li data-why="Local memory de thread&#x27;e özeldir (adı yanıltıcı).">Local memory</li>
+    <li data-why="Doğru: shared memory bloğa özeldir; bekleşme __syncthreads() ile.">Shared memory</li>
+    <li data-why="Constant memory kernel için salt okunurdur; veri alışverişinde kullanılamaz.">Constant memory</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

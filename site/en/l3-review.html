@@ -15,6 +15,7 @@
 <main><div class="content">
 
 <h1>Summary and quiz</h1>
+<p class="lead">Wraps up all of Lecture 3: the key ideas of threads and synchronisation, common mistakes, open-ended questions and a mixed quiz.</p>
 
 <h2>Key ideas of the lecture</h2>
 <ul>
@@ -35,7 +36,7 @@
 </ul>
 <h3>Open-ended questions for the final</h3>
 <p><strong>1.</strong> 4 threads each do an unprotected <code>counter++</code> 1000 times. What can the final value be at most? Why does it come out below 4000?</p>
-<div class="hint"><p>At most 4000 (if there is never an overlap). In practice less, because the read-add-write steps interleave and updates are lost (the table above). The theoretical lower bound is very small (a bad interleaving can bring it down to 2); in the exam what matters is explaining why: updates are lost and the result is nondeterministic.</p></div>
+<div class="hint"><p>At most 4000 (if there is never an overlap). In practice less, because the read-add-write steps interleave and updates are lost (the step-by-step <code>counter++</code> table in <a href="l3-threads.html">3.1</a>). The theoretical lower bound is very small (a bad interleaving can bring it down to 2); in the exam what matters is explaining why: updates are lost and the result is nondeterministic.</p></div>
 <p><strong>2.</strong> In producer-consumer the consumer is written in this order: <code>l.acquire(); resAvail.acquire(); …</code>. What happens?</p>
 <div class="hint"><p>With an empty buffer the consumer takes the mutex, then sleeps on <code>resAvail</code> <strong>while holding the mutex</strong>. The producer cannot take the mutex to add an item → nobody can progress: <strong>deadlock</strong>. The right order is semaphore first, then mutex.</p></div>
 <p><strong>3.</strong> A web server can open at most 8 database connections at once. Which synchronisation tool do you use? Write the skeleton of the code.</p>

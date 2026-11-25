@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Explain why frequency scaling stopped and the move to multi-core.</li>
-    <li>State Flynn's taxonomy and the difference between shared and distributed memory MIMD.</li>
-    <li>Use the speedup, efficiency, Amdahl and Gustafson-Barsis formulas.</li>
+    <li>Explain why clock frequency stopped rising (the power wall) and the move to multi-core.</li>
+    <li>Name the four classes of Flynn's taxonomy and the difference between shared- and distributed-memory MIMD.</li>
+    <li>Summarise why CPUs and GPUs spend the same silicon differently.</li>
   </ul>
 </div>
 
@@ -80,6 +80,26 @@
   <li>B200: dual die (10 TB/s NV-HBI), 208 billion transistors, 148 active SMs = 18,944 CUDA cores, 592 Tensor cores.</li>
 </ul>
 <p>Other examples: <strong>AMD APU</strong> (CPU and GPU on the same die, <strong>unified memory space</strong> → no data transfers; HSA: latency-oriented LCUs and throughput-oriented TCUs), the Cell BE, multi-core CPUs (TILE-Gx8072, Intel Xeon Phi).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>What is the main reason clock frequency stopped at 2–4 GHz around 2004–2005?</p>
+  <ol>
+    <li data-why="Moore&#x27;s law is about transistor count and it continued in those years.">Moore's law ended.</li>
+    <li data-why="Correct: higher frequency means more heat, and lowering the voltage was not enough (the power wall).">Power and heat: the power wall.</li>
+    <li data-why="Slow memory is a separate problem; heat is what stopped the frequency.">Memory frequency dropped.</li>
+    <li data-why="Multi-core is the fix that came after the frequency stopped, not the cause.">Multi-core chips forced lower frequencies.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>A GPU warp applies the same instruction to 32 threads with different data. Which Flynn class is closest?</p>
+  <ol>
+    <li data-why="SISD is single instruction, single data: one sequential core.">SISD</li>
+    <li data-why="MISD is rare in practice (different instructions, the same data).">MISD</li>
+    <li data-why="Correct: single instruction, multiple data. The GPU&#x27;s SIMT model is a threaded form of SIMD.">SIMD</li>
+    <li data-why="The whole GPU, with many independent SMs, can act like MIMD, but a single warp is SIMD.">MIMD</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

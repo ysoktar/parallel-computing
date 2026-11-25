@@ -20,10 +20,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Bir CPU döngüsünü kernel'e çevirmek: host tarafı (ayır, kopyala, başlat, geri kopyala, serbest bırak) ve device tarafı.</li>
-    <li><code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>'ten satır/sütun hesaplamak.</li>
-    <li><code>__syncthreads()</code>'in kuralları; warp'lar ve latency hiding.</li>
-    <li>CGMA'yı hesaplayıp tiling'in global trafiği neden T kat azalttığını göstermek; tiled matmul kernel'ini yazmak.</li>
+    <li>Bir CPU döngüsünü, her elemana bir thread düşen bir kernel'e çevirmek.</li>
+    <li>Host tarafının beş adımını (ayır, kopyala, başlat, geri kopyala, serbest bırak) sırayla yazmak.</li>
+    <li><code>__global__</code>, <code>__device__</code> ve <code>__host__</code> niteleyicilerini ayırt etmek.</li>
   </ul>
 </div>
 
@@ -139,6 +138,26 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
   <p><strong>Döngüler nerede?</strong> Dıştaki <code>i</code> ve <code>j</code> döngüleri gitti: yerlerini <code>ty</code> (satır) ve <code>tx</code> (sütun) aldı. İç çarpım döngüsü kaldı.</p>
   <p><strong>Sorunu:</strong> sadece bir blok kullanıyor, yani matris en fazla blok başına thread sınırı kadar elemanlı olabilir (eski GPU'larda 512 → 16×16; yenilerde 1024 → 32×32). Daha fazla blok kullansak bile aynı <code>threadIdx</code>'e sahip farklı bloklardaki thread'ler <strong>aynı</strong> <code>Pd</code> elemanını hesaplardı, çünkü <code>blockIdx</code> kullanılmıyor.</p>
 </div>
+</div>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="1">
+  <p>Host'tan çağrılıp device'ta çalışan fonksiyon hangi niteleyiciyle tanımlanır?</p>
+  <ol>
+    <li data-why="Doğru: __global__ bir kernel&#x27;dir; host&#x27;tan &lt;&lt;&lt;…&gt;&gt;&gt; ile başlatılır, device&#x27;ta çalışır, void döndürür.">__global__</li>
+    <li data-why="__device__ device&#x27;ta çalışır ama sadece device&#x27;tan çağrılır.">__device__</li>
+    <li data-why="__host__ sıradan CPU fonksiyonudur.">__host__</li>
+    <li data-why="__shared__ bir değişken niteleyicisidir, fonksiyon değil.">__shared__</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice)</code> ne yapar?</p>
+  <ol>
+    <li data-why="Yön tersi: DeviceToHost.">GPU'daki d_A'yı CPU'daki h_A'ya kopyalar</li>
+    <li data-why="Doğru: CPU belleğindeki h_A&#x27;yı GPU belleğindeki d_A&#x27;ya kopyalar (ilk argüman hedef).">CPU'daki h_A'yı GPU'daki d_A'ya kopyalar</li>
+    <li data-why="Bellek ayırmak cudaMalloc&#x27;un işidir.">d_A için GPU belleği ayırır</li>
+    <li data-why="Kernel &lt;&lt;&lt;…&gt;&gt;&gt; ile başlatılır.">Kernel'i başlatır</li>
+  </ol>
 </div>
 
 </div></main>

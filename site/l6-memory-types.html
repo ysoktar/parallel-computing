@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Global, local, shared, constant bellek</h1>
+<p class="lead">6.2'deki haritanın parçalarına tek tek yaklaşıyoruz. Her bellek için aynı üç şeye bakın: nerede durur, kim görür, warp'ın 32 erişimi nasıl karşılanır.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Global bellekte hizalama ve pitch'in neden gerektiğini söylemek.</li>
+    <li>Local memory'nin ne zaman kullanıldığını (spill, dinamik indeksli diziler) açıklamak.</li>
+    <li>Shared memory'de bank conflict derecesini hesaplamak; constant memory'nin broadcast'ini açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Global bellek</h2>
 <p>Verimli erişim için dört ana nokta (slayt 35):</p>
@@ -113,6 +122,26 @@ __constant__ float constData[256];          // fonksiyonların dışında
 float data[256];                             // host tarafındaki tampon
 cudaMemcpyToSymbol(constData, data, sizeof(data));   // kernel'den önce kopyala
 </pre>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>32 bank'lı shared memory'de bir warp <code>s[2*threadIdx.x]</code> (<code>float s[64]</code>) okuyor. Bank conflict derecesi nedir?</p>
+  <ol>
+    <li data-why="Adımı 2 olan erişimde iki thread aynı bank&#x27;a düşer.">Conflict yok</li>
+    <li data-why="Doğru: thread t ve t+16 aynı bank&#x27;a ((2t) % 32) düşer → 2-way conflict.">2-way</li>
+    <li data-why="16-way için adımın 16 olması gerekir.">16-way</li>
+    <li data-why="32-way, hepsi aynı bank&#x27;ın farklı kelimelerini isterse olur.">32-way</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Bir warp'ın bütün thread'leri aynı <code>__constant__</code> adresini okuyor. Ne olur?</p>
+  <ol>
+    <li data-why="Doğru: constant cache değeri tek okumada bütün warp&#x27;a yayınlar (broadcast).">Tek okuma, warp'a yayın (broadcast)</li>
+    <li data-why="Farklı adresler sıralanır; aynı adres sıralanmaz.">32 okuma sırayla yapılır</li>
+    <li data-why="Aynı adres bank conflict değildir; ayrıca constant bank&#x27;lı değildir.">32-way bank conflict</li>
+    <li data-why="Kernel constant&#x27;ı okuyabilir, yazamaz.">Derleme hatası</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

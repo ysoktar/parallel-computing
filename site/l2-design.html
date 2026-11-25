@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>PCAM'ın dört adımını ve her adımın pratik kuralını söylemek.</li>
-    <li>Bir problem için uygun ayrıştırma desenini seçmek.</li>
-    <li>GPLS ve GSLP program yapısı desenlerini ayırt etmek.</li>
+    <li>Paralelleştirmeden önce sorulacak soruları (gerekli mi, mümkün mü?) söylemek.</li>
+    <li>PCAM'ın dört adımını (bölümleme, iletişim, birleştirme, eşleme) ve her birinin pratik kuralını açıklamak.</li>
+    <li>Bir problemi (ör. 2D konvolüsyon) PCAM adımlarıyla tasarlamak.</li>
   </ul>
 </div>
 
@@ -58,6 +58,26 @@
   <li><strong>Mapping:</strong> grupları eşit büyüklükte tutun (yük dengesi) ve her çekirdeğe bir/birkaç grup verin. GPU'da: karo = thread bloğu, halo = karonun etrafındaki fazla satırlar, ve karo shared memory'ye yüklenir.</li>
 </ol>
 <p>Aynı akıl yürütme matris çarpımında da var: bir çıktı elemanı = bir görev, gruplama = blok/karo, iletişimi azaltma = shared memory ile tiling (L5).</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p>PCAM'ın hangi adımında küçük görevler, iletişimi azaltmak için daha büyük görevlerde toplanır?</p>
+  <ol>
+    <li data-why="Partitioning işi mümkün olduğunca küçük görevlere böler.">Partitioning</li>
+    <li data-why="Communication görevler arasındaki veri alışverişini belirler.">Communication</li>
+    <li data-why="Doğru: agglomeration görevleri gruplar; görev içi iletişim bedavadır.">Agglomeration</li>
+    <li data-why="Mapping görevleri işlemcilere atar.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>2D konvolüsyonda her çıktı pikseli bir görev olsun. Görevler arasındaki iletişim nereden çıkar?</p>
+  <ol>
+    <li data-why="Doğru: her çıktı komşu giriş piksellerine ihtiyaç duyar; bölge sınırında komşunun verisi (halo) gerekir.">Komşu piksellere ihtiyaç</li>
+    <li data-why="Her pikselin çıktısı ayrı bir yere yazılır; ortak bir çıktı yoktur.">Ortak çıktı dizisine yazma</li>
+    <li data-why="Filtre katsayıları sadece okunur; herkes kopyasını tutabilir.">Filtre katsayılarını değiştirmek</li>
+    <li data-why="Görevler arasında sıra bağımlılığı yoktur; hepsi aynı anda çalışabilir.">Bir pikselin öncekini beklemesi</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

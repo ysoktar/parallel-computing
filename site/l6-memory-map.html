@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>GPU belleği: tek resim ve sınırlar</h1>
+<p class="lead">Bellek türlerini tek tek ezberlemek yerine onları tek bir haritaya yerleştiriyoruz; sonra bu belleklerin sınırlı olmasının, bir SM'de aynı anda kaç thread çalışabileceğini nasıl belirlediğine bakıyoruz.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Her belleği üç soruyla (nerede, kim görür, nasıl erişilmeli) yerleştirmek.</li>
+    <li>Bir kernel'deki her değişkenin hangi bellekte durduğunu söylemek.</li>
+    <li>Register ve shared bellek sınırlarından SM başına blok ve thread sayısını hesaplamak.</li>
+  </ul>
+</div>
 
 <h2>Üç soru, bir bellek haritası</h2>
 <p>Bellek türlerini tek tek ezberlemek yerine onları <strong>üç soruya</strong> göre bir yapıya oturtalım. Her bellek türü bu üç sorunun bir cevap kombinasyonudur:</p>
@@ -118,7 +127,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <li><strong>Hiçbiri değilse</strong> (büyük girdi/çıktı dizileri) → <strong>global</strong>; erişimleri coalesced yap, 2D'de pitch kullan.</li>
 </ol>
 <div class="callout example">
-  <p><strong>Tiled matmul'ü bu gözle okuyun:</strong> <code>M</code>, <code>N</code>, <code>P</code> global'de (büyük, herkes görür; yüklemeler coalesced). Karolar <code>Mds</code>, <code>Nds</code> shared'da (bloktaki 16 thread aynı elemanı kullanır). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> register'da (thread'e özel). Bariyer, shared'ı paylaşmanın bedeli. Aşağıdaki bölümler bu resmin her parçasını ayrıntılandırıyor.</p>
+  <p><strong>Tiled matmul'ü bu gözle okuyun:</strong> <code>M</code>, <code>N</code>, <code>P</code> global'de (büyük, herkes görür; yüklemeler coalesced). Karolar <code>Mds</code>, <code>Nds</code> shared'da (bloktaki 16 thread aynı elemanı kullanır). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> register'da (thread'e özel). Bariyer, shared'ı paylaşmanın bedeli. Bu resmin parçaları <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) ve <a href="l6-texture.html">6.4</a> (texture) sayfalarında ayrıntılanıyor.</p>
 </div>
 <h2>Bellek sınırları ve etkileri</h2>
 <ul>
@@ -133,6 +142,26 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <p><strong>Matmul:</strong> 16×16 tile → Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/blok → 8 blok sığar (zaten G80 sınırı). Ama asıl sınır SM başına 768 thread: 768 / 256 = <strong>3 blok</strong> → shared'ın sadece 3·2 = 6 KB'ı kullanılır. Bu sınırların hepsi cihaza bağlıdır.</p>
 </div>
 <p>Mimari listesi (2023 itibarıyla ~20 tür): Tesla (1.0, 1.1), Fermi (2.0, 3.0), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Bellek davranışları cihaza bağlı: her zaman kullandığınız cihazın özelliklerini bilin.</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="1">
+  <p>Bir kernel'de <code>int i = blockIdx.x * blockDim.x + threadIdx.x;</code> ile tanımlanan <code>i</code> normalde nerede durur?</p>
+  <ol>
+    <li data-why="Doğru: thread&#x27;e özel skaler yerel değişkenler register&#x27;dadır.">Register</li>
+    <li data-why="Shared için __shared__ niteleyicisi gerekir.">Shared memory</li>
+    <li data-why="Global için cudaMalloc ya da __device__ değişken gerekir.">Global bellek</li>
+    <li data-why="Constant için __constant__ niteleyicisi gerekir.">Constant memory</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>G80'de SM başına 8192 register var ve 768 thread doldurulmak isteniyor. Thread başına en fazla kaç register kullanılabilir?</p>
+  <ol>
+    <li data-why="8192/256 = 32, blok başına hesaptır.">32</li>
+    <li data-why="16 ile 768 thread&#x27;e 12.288 register gerekir; sığmaz.">16</li>
+    <li data-why="Doğru: 8192 / 768 ≈ 10,7 → 10 register.">10</li>
+    <li data-why="Register sınırı SM başına toplamdır, thread başına sabit değildir.">Sınırsız; register thread başına sabittir</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

@@ -22,8 +22,7 @@
   <ul>
     <li>Bir erişim deseni için kaç tane 32/128 baytlık segmente dokunulduğunu ve verimi hesaplamak.</li>
     <li>Bir kodun coalesced olup olmadığını <code>threadIdx.x</code>'in adreste nerede durduğuna bakarak söylemek.</li>
-    <li>Naive transpose'un neden yavaş olduğunu ve shared memory karosuyla nasıl düzeltildiğini indeks indeks açıklamak.</li>
-    <li>Loop unrolling'in ne kazandırdığını ve maliyetini söylemek.</li>
+    <li>2D dizilerde pitch'in neden gerektiğini ve nasıl kullanıldığını açıklamak.</li>
   </ul>
 </div>
 
@@ -113,6 +112,26 @@ cudaMemcpy2D(devPtr, devPitch,            // hedef ve pitch'i (GPU)
              cudaMemcpyHostToDevice);
 </pre>
 <p>Pitch örnekleri (256 B hizalama): genişlik 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir warp, 128 B hizalı bir <code>float</code> dizisinden <code>a[threadIdx.x + 1]</code> okuyor. Kaç tane 128 B'lık segmente dokunulur?</p>
+  <ol>
+    <li data-why="Bir kayma, son elemanı bir sonraki segmente taşır.">1</li>
+    <li data-why="Doğru: adresler 4…131 baytları kapsar; 0–127 ve 128–255 segmentleri → 2.">2</li>
+    <li data-why="Ardışık erişim dağılmaz; sadece bir kayma var.">32</li>
+    <li data-why="Hizasız erişim de çalışır, sadece daha çok segmente dokunur.">Erişim hata verir</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Hangi indeksleme, satır düzenindeki bir matriste coalesced okuma verir (<code>x = blockIdx.x*blockDim.x + threadIdx.x</code>)?</p>
+  <ol>
+    <li data-why="Doğru: threadIdx.x en sağda ve çarpansız; komşu thread&#x27;ler komşu adresleri okur.">A[y * W + x]</li>
+    <li data-why="x W ile çarpılınca komşu thread&#x27;ler W eleman aralıklı okur.">A[x * W + y]</li>
+    <li data-why="Adımı 2 olan erişim segmentlerin yarısını boşa harcar.">A[y * W + 2*x]</li>
+    <li data-why="Hepsi coalesced değildir; adres deseni belirler.">Hepsi aynı</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

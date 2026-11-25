@@ -16,6 +16,7 @@
 <main><div class="content">
 
 <h1>Loop unrolling; coalescing summary and quiz</h1>
+<p class="lead">Finishes the coalescing part of Lecture 6: first loop unrolling, then the key ideas of coalescing and the transpose, open-ended questions and a mixed quiz.</p>
 
 <h2 id="loop-unrolling" data-toc="Loop unrolling: cutting loop overhead">Loop unrolling: cutting loop overhead <span class="badge-class">class</span></h2>
 <p>Copying the loop body several times to reduce the number of iterations. Every iteration runs, besides the "real work", <strong>counter-increment, compare and branch</strong> instructions; on a GPU these take instruction slots too. Unrolling reduces this overhead and, by putting independent instructions side by side, increases instruction-level parallelism (ILP).</p>

@@ -20,10 +20,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Runtime API ile driver API'yi ayırt etmek; PTX, cubin ve JIT derlemeyi açıklamak.</li>
-    <li>Bir <code>-gencode</code> satırından hangi GPU'ya hangi kodun yükleneceğini söylemek.</li>
-    <li>Register ve shared bellek sınırlarından SM başına blok/thread sayısını hesaplamak.</li>
-    <li>Local ve constant belleğin ne olduğunu ve en iyi erişim desenlerini söylemek; bank conflict derecesini hesaplamak.</li>
+    <li>Runtime API ile driver API'yi ayırt etmek.</li>
+    <li>Derleme zincirini (.cu → PTX → SASS/cubin) ve JIT derlemenin ne zaman devreye girdiğini açıklamak.</li>
+    <li>Bir <code>-gencode</code> satırından hangi GPU'ya hangi kodun yükleneceğini söylemek; kernel süresini doğru ölçmek.</li>
   </ul>
 </div>
 
@@ -81,6 +80,26 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li><strong>GPU yardımcı işlemcidir;</strong> işletim sistemini CPU başlatır, "şovu CPU yönetir".</li>
   <li>Süre ölçerken: (1) GPU önceden başlatılmış olmalı (soğuk çalıştırma olmasın), (2) kod bitmiş olmalı. <strong>Kernel başlatmaları asenkrondur</strong>: kernel'den sonra, süreyi almadan önce <code>cudaDeviceSynchronize()</code>. (Yoksa "mucizevi derecede kısa" süreler ölçersiniz.) Örnek: <code>texRotate.cu</code> 100 tekrarın her birinde kernel + <code>cudaDeviceSynchronize()</code> süresini ölçüp ortalamasını alır.</li>
 </ul>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p>Uygulama derlendiğinde henüz var olmayan yeni bir GPU'da kodun çalışabilmesini ne sağlar?</p>
+  <ol>
+    <li data-why="SASS belli bir mimariye özeldir; yeni mimaride çalışmaz.">Sadece sm_XY için SASS gömmek</li>
+    <li data-why="-O3 optimizasyon seviyesidir, uyumluluk sağlamaz.">-O3 ile derlemek</li>
+    <li data-why="Doğru: ikiliye PTX gömülürse sürücü onu yeni GPU için JIT ile derler.">İkiliye PTX gömmek (JIT derleme)</li>
+    <li data-why="Sürücü API&#x27;si de PTX ya da cubin ister; tek başına çözüm değildir.">Driver API kullanmak</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Bir kernel'in süresini ölçerken bitiş zamanını almadan önce neden <code>cudaDeviceSynchronize()</code> çağrılır?</p>
+  <ol>
+    <li data-why="Kernel başlatması derlemeyi tetiklemez.">Kernel'in derlenmesini beklemek için</li>
+    <li data-why="Doğru: kernel başlatma asenkrondur; senkronize etmezseniz sadece başlatma süresini ölçersiniz.">Kernel başlatma asenkron olduğu için; yoksa çok kısa süre ölçülür</li>
+    <li data-why="GPU ilk çağrıda başlatılır; bu ayrı bir ısınma meselesidir.">GPU'yu başlatmak için</li>
+    <li data-why="Senkronizasyon belleği temizlemez.">Bellekteki eski veriyi temizlemek için</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

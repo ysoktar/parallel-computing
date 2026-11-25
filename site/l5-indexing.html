@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Thread indeksleme, senkronizasyon, warp'lar</h1>
+<p class="lead">5.1'deki kernel tek blokla sınırlıydı. Bu sayfa birden çok bloğa geçişi, her thread'in kendi satır/sütununu bulmasını ve bir bloğun thread'lerinin birbirini beklemesini anlatıyor.</p>
+
+<div class="callout goals">
+  <ul>
+    <li><code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>'ten satır ve sütun hesaplamak.</li>
+    <li><code>__syncthreads()</code>'in kurallarını ve bir koşulun içine konursa ne olacağını söylemek.</li>
+    <li>Blokların SM'lere atanmasını, warp'ları ve latency hiding'i açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Thread blokları ve indeksleme</h2>
 <ul>
@@ -83,6 +92,26 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
     <li><strong>32×32</strong> = 1024 thread → blok başına 512 sınırını aşar ✗.</li>
   </ul>
   <p>Sonuç: 16×16. (Henüz shared memory yok; olunca hesap karmaşıklaşır.)</p>
+</div>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p><code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code> başlatmasında blok (2,1)'deki <code>threadIdx = (5,10)</code> thread'inin sütunu (x) ve satırı (y) nedir?</p>
+  <ol>
+    <li data-why="Sütunda blockDim.x = 8 kullanılır, 32 değil.">col = 69, row = 42</li>
+    <li data-why="x ve y karıştırılmış.">col = 42, row = 21</li>
+    <li data-why="Doğru: col = 2·8 + 5 = 21, row = 1·32 + 10 = 42.">col = 21, row = 42</li>
+    <li data-why="Blok ofseti eklenmemiş.">col = 5, row = 10</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>if (threadIdx.x &lt; 16) __syncthreads();</code> neden yanlıştır?</p>
+  <ol>
+    <li data-why="__syncthreads() koşul içinde derlenir; sorun çalışma anındadır.">Derleme hatası verir</li>
+    <li data-why="Doğru: bloğun bütün thread&#x27;leri bariyere ulaşmalıdır; ulaşmayanlar olursa kernel kilitlenebilir ya da tanımsız davranır.">Bloğun bütün thread'leri bariyere ulaşmaz; kilitlenme ya da tanımsız davranış</li>
+    <li data-why="Bariyer blok içindir; diğer blokları hiç beklemez.">Diğer blokları gereksiz yere bekletir</li>
+    <li data-why="Warp sayısı bariyerin doğruluğunu belirlemez.">Sadece 16 thread'lik warp'larda çalışır</li>
+  </ol>
 </div>
 
 </div></main>

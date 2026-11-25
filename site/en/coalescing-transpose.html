@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Matrix transpose: naive vs shared memory</h1>
+<p class="lead">The rule of 6.6 is simple: neighbouring threads should access neighbouring addresses. A transpose fights that rule, because reads are consecutive in one direction and writes in the other. This page builds the fix in four steps.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Say why writing a copy kernel first and checking the indices pays off.</li>
+    <li>Show which access of the naive transpose does not coalesce.</li>
+    <li>Explain why both accesses coalesce with a shared-memory tile, and how <code>[32][33]</code> padding removes the bank conflict.</li>
+  </ul>
+</div>
 
 <h2 id="matrix-transpose" data-toc="The transpose in four steps">The transpose in four steps <span class="badge-class">class</span></h2>
 <p>The instructor's example in class; the kernel series of NVIDIA's <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a>. A transpose does no arithmetic at all, it only moves data: its performance depends entirely on the memory access pattern. That makes it the best example for showing coalescing.</p>
@@ -120,6 +129,26 @@ __shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c
   </tbody>
 </table>
 <p>Effective bandwidth = 2 × matrix size (one read + one write) / time. Conclusion: <strong>coalescing global memory is the most critical factor</strong>; the cost of shared memory and synchronisation is much smaller.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>In the naive transpose <code>out[x * N + y] = in[y * N + x]</code>, which access does not coalesce?</p>
+  <ol>
+    <li data-why="In the read, x (from threadIdx.x) is rightmost; the read coalesces.">The read from in</li>
+    <li data-why="Correct: in the write x is multiplied by N; neighbouring threads write N elements apart.">The write to out</li>
+    <li data-why="The read coalesces, so not both.">Both</li>
+    <li data-why="The write does not coalesce.">Neither</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>What does the extra column in <code>__shared__ float tile[32][33];</code> do?</p>
+  <ol>
+    <li data-why="The extra column is not used; it is not for overflow.">Catch out-of-bounds writes</li>
+    <li data-why="Global coalescing does not depend on the shared array&#x27;s size.">Make the global write coalesced</li>
+    <li data-why="Correct: with 33-word rows the elements of a column fall in different banks; the 32-way conflict of the column read disappears.">Remove the bank conflict when reading a column</li>
+    <li data-why="An extra element does not remove the need for __syncthreads().">Make __syncthreads() unnecessary</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

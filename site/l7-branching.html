@@ -14,6 +14,15 @@
 <main><div class="content">
 
 <h1>Dallanma, predication ve döngüler</h1>
+<p class="lead">7.1'deki hatalar doğruluk meselesiydi; bu sayfa performansa geçiyor. Warp'ın 32 thread'i tek komut sayacını paylaştığı için <code>if</code> ve döngülerin nasıl yazıldığı süreyi doğrudan etkiler.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Bir koşulun kaç warp'ı diverge ettirdiğini hesaplamak.</li>
+    <li>CPU'nun branch prediction'ı ile GPU'nun branch predication'ını ayırt etmek.</li>
+    <li><code>#pragma unroll</code> çeşitlerini ve signed döngü sayacı tavsiyesinin nedenini açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Branching ve divergence</h2>
 <ul>
@@ -92,6 +101,26 @@ for (int i = 0; i < n; i++) {
     out[i] = in[offset + stride*i];
 }
 </pre>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="1">
+  <p>256 thread'lik blokta <code>if (threadIdx.x % 64 &lt; 32)</code> kaç warp'ı diverge ettirir?</p>
+  <ol>
+    <li data-why="Doğru: koşul 32&#x27;lik gruplara tam hizalı; her warp ya tamamen girer ya hiç girmez → 0.">0</li>
+    <li data-why="Koşul warp sınırlarında değişiyor; warp içinde değişmiyor.">4</li>
+    <li data-why="Hepsi diverge etmez.">8</li>
+    <li data-why="Yarısı dalı alır ama warp içinde fark yoktur.">Yarısı (4)</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Döngü sayacı için neden <code>int</code> (signed) tercih edilir?</p>
+  <ol>
+    <li data-why="İkisi de aynı boyuttadır.">Daha az register kullandığı için</li>
+    <li data-why="Doğru: signed taşma tanımsız olduğu için derleyici taşma olmadığını varsayıp daha agresif optimize edebilir; unsigned taşmanın sarma davranışını korumak zorundadır.">Signed taşma tanımsız; derleyici daha agresif optimize edebilir</li>
+    <li data-why="Negatif değer gerekmesi şart değildir.">Döngüler negatif saymak zorunda olduğu için</li>
+    <li data-why="unsigned GPU&#x27;da desteklenir.">unsigned GPU'da yoktur</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

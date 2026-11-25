@@ -20,10 +20,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Tell the runtime API from the driver API; explain PTX, cubin and JIT compilation.</li>
-    <li>Say which code is loaded on which GPU from a <code>-gencode</code> line.</li>
-    <li>Compute blocks/threads per SM from the register and shared memory limits.</li>
-    <li>Say what local and constant memory are and their best access patterns; compute the degree of a bank conflict.</li>
+    <li>Tell the runtime API from the driver API.</li>
+    <li>Explain the compilation chain (.cu → PTX → SASS/cubin) and when JIT compilation kicks in.</li>
+    <li>Read a <code>-gencode</code> line and say which code is loaded on which GPU; time a kernel correctly.</li>
   </ul>
 </div>
 
@@ -81,6 +80,26 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li><strong>The GPU is a coprocessor;</strong> the CPU boots the OS, "the CPU runs the show".</li>
   <li>When timing: (1) the GPU must already be initialised (no cold runs), (2) the code must have finished. <strong>Kernel launches are asynchronous</strong>: call <code>cudaDeviceSynchronize()</code> after the kernel and before taking the time. (Otherwise you measure "miraculously short" times.) Example: <code>texRotate.cu</code> times kernel + <code>cudaDeviceSynchronize()</code> in each of 100 repetitions and averages.</li>
 </ul>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>What lets the code run on a new GPU that did not exist when the application was compiled?</p>
+  <ol>
+    <li data-why="SASS is specific to an architecture; it does not run on a new one.">Embedding SASS for sm_XY only</li>
+    <li data-why="-O3 is an optimisation level; it does not give compatibility.">Compiling with -O3</li>
+    <li data-why="Correct: if PTX is embedded in the binary, the driver JIT-compiles it for the new GPU.">Embedding PTX in the binary (JIT compilation)</li>
+    <li data-why="The driver API also needs PTX or a cubin; it is not a fix on its own.">Using the driver API</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>When timing a kernel, why call <code>cudaDeviceSynchronize()</code> before taking the end time?</p>
+  <ol>
+    <li data-why="Launching a kernel does not trigger compilation.">To wait for the kernel to compile</li>
+    <li data-why="Correct: kernel launches are asynchronous; without synchronising you only measure the launch.">Because launches are asynchronous; otherwise a tiny time is measured</li>
+    <li data-why="The GPU is initialised on the first call; that is a separate warm-up issue.">To initialise the GPU</li>
+    <li data-why="Synchronising does not clear memory.">To clear stale data in memory</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

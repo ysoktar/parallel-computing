@@ -20,10 +20,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Compute how many 32/128-byte segments an access pattern touches, and its efficiency.</li>
+    <li>Compute how many 32/128-byte segments an access pattern touches, and the efficiency.</li>
     <li>Tell whether code is coalesced by looking at where <code>threadIdx.x</code> sits in the address.</li>
-    <li>Explain, index by index, why the naive transpose is slow and how a shared memory tile fixes it.</li>
-    <li>Say what loop unrolling gains and what it costs.</li>
+    <li>Explain why 2D arrays need a pitch and how to use it.</li>
   </ul>
 </div>
 
@@ -113,6 +112,26 @@ cudaMemcpy2D(devPtr, devPitch,            // destination and its pitch (GPU)
              cudaMemcpyHostToDevice);
 </pre>
 <p>Pitch examples (256 B alignment): width 5, 50, 250 B → pitch 256; 500 B → 512; 700 B → 768.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>A warp reads <code>a[threadIdx.x + 1]</code> from a 128 B-aligned <code>float</code> array. How many 128 B segments are touched?</p>
+  <ol>
+    <li data-why="The offset pushes the last element into the next segment.">1</li>
+    <li data-why="Correct: the addresses span bytes 4…131; segments 0–127 and 128–255 → 2.">2</li>
+    <li data-why="Consecutive accesses do not scatter; there is only an offset.">32</li>
+    <li data-why="Misaligned accesses work; they just touch more segments.">The access fails</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Which indexing gives coalesced reads of a row-major matrix (<code>x = blockIdx.x*blockDim.x + threadIdx.x</code>)?</p>
+  <ol>
+    <li data-why="Correct: threadIdx.x is rightmost and unscaled; neighbouring threads read neighbouring addresses.">A[y * W + x]</li>
+    <li data-why="Multiplying x by W makes neighbouring threads read W elements apart.">A[x * W + y]</li>
+    <li data-why="A stride of 2 wastes half of each segment.">A[y * W + 2*x]</li>
+    <li data-why="They are not all coalesced; the address pattern decides.">They are all the same</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

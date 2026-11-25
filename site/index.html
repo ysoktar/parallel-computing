@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paralel Hesaplama · BİL 455/533 çalışma sitesi</title>
-<meta name="description" content="BİL 455/533 Paralel Hesaplama (TOBB ETÜ, 2026 Güz) için iki dilli çalışma sitesi: 2. ara sınav (CUDA, shared memory, __syncthreads, coalescing, tiled matmul, transpose) önceliğiyle Lecture 1–6.">
+<meta name="description" content="BİL 455/533 Paralel Hesaplama (TOBB ETÜ, 2026 Güz) için iki dilli çalışma sitesi: Lecture 1–7 ders ders alt sayfalara bölünmüş, her sayfada çözümlü örnekler, etkileşimli şekiller ve sorular; final için tüm dönem.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
@@ -36,7 +36,7 @@
 <h2>Sayfalar</h2>
 <p>Sayfalar ders sırasını izler; her sayfanın sonundaki düğmeler bir sonraki derse götürür. Sınav sayfaları en sonda.</p>
 <div class="callout note" data-label="Sıradaki sınav: final">
-  <p><strong>Final:</strong> tüm dönem. 2. vizede dışarıda kalan shared memory bank conflict'leri ve texture memory artık kapsamda (<a href="l6-cuda-memory.html">L6</a>). Her dersin sonunda bir özet, sık yapılan hatalar ve final tipi açık uçlu sorular var. 2. vize materyalleri: <a href="exam-midterm2.html">çalışma rehberi</a>, <a href="cheatsheet.html">hazır kopya kâğıdı</a>, <a href="mock-exam.html">kod yazmalı deneme</a>.</p>
+  <p><strong>Final:</strong> tüm dönem. 2. vizede dışarıda kalan shared memory bank conflict'leri ve texture memory artık kapsamda (<a href="l6-memory-types.html">6.3 bank'lar</a>, <a href="l6-texture.html">6.4 texture</a>). Her alt sayfa kendi sorularıyla biter; her dersin son sayfasında özet, sık yapılan hatalar ve final tipi açık uçlu sorular var. 2. vize materyalleri: <a href="exam-midterm2.html">çalışma rehberi</a>, <a href="cheatsheet.html">hazır kopya kâğıdı</a>, <a href="mock-exam.html">kod yazmalı deneme</a>.</p>
 </div>
 <div class="cards" id="parts"></div>
 
@@ -46,7 +46,8 @@
   <li><strong>Nasıl tasarlanır? (L2)</strong> PCAM: problemi parçala, iletişimi belirle, parçaları birleştir, işlemcilere eşle. Ayrıştırma desenleri (geometrik, pipeline, …) ve program yapıları (SPMD, master-worker, map-reduce, fork/join).</li>
   <li><strong>CPU'da paylaşımlı bellek (L3)</strong> C++11 thread'leri; veri yarışlarını mutex, semafor, atomik ve monitörlerle önlemek.</li>
   <li><strong>GPU'da veri paralelliği (L4–L5)</strong> Her veri elemanına bir thread: grid → blok → thread, <code>blockIdx/threadIdx</code> ile indeksleme, warp'lar, blok içi senkronizasyon ve shared memory ile tiling.</li>
-  <li><strong>Belleği beslemek (L6)</strong> Hesap ucuz, bellek pahalı: register/shared sınırları, coalescing, pitch, constant bellek (texture bu vizede yok). Transpose örneği bunların hepsini bir araya getirir.</li>
+  <li><strong>Belleği beslemek (L6)</strong> Hesap ucuz, bellek pahalı: register/shared sınırları, coalescing, pitch, shared memory bank'ları, constant ve texture bellek. Transpose örneği bunların hepsini bir araya getirir.</li>
+  <li><strong>Hataları ve dallanmayı yönetmek (L7)</strong> Kernel hataları asenkron gelir: başlatmadan sonra <code>cudaGetLastError()</code>, sonra <code>cudaDeviceSynchronize()</code>. Warp tek komut sayacı paylaştığı için <code>if</code>'ler warp sınırına hizalanmalı; döngüler unrolling ve signed sayaçla hızlanır.</li>
 </ol>
 
 <h2>Sitenin kullanımı</h2>
@@ -68,10 +69,10 @@
 </div>
 
 <h2>Konuyu okurken kod üzerinde dene</h2>
-<p>İlgili derslerin içine yerleştirilen uygulamalar: <a href="l1-intro.html">Amdahl hızlanması</a>, <a href="l2-design.html">geometrik ayrıştırma ve halo</a>, <a href="l3-threads.html">race condition</a>, <a href="l4-cuda-intro.html">CUDA thread–matris indeksi</a>, <a href="l5-cuda-kernels.html">tiled matmul</a>, <a href="l6-cuda-memory.html">pitch ve coalescing</a>. Hücrenin üzerine gel, kodun nasıl vurgulandığını gör; tıklayıp seçimi sabitle.</p>
+<p>İlgili derslerin içine yerleştirilen uygulamalar: <a href="l1-performance.html">Amdahl hızlanması</a>, <a href="l2-patterns.html">geometrik ayrıştırma ve halo</a>, <a href="l3-threads.html">race condition</a>, <a href="l4-hierarchy.html">CUDA thread–matris indeksi</a>, <a href="l5-tiling.html">tiled matmul</a>, <a href="l6-memory-types.html">pitch ve coalescing</a>. Hücrenin üzerine gel, kodun nasıl vurgulandığını gör; tıklayıp seçimi sabitle.</p>
 <h2>Kaynaklar</h2>
 <ul>
-  <li>Ders slaytları: Lecture 1 (giriş), 2 (tasarım), 3 (thread'ler), 4 (CUDA'ya giriş), 5 (CUDA programlama), 6 (CUDA programlama arayüzü ve bellek).</li>
+  <li>Ders slaytları: Lecture 1 (giriş), 2 (tasarım), 3 (thread'ler), 4 (CUDA'ya giriş), 5 (CUDA programlama), 6 (CUDA programlama arayüzü ve bellek), 7 (hata kontrolü ve kontrol akışı).</li>
   <li>Alıştırmalar: Exercise 1–2 (C++ thread'leriyle histogram, integral dizi/görüntü, 2D konvolüsyon, matris çarpımı), Exercise 3–4 (aynılarının CUDA versiyonları). Örnek kodlar: semafor senkronizasyonu, texture ile görüntü döndürme (<code>texRotate.cu</code>).</li>
   <li>NVIDIA, <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-programming-guide/" target="_blank" rel="noopener">CUDA C++ Programming Guide</a> ve <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-best-practices-guide/" target="_blank" rel="noopener">Best Practices Guide</a> (slaytların önerdiği).</li>
   <li>M. Harris, <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">An Efficient Matrix Transpose in CUDA C/C++</a> (transpose örneği).</li>

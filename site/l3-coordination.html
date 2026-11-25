@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Deadlock, atomikler, monitörler</h1>
+<p class="lead">3.1'deki araçlar yarışları önler; bu sayfa onları birlikte kullanınca çıkan soruları ele alıyor: bellek hangi sırayla görünür, kilitler nasıl kilitlenir, thread'ler birbirini nasıl bekler?</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Deadlock, livelock ve starvation'ı tanımlayıp deadlock'u önlemenin pratik yolunu söylemek.</li>
+    <li>Producer-consumer problemini semafor ve mutex ile doğru sırada çözmek.</li>
+    <li>Atomik işlemleri, CAS'ı ve monitör/condition variable kullanımını açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Bellek tutarlılık modelleri</h2>
 <ul>
@@ -93,6 +102,26 @@ public:
 </ul>
 <div class="callout key">
   <p><strong>CPU ↔ GPU köprüsü:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel başlatma + <code>cudaDeviceSynchronize()</code>; bariyer ≈ <code>__syncthreads()</code> (ama sadece blok içi); <code>std::atomic</code> ≈ <code>atomicAdd</code>; histogram alıştırması iki dünyada da aynı yarış problemini gösterir.</p>
+</div>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="4">
+  <p>Thread A önce m1 sonra m2'yi, thread B önce m2 sonra m1'i kilitliyor. En basit düzeltme nedir?</p>
+  <ol>
+    <li data-why="Kilitleri kaldırmak yarışı geri getirir.">Kilitleri kaldırmak</li>
+    <li data-why="Bekleme süresi eklemek deadlock&#x27;u nadirleştirir ama önlemez.">Kilitler arasına sleep koymak</li>
+    <li data-why="Daha çok thread sorunu büyütür.">Thread sayısını artırmak</li>
+    <li data-why="Doğru: herkes kilitleri aynı sırada alırsa döngüsel bekleme oluşamaz (ya da std::scoped_lock(m1, m2)).">İki thread'in de kilitleri aynı sırada alması</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Condition variable ile beklerken koşul neden <code>while</code> döngüsünde kontrol edilir?</p>
+  <ol>
+    <li data-why="Doğru: thread sahte uyanabilir (spurious wakeup) ya da başka thread koşulu yeniden bozmuş olabilir.">Sahte uyanma ve koşulun yeniden bozulmuş olabilmesi</li>
+    <li data-why="Performans için değil, doğruluk için.">Döngü daha hızlı olduğu için</li>
+    <li data-why="wait() mutex&#x27;i bırakır ve uyanınca yeniden alır; bunu döngü yapmaz.">Mutex'i bırakmak için</li>
+    <li data-why="Derleyicinin isteği değildir.">Derleyici if'e izin vermediği için</li>
+  </ol>
 </div>
 
 </div></main>

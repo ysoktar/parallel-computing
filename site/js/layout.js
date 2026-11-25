@@ -270,6 +270,18 @@ function buildKicker(info) {
   return k;
 }
 
+/** The pages of the current lecture, in order, with the current one marked: a small road map under the H1. */
+function buildLectureSteps(id) {
+  const part = NAV.find((p) => p.lecture && p.items.some((it) => it.id === id));
+  if (!part) return null;
+  return h("nav", { class: "lec-steps", "aria-label": tl("Bu dersin sayfaları", "Pages of this lecture") },
+    ...part.items.map((it) => {
+      const a = h("a", { href: href(it.id) }, h("span", { class: "lec-step-num" }, it.num), " ", tx(it, "title"));
+      if (it.id === id) a.setAttribute("aria-current", "page");
+      return a;
+    }));
+}
+
 /** On phones, tables become stacked cards: every cell carries its column name (CSS shows it). */
 export function labelTables(root) {
   for (const t of $$("table.simple", root)) {
@@ -290,6 +302,8 @@ function init() {
   const h1 = $("h1", content);
   const kicker = buildKicker(info);
   if (h1 && kicker) h1.before(kicker);
+  const steps = buildLectureSteps(id);
+  if (h1 && steps) h1.after(steps);
   const pager = buildPager(id);
   if (pager) content.append(pager);
   content.append(buildFooter());

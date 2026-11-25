@@ -20,9 +20,8 @@
 <div class="callout goals">
   <ul>
     <li>Explain why CPUs and GPUs spend their silicon differently.</li>
-    <li>Tell SIMD from SIMT.</li>
-    <li>Compute the linear thread index and the warp in a 1D/2D/3D block.</li>
-    <li>Say why blocks must be independent and how this relates to scalability.</li>
+    <li>Tell SIMD from SIMT; state the cost of warp divergence.</li>
+    <li>Use the general CUDA approach (the host prepares, the device computes) and the basic terms.</li>
   </ul>
 </div>
 
@@ -111,6 +110,26 @@ __global__ void uniform(float* a) {
     <tr><td>Kernel</td><td>A <code>__global__</code> GPU function; called with <code>&lt;&lt;&lt;numberOfBlocks, threadsPerBlock&gt;&gt;&gt;</code>.</td></tr>
   </tbody>
 </table>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>Half of a warp takes the <code>if</code> branch, half the <code>else</code> branch. What is the time?</p>
+  <ol>
+    <li data-why="The branches do not run at the same time; the warp shares one program counter.">The time of the longer branch</li>
+    <li data-why="That would need the branches to run in parallel.">The time of the shorter branch</li>
+    <li data-why="Correct: the branches run one after the other (the other half masked off); the time is the sum of both.">The sum of both branches</li>
+    <li data-why="Divergence is not a compile error.">The kernel does not compile</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>How does a GPU hide the time a thread spends waiting for memory?</p>
+  <ol>
+    <li data-why="GPU caches are small compared with a CPU&#x27;s; that is not the main method.">With large caches</li>
+    <li data-why="Correct: the SM immediately runs another ready warp (latency hiding); this needs many warps.">By switching to another ready warp</li>
+    <li data-why="GPUs do not rely on branch prediction.">With branch prediction</li>
+    <li data-why="A higher frequency does not hide waiting.">By raising the clock frequency</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

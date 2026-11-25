@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Measuring performance and speedup laws</h1>
+<p class="lead">How much faster does a program get with more cores? This page shows how to measure speedup and the two laws that describe its limits.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute speedup and efficiency; say what linear speedup means.</li>
+    <li>Find the upper bound set by the serial part with Amdahl's law.</li>
+    <li>Explain why Gustafson-Barsis applies when the problem grows, and the difference between latency and throughput.</li>
+  </ul>
+</div>
 
 <h2>Performance metrics</h2>
 <div class="formula-box">speedup    = t_seq / t_par
@@ -68,6 +77,26 @@ efficiency = speedup / N = (1 − α)/N + α</div>
 </div>
 <h2>Latency and throughput</h2>
 <p>A work request arrives at t = 0. A <strong>latency-optimised processor</strong> (CPU) produces the first result quickly (low latency). A <strong>throughput-optimised processor</strong> (GPU) produces the first result later (high latency) but much more output per unit time (high throughput).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>90% of a program can be parallelised. By Amdahl's law, what is the speedup on 10 cores, roughly?</p>
+  <ol>
+    <li data-why="10 treats the program as if it had no serial part.">10</li>
+    <li data-why="1/0.1 = 10 is the limit for infinitely many cores, not for 10.">Unlimited</li>
+    <li data-why="Correct: 1 / (0.1 + 0.9/10) = 1 / 0.19 ≈ 5.3.">≈ 5.3</li>
+    <li data-why="0.9 · 10 = 9 is a wrong mix that looks like Gustafson.">9</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>You want to solve a bigger problem (a finer grid) in the same time. Which law describes your expectation correctly?</p>
+  <ol>
+    <li data-why="Amdahl assumes a fixed problem size (strong scaling).">Amdahl</li>
+    <li data-why="Correct: in Gustafson&#x27;s law the parallel part grows with N, the serial part does not; speedup approaches N.">Gustafson-Barsis</li>
+    <li data-why="Moore&#x27;s law is about transistor count, not speedup.">Moore</li>
+    <li data-why="Flynn&#x27;s taxonomy classifies machines; it does not measure speedup.">Flynn</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

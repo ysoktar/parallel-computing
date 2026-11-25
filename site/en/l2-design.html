@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>State the four PCAM steps and each step's rule of thumb.</li>
-    <li>Choose a suitable decomposition pattern for a problem.</li>
-    <li>Tell GPLS and GSLP program structure patterns apart.</li>
+    <li>State the questions to ask before parallelising (is it necessary, is it achievable?).</li>
+    <li>Explain PCAM's four steps (partitioning, communication, agglomeration, mapping) and the practical rule of each.</li>
+    <li>Design a problem (e.g. a 2D convolution) with the PCAM steps.</li>
   </ul>
 </div>
 
@@ -58,6 +58,26 @@
   <li><strong>Mapping:</strong> keep the groups the same size (load balance) and give each core one or a few groups. On a GPU: tile = thread block, halo = extra rows around the tile, and the tile is loaded into shared memory.</li>
 </ol>
 <p>The same reasoning appears in matrix multiplication: one output element = one task, grouping = block/tile, reducing communication = tiling with shared memory (L5).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>In which PCAM step are small tasks combined into bigger ones to reduce communication?</p>
+  <ol>
+    <li data-why="Partitioning splits the work into tasks as small as possible.">Partitioning</li>
+    <li data-why="Communication identifies the data exchange between tasks.">Communication</li>
+    <li data-why="Correct: agglomeration groups tasks; communication inside a task is free.">Agglomeration</li>
+    <li data-why="Mapping assigns tasks to processors.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>In a 2D convolution, let each output pixel be a task. Where does communication between tasks come from?</p>
+  <ol>
+    <li data-why="Correct: each output needs neighbouring input pixels; at a region border it needs the neighbour&#x27;s data (halo).">Needing neighbouring pixels</li>
+    <li data-why="Each output goes to its own place; there is no shared output.">Writing to a shared output array</li>
+    <li data-why="The filter coefficients are only read; everyone can keep a copy.">Changing the filter coefficients</li>
+    <li data-why="There is no ordering dependency; all tasks can run at once.">A pixel waiting for the previous one</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

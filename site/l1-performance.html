@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Performans ölçümü ve hızlanma yasaları</h1>
+<p class="lead">Çekirdek sayısını artırınca program ne kadar hızlanır? Bu sayfa hızlanmayı ölçmeyi ve sınırlarını anlatan iki yasayı veriyor.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Speedup ve verimi hesaplamak; doğrusal speedup'ın ne demek olduğunu söylemek.</li>
+    <li>Amdahl yasasıyla seri kısmın koyduğu üst sınırı bulmak.</li>
+    <li>Problem büyüyünce neden Gustafson-Barsis'in geçerli olduğunu ve gecikme/throughput farkını açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Performans ölçütleri</h2>
 <div class="formula-box">speedup    = t_seq / t_par
@@ -68,6 +77,26 @@ efficiency = speedup / N = (1 − α)/N + α</div>
 </div>
 <h2>Gecikme ve throughput</h2>
 <p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p>Bir programın %90'ı paralelleştirilebiliyor. Amdahl'a göre 10 çekirdekle speedup yaklaşık kaçtır?</p>
+  <ol>
+    <li data-why="10, seri kısım yokmuş gibi hesaplamaktır.">10</li>
+    <li data-why="1/0,1 = 10 sonsuz çekirdeğin sınırıdır, 10 çekirdeğin değil.">Sınırsız</li>
+    <li data-why="Doğru: 1 / (0,1 + 0,9/10) = 1 / 0,19 ≈ 5,3.">≈ 5,3</li>
+    <li data-why="0,9 · 10 = 9, Gustafson&#x27;a benzeyen yanlış bir karışım.">9</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Aynı sürede daha büyük bir problemi (daha ince ızgara) çözmek istiyorsunuz. Hangi yasa beklentinizi doğru anlatır?</p>
+  <ol>
+    <li data-why="Amdahl sabit problem boyutunu (strong scaling) varsayar.">Amdahl</li>
+    <li data-why="Doğru: Gustafson&#x27;da paralel kısım N ile büyür, seri kısım büyümez; speedup N&#x27;e yaklaşır.">Gustafson-Barsis</li>
+    <li data-why="Moore yasası transistör sayısını anlatır, speedup&#x27;ı değil.">Moore</li>
+    <li data-why="Flynn taksonomisi makineleri sınıflar, hızlanmayı ölçmez.">Flynn</li>
+  </ol>
+</div>
 
 </div></main>
 </body>
