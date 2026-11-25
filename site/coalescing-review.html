@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop unrolling, özet ve sınama · Lecture 6 · Coalescing · Paralel Hesaplama</title>
+<meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="coalescing-review">
+<main><div class="content">
+
+<h1>Loop unrolling, özet ve sınama</h1>
+
+<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">derste</span></h2>
+<p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>
+<div class="two-col">
+<pre class="code" data-run="unroll.cu" data-title="Normal">
+float sum = 0;
+for (int k = 0; k < 16; ++k)
+    sum += Mds[ty][k] * Nds[k][tx];
+// 16 tur × (çarp-topla + k++ + k<16 + dallanma)
+</pre>
+<pre class="code" data-run="unroll.cu" data-title="4 kat elle açılmış">
+float sum = 0;
+for (int k = 0; k < 16; k += 4) {
+    sum += Mds[ty][k]     * Nds[k][tx];
+    sum += Mds[ty][k + 1] * Nds[k + 1][tx];
+    sum += Mds[ty][k + 2] * Nds[k + 2][tx];
+    sum += Mds[ty][k + 3] * Nds[k + 3][tx];
+}
+// 4 tur: döngü kontrolü 4 kat azaldı
+</pre>
+</div>
+<pre class="code" data-run="unroll.cu" data-title="Derleyiciye yaptırmak">
+#pragma unroll                 // döngü sayısı derleme zamanında belliyse tamamen açar
+for (int k = 0; k < TILE_WIDTH; ++k)      // TILE_WIDTH bir #define / const → sabit
+    sum += Mds[ty][k] * Nds[k][tx];
+
+#pragma unroll 4               // 4 kat aç
+for (int i = 0; i < n; ++i) a[i] *= s;
+
+#pragma unroll 1               // açma
+for (int i = 0; i < n; ++i) a[i] += 1;
+</pre>
+<ul>
+  <li><strong>Kazanç:</strong> daha az döngü kontrol komutu; tam açılınca indeksler sabit olur (<code>Mds[ty][3]</code> gibi) ve adres hesapları derleme zamanında yapılır; bağımsız load'lar art arda verilip gecikme gizlenir.</li>
+  <li><strong>Maliyet:</strong> kod büyür; aynı anda canlı değişken sayısı artar → <strong>register kullanımı artar</strong> → thread başına register sınırı aşılırsa register spill (local memory) ya da SM başına daha az thread (occupancy düşer).</li>
+  <li>Döngü sayısı sabitse (transpose'daki <code>j</code> döngüsü: <code>TILE_DIM/BLOCK_ROWS = 4</code> tur; tiled matmul'deki <code>k</code> döngüsü: <code>TILE_WIDTH</code> tur) derleyici genelde zaten açar. Döngü sayısı çalışma zamanında belliyse (<code>width/TILE_WIDTH</code>) tam açılamaz.</li>
+  <li>Bağlantı: L6'daki "local memory" slaytı. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
+</ul>
+
+<h2>Özet</h2>
+<ul>
+  <li>Bir warp'ın erişimleri 32/64/128 baytlık, boyutuna hizalı segmentlere toplanır; ne kadar az segment, o kadar iyi.</li>
+  <li>Kontrol: adreste <code>threadIdx.x</code> çarpansız ve en sağda mı? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>2D dizilerde satır başları hizalı olsun diye <code>cudaMallocPitch</code>; pitch bayt cinsinden.</li>
+  <li>Transpose: naive'de yazma ✗; shared memory karosuyla okuma ve yazma ✓; <code>[32][33]</code> padding bank conflict'i kaldırır.</li>
+  <li>Loop unrolling: döngü kontrolünü azaltır, ILP'yi artırır; bedeli register.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>float</code> dizisinde bir warp <code>a[threadIdx.x * 2 + 1]</code> okuyor (dizi 128 B hizalı). Kaç tane 32 B segment taşınır, verim nedir?</p>
+<div class="hint"><p>Adresler 4, 12, 20, …, 252 (bayt): 0–255 aralığındaki 8 segmentin hepsine dokunulur → 8 · 32 = 256 B taşınır, 128 B kullanılır: <strong>%50</strong>.</p></div>
+<p><strong>2.</strong> Shared memory'li transpose'ta neden hem global okuma hem global yazma coalesced olur? Hangi erişim dağınık kalır ve neden sorun değildir?</p>
+<div class="hint"><p>Okumada ve yazmada <code>threadIdx.x</code> global adresin en sağında (satır boyunca ardışık). Yer değiştirme shared memory içinde yapılır: <code>tile[threadIdx.x][…]</code> sütun okur, yani dağınık erişim <strong>shared</strong> bellektedir. Shared memory on-chip ve hızlı olduğu için bu ucuzdur; tek bedeli bank conflict'tir, o da <code>[32][33]</code> padding ile çözülür.</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir warp 128 B hizalı bir <code>float</code> dizisinden <code>a[3*threadIdx.x]</code> okuyor. Kaç tane 32 B segmente dokunulur?</p>
+  <ol>
+    <li data-why="Ardışık olsaydı 4 olurdu; stride 3 ile 384 B'lık bir alana yayılır.">4</li>
+    <li data-why="Adresler 0, 12, 24, …, 372: 0–383 aralığındaki 12 segmentin hepsine dokunulur.">12</li>
+    <li data-why="Stride 3'te segment başına ~2,7 thread düşer; her thread ayrı segment değil.">32</li>
+    <li data-why="128 B satır sayısı 3; soru 32 B segmentleri soruyor.">3</li>
+  </ol>
+  <div class="explain">Taşınan 12·32 = 384 B, kullanılan 128 B → verim 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Transpose kernellerinde blok neden 32×32 değil de 32×8 thread?</p>
+  <ol>
+    <li data-why="32×32 = 1024 thread günümüz GPU'larında izinli; sebep bu değil.">32×32 blok başlatılamaz.</li>
+    <li data-why="Bank conflict'le ilgisi yok; çözümü padding.">Bank conflict'leri önlemek için.</li>
+    <li data-why="Doğru: her thread 4 eleman işler; indeks hesabı 4 elemana bölünür, döngü satır yönünde döndüğü için coalescing korunur.">Her thread karoda 4 eleman işlesin, indeks hesabının maliyeti paylaşılsın diye.</li>
+    <li data-why="Karo hâlâ 32×32; shared bellek aynı.">Shared bellekten tasarruf için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p><code>transposeCoalesced</code>'da yazma aşamasında neden <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> kullanılıyor?</p>
+  <ol>
+    <li data-why="Doğru: (bx, by) karosu çıktıda (by, bx) konumuna gider.">Girdideki (bx, by) karosu çıktıda transpoze konuma, (by, bx)'e yazılmalı.</li>
+    <li data-why="Bank conflict'i padding çözer; bu indeks değişikliği karonun yerini belirler.">Bank conflict'leri azaltmak için.</li>
+    <li data-why="threadIdx.x en sağda kaldığı için yazma coalesced; ama soru blok ofsetini soruyor.">Okumayı coalesced yapmak için.</li>
+    <li data-why="Hata değil; olmasaydı karolar kendi yerlerinde transpoze edilir, matris yanlış olurdu.">Bir yazım hatası; blockIdx.x olmalı.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p><code>#pragma unroll</code> için hangisi doğru?</p>
+  <ol>
+    <li data-why="Unrolling seri döngüyü thread'lere dağıtmaz; aynı thread içinde kopyalar.">Döngü turlarını farklı thread'lere dağıtır.</li>
+    <li data-why="Register kullanımı genelde artar.">Register kullanımını azaltır.</li>
+    <li data-why="Sonuç değişmez (aynı işlemler, aynı sırada).">Sonucu değiştirebilir, dikkat edilmeli.</li>
+    <li data-why="Doğru: sabit döngü sayısında gövde tamamen kopyalanır, kontrol komutları kalkar.">Döngü sayısı derleme zamanında sabitse döngüyü tamamen açabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

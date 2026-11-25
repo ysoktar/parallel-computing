@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matris transpose · Lecture 6 · Coalescing · Paralel Hesaplama</title>
+<meta name="description" content="Global bellek coalescing (32/64/128 B transaction, hizalama, 2D erişim, pitch), naive ve shared memory matris transpose, for loop unrolling.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="coalescing-transpose">
+<main><div class="content">
+
+<h1>Matris transpose</h1>
+
+<h2 id="matris-transpose" data-toc="Matris transpose">Matris transpose <span class="badge-class">derste</span></h2>
+<p>Hocanın derste verdiği örnek; NVIDIA'nın <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a> yazısındaki kernel serisi. Transpose hiç hesap yapmaz, sadece veri taşır: performansı tamamen bellek erişim desenine bağlıdır. Bu yüzden coalescing'i göstermek için en iyi örnek.</p>
+
+<h3>Kurulum: 32×32 karo, 32×8 thread</h3>
+<ul>
+  <li><code>TILE_DIM = 32</code>, <code>BLOCK_ROWS = 8</code>. Her blok matrisin bir <strong>32×32 karosunu</strong> işler ama <strong>32×8 = 256 thread</strong>'i vardır.</li>
+  <li>Bu yüzden her thread karo içinde <strong>4 eleman</strong> işler (32/8): satır <code>y, y+8, y+16, y+24</code>. Döngü ikinci indeks (satır) üzerinde döner, böylece bir warp'ın ardışık thread'leri hâlâ ardışık adreslere gider. Faydası: indeks hesabının maliyeti 4 elemana bölünür.</li>
+  <li>Grid: N×N matris için <code>dim3(N/32, N/32)</code>, blok: <code>dim3(TILE_DIM, BLOCK_ROWS) = dim3(32, 8)</code>.</li>
+</ul>
+
+<h3>1) Referans: copy</h3>
+<pre class="code" data-run="transpose.cu" data-title="copy: transpose'un hedefleyeceği hız (aynı erişimler, yer değiştirme yok)">
+const int TILE_DIM = 32;
+const int BLOCK_ROWS = 8;
+
+__global__ void copy(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;   // TILE_DIM ile, blockDim.y ile değil!
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = idata[(y + j) * width + x];
+}
+// dim3 grid(N / TILE_DIM, N / TILE_DIM), block(TILE_DIM, BLOCK_ROWS);
+</pre>
+<p>Okuma da yazma da coalesced: bir warp = bir satırdaki 32 ardışık float = 128 B. Transpose ne kadar hızlı olursa olsun bu kernelden hızlı olamaz; ölçüm için "tavan".</p>
+<div class="callout class">
+  <p>Hocanın tavsiyesiyle aynı fikir: <strong>önce hesap yapmayan bir kopya kernel'i</strong> yazın, çıktının girdiye eşit olduğunu (ve hızını) görün; sonra asıl işlemi ekleyin. Shared memory'li versiyonda da önce <code>copySharedMem</code> (global → shared → global, aynı yere) yazılıp indeksler doğrulanır.</p>
+</div>
+
+<h3>2) Naive transpose</h3>
+<pre class="code" data-run="transpose.cu" data-title="transposeNaive: tek fark, yazma indeksinde x ile y'nin yer değiştirmesi">
+__global__ void transposeNaive(float* odata, const float* idata)
+{
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[x * width + (y + j)] = idata[(y + j) * width + x];
+}
+</pre>
+<ul>
+  <li><strong>Okuma</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> en sağda, çarpansız → warp 128 B'lık tek satır okur ✓.</li>
+  <li><strong>Yazma</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> <code>width</code> ile çarpılmış → ardışık thread'ler <code>width</code> eleman aralıklı. 1024×1024 matriste aralık 1024 float = <strong>4096 B</strong> → warp'ın 32 yazması 32 ayrı segment. Coalesced <strong>değil</strong>.</li>
+  <li>Laboratuvardaki <code>a[i*1024]</code> örneği tam olarak bu yazma.</li>
+</ul>
+
+<h3>Uygula: A satır ve sütunundan B'ye</h3>
+<div data-learning="transpose"></div>
+<h3>3) Shared memory ile coalesced transpose</h3>
+<p>Fikir: karoyu global bellekten <strong>satır satır</strong> (coalesced) okuyup shared memory'ye koy; yer değiştirmeyi shared memory içinde yap (orada dağınık erişim ucuz); sonra karonun <strong>sütununu</strong> çıktıda <strong>satır</strong> olarak (coalesced) yaz. Blok da transpoze edilmiş yere yazmalı.</p>
+<pre class="code" data-run="transpose.cu" data-title="transposeCoalesced">
+__global__ void transposeCoalesced(float* odata, const float* idata)
+{
+    __shared__ float tile[TILE_DIM][TILE_DIM];
+
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int width = gridDim.x * TILE_DIM;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        tile[threadIdx.y + j][threadIdx.x] = idata[(y + j) * width + x];   // coalesced okuma
+
+    __syncthreads();   // thread'ler okuduklarından FARKLI elemanları yazacak: karo tamamen dolmalı
+
+    x = blockIdx.y * TILE_DIM + threadIdx.x;   // transpoze blok konumu: bx ↔ by
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+        odata[(y + j) * width + x] = tile[threadIdx.x][threadIdx.y + j];   // coalesced yazma
+}
+</pre>
+<div class="callout example">
+  <p><strong>İndeks takibi</strong> (N = 1024, grid 32×32, blok 32×8): <code>blockIdx = (1, 2)</code>, <code>threadIdx = (5, 3)</code>.</p>
+  <ul>
+    <li>Yükleme: <code>x = 1·32 + 5 = 37</code>, <code>y = 2·32 + 3 = 67</code>. j = 0, 8, 16, 24 için <code>idata</code>'nın satır 67, 75, 83, 91 / sütun 37'sini okuyup <code>tile[3][5], tile[11][5], tile[19][5], tile[27][5]</code>'e koyar. Bu blok girdinin satır 64–95, sütun 32–63 karosunu yükler.</li>
+    <li>Yazma: <code>x = 2·32 + 5 = 69</code>, <code>y = 1·32 + 3 = 35</code>. <code>odata</code>'nın satır 35, 43, 51, 59 / sütun 69'una <code>tile[5][3], tile[5][11], tile[5][19], tile[5][27]</code>'yi yazar. Kontrol: <code>tile[5][3]</code> = girdi (satır 64+5, sütun 32+3) = <code>idata[69][35]</code> → <code>odata[35][69]</code> ✓.</li>
+    <li>Warp'taki ardışık thread'ler (<code>threadIdx.x</code> = 0..31) hem okumada hem yazmada ardışık global adreslere gider; dağınık kısım (<code>tile[threadIdx.x][…]</code>, sütun okuma) shared memory'de.</li>
+  </ul>
+</div>
+<div class="callout gotcha">
+  <p>Buradaki <code>__syncthreads()</code> zorunlu: bir thread'in yazdığı <code>tile[threadIdx.x][threadIdx.y+j]</code> başka bir thread (hatta başka bir warp) tarafından yüklendi. Sadece kopya yapan <code>copySharedMem</code>'de her thread kendi yüklediğini yazdığı için bariyer teknik olarak gereksizdir (yazıda sadece karşılaştırma için konmuş); ölçümler bariyerin darboğaz olmadığını gösterir.</p>
+</div>
+
+<h3>4) Bank conflict'siz versiyon</h3>
+<p>32×32 karoda <code>tile[r][c]</code>'nin bank'ı <code>(32r + c) % 32 = c</code>: bir sütunun 32 elemanı aynı bank'ta. Yazma aşaması sütun okur (<code>tile[threadIdx.x][threadIdx.y + j]</code>): warp'taki 32 thread aynı bank'tan farklı kelimeler ister → <strong>32-yollu bank conflict</strong>. Çözüm tek satır, satırları bir eleman uzatmak:</p>
+<pre class="code" data-run="transpose.cu">
+__shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: sütun boyunca hepsi farklı
+</pre>
+<p>Ayrıntılı bank hesabı ve görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">L6, bank'lar</a>.</p>
+
+<h3>Ölçümler (NVIDIA yazısı, GB/s)</h3>
+<table class="simple">
+  <thead><tr><th>Kernel</th><th>Tesla M2050</th><th>Tesla K20c</th></tr></thead>
+  <tbody>
+    <tr><td>copy</td><td>105,2</td><td>136,0</td></tr>
+    <tr><td>copySharedMem</td><td>104,6</td><td>152,3</td></tr>
+    <tr><td>transposeNaive</td><td><strong>18,8</strong></td><td>55,3</td></tr>
+    <tr><td>transposeCoalesced</td><td>51,3</td><td>97,6</td></tr>
+    <tr><td>transposeNoBankConflicts</td><td>99,5</td><td>144,3</td></tr>
+  </tbody>
+</table>
+<p>Etkin bant genişliği = 2 × matris boyu (bir okuma + bir yazma) / süre. Sonuç: <strong>global bellek coalescing'i en kritik etken</strong>; shared memory'nin ve senkronizasyonun maliyeti ondan çok küçük.</p>
+
+</div></main>
+</body>
+</html>

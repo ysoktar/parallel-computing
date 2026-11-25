@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>İndeksleme, senkronizasyon, warp'lar · Lecture 5 · CUDA programlama · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 5: vektör/matris toplama, matris çarpımı, cudaMalloc/cudaMemcpy/cudaFree, kernel ve fonksiyon niteleyicileri, blockIdx/threadIdx, __syncthreads, warp ve latency hiding, CGMA, bellek türleri, tiled matmul.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l5-indexing">
+<main><div class="content">
+
+<h1>İndeksleme, senkronizasyon, warp'lar</h1>
+
+<h2>Thread blokları ve indeksleme</h2>
+<ul>
+  <li>Bir kernel başlatılınca paralel thread'lerden oluşan bir <strong>grid</strong> olarak çalışır (binlerce-milyonlarca hafif thread).</li>
+  <li>İki seviyeli hiyerarşi: grid → bir veya daha fazla <strong>thread bloğu</strong>; grid'deki tüm blokların thread sayısı aynıdır. Her bloğun <code>blockIdx</code> koordinatı var (compute 1.x'te 2D, 2.0+ 3D).</li>
+  <li>Her blok en fazla 512 (compute 1.x) / <strong>1024</strong> (2.0+) thread'lik 3D bir dizi; thread'in blok içindeki koordinatı <code>threadIdx</code>.</li>
+  <li>1D örnek (slayt 31–33): N blok, her biri M thread → toplam N·M thread. Blok 0'ın 3. thread'i: <code>0·M + 3</code>; Blok 5'in 3. thread'i: <code>5·M + 3</code>. Genel: <code>blockIdx.x * blockDim.x + threadIdx.x</code>.</li>
+  <li>Girdi ve çıktı eşlemesi farklı olabilir: veriyi bir eşlemeyle okuyup başka bir eşlemeyle işleyip üçüncü bir eşlemeyle yazabilirsiniz (farklı girdi/çıktı oranları, shared memory hazırlığı, sınır koşulları).</li>
+</ul>
+<pre class="code" data-run="matmul_gpu.cu" data-title="Bloklu matmul (slayt 39): her thread P'nin bir elemanı">
+__global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    int row = blockIdx.y * TILE_WIDTH + threadIdx.y;
+    int col = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    float sum = 0;
+    for (int i = 0; i < width; i++)
+        sum += Md[row * width + i] * Nd[i * width + col];
+    Pd[row * width + col] = sum;
+}
+</pre>
+<p>Burada <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Kendi konfigürasyonunuzla deneyin: <a href="lab.html">laboratuvar</a>.</p>
+<div class="callout discuss">
+  <p><strong>Slayt 40'ın soruları.</strong> (1) Blokların çalışma sırasını zorlayabilir miyiz? <strong>Hayır.</strong> (2) Küçük ID'li bloğun büyük ID'liden önce başlayacağını varsayabilir miyiz? <strong>Hayır.</strong> (3) Bunun ölçeklenebilirlikle ilgisi? Bloklar bağımsız olduğu için çalışma zamanı onları istediği SM'ye, istediği sırada (round-robin) dağıtabilir; aynı program 2 SM'li GPU'da da 80 SM'li GPU'da da çalışır.</p>
+</div>
+<p>Dikkate alınması gereken sınırlar: blok başına en fazla thread, SM başına en fazla blok, <strong>SM başına en fazla thread</strong>. Genelde SM'lerde mümkün olduğunca çok thread'in yerleşik olması (occupancy) hedeflenir.</p>
+
+<h3>Uygula: thread kodu ve matris hücresi</h3>
+<div data-learning="cuda-index"></div>
+<h3>İndeks formülünü adım adım kurmak</h3>
+<p>Bir kitap düşünün: her sayfada 10 satır var. 3. sayfanın 7. satırı, kitabın baştan kaçıncı satırıdır? <code>3·10 + 7 = 37</code> (sayfalar ve satırlar 0'dan başlıyor). CUDA'da sayfa = blok, satır = thread:</p>
+<div class="formula-box">global indeks = blockIdx.x · blockDim.x + threadIdx.x
+              (kaçıncı blok) · (blok başına thread) + (blok içindeki sıra)
+<<<4, 256>>>: blok 2'nin 37. thread'i → 2·256 + 37 = 549</div>
+<p>2D'de aynı şeyi iki eksende ayrı ayrı yaparız: x ekseni sütunları, y ekseni satırları verir; row-major bellekte eleman <code>A[row·width + col]</code>'dadır.</p>
+<div class="formula-box">col = blockIdx.x · blockDim.x + threadIdx.x
+row = blockIdx.y · blockDim.y + threadIdx.y
+if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
+<p><strong>Neden sınır kontrolü?</strong> Grid blok sayısı yukarı yuvarlanır: 1000 elemana 256'lık bloklarla <code>(1000 + 255)/256 = 4</code> blok = 1024 thread başlar. Son 24 thread'in elemanı yok; <code>if</code> olmazsa dizinin dışına yazarlar.</p>
+<h2>Senkronizasyon: <code>__syncthreads()</code></h2>
+<h3>Uygula: bariyeri kodla ve thread'lerle izle</h3>
+<div data-learning="barrier"></div>
+<ul>
+  <li>Aynı bloktaki thread'ler faaliyetlerini bariyer senkronizasyonuyla koordine eder. Çağıran her thread, bloktaki tüm thread'ler o noktaya gelene kadar orada tutulur. Böylece bir sonraki faza geçmeden herkes önceki fazı bitirmiş olur. Tipik örnek: shared memory'yi doldurmak.</li>
+  <li>Gerçek hayat: işe aynı arabayla giden dört kişi. Masalarında paralel çalışırlar; dönüşte herkes arabaya gelene kadar beklenir (bariyer).</li>
+  <li><strong>Bloktaki tüm thread'ler tarafından çalıştırılmalı.</strong> <code>if/else</code> içinde kullanmak tanımsız davranış; tek istisna koşulun bloktaki tüm thread'ler için aynı sonucu vermesi.</li>
+  <li>Gerçekte thread'leri değil, <strong>warp'ları</strong> senkronize eder.</li>
+  <li>Bekleme süreleri uzamasın diye çalışma zamanı bir bloğun <strong>tüm</strong> thread'lerini aynı SM'ye birlikte atar.</li>
+  <li>Bloklar arası senkronizasyon CUDA 9 öncesi neredeyse imkânsızdı (<code>__threadfence()</code> ile hileler: thread'i önceki shared/global yazmaları diğerlerine görünür olana kadar durdurur). CUDA 9 (Pascal) ile <strong>cooperative groups</strong>.</li>
+</ul>
+
+<h2>Blok atama, warp'lar, latency hiding</h2>
+<ul>
+  <li>Kernel başlayınca çalışma zamanı grid'i oluşturur; thread'ler SM'lere <strong>blok blok</strong> atanır. GT200: 30 SM, SM başına en fazla 8 blok → aynı anda 240 blok; biten bloğun yerine listeden yenisi gelir.</li>
+  <li>SM başına izlenebilen thread sayısı da sınırlı: GT200'de SM başına 1024 thread (ör. 4 × 256 veya 8 × 128) → 30 · 1024 = 30.720 yerleşik thread.</li>
+  <li><strong>Warp:</strong> ardışık <code>threadIdx</code>'li 32 thread; SM'de zamanlama birimi. Thread 0–31 ilk warp, 32–63 ikinci… Eşleme deterministik. 256 thread'lik blok = 8 warp; SM'de 3 blok = 24 warp.</li>
+  <li>"CUDA kodu yazmak için warp'ı bilmeniz gerekmez; <strong>yüksek performanslı</strong> CUDA kodu yazmak için gerekir."</li>
+  <li><strong>Latency hiding:</strong> bir warp uzun gecikmeli bir işlemin (global bellek erişimi, pipeline'lı FP aritmetiği, dallanma) sonucunu beklerken seçilmez; hazır olan başka bir warp çalıştırılır. Seçim boş zaman eklemez: <strong>sıfır maliyetli thread zamanlaması</strong>. Yeterince warp varsa donanım her an çalıştıracak bir warp bulur.</li>
+  <li>Bu yüzden GPU'lar büyük önbelleklere ve dallanma tahminine CPU'lar kadar alan ayırmaz; o alanı FP birimlerine verir.</li>
+</ul>
+<div class="callout example">
+  <p><strong>GT200 için matmul blok boyutu</strong> (1024 thread/SM, 8 blok/SM, 512 thread/blok):</p>
+  <ul>
+    <li><strong>8×8</strong> = 64 thread → SM'yi doldurmak için 16 blok gerekir ama sınır 8 → 8·64 = 512 thread: kaynaklar yarı boş, gecikmeyi gizleyecek warp az.</li>
+    <li><strong>16×16</strong> = 256 thread → 1024/256 = 4 blok (8 sınırının altında) → tam kapasite ✓.</li>
+    <li><strong>32×32</strong> = 1024 thread → blok başına 512 sınırını aşar ✗.</li>
+  </ul>
+  <p>Sonuç: 16×16. (Henüz shared memory yok; olunca hesap karmaşıklaşır.)</p>
+</div>
+
+</div></main>
+</body>
+</html>

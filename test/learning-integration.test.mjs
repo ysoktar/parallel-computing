@@ -4,13 +4,15 @@ import { readFileSync } from "node:fs";
 const root=new URL("../site/", import.meta.url);
 const src=path=>readFileSync(new URL(path,root),"utf8");
 const pages={
- "l1-intro.html":["amdahl"],
- "l2-design.html":["halo"],
+ "l1-performance.html":["amdahl"],
+ "l2-patterns.html":["halo"],
  "l3-threads.html":["race"],
- "l4-cuda-intro.html":["cuda-index","dim3-index"],
- "l5-cuda-kernels.html":["cuda-index","barrier","tile"],
- "l6-cuda-memory.html":["pitch","coalesce-lanes"],
- "coalescing.html":["coalesce-lanes","transpose"],
+ "l4-hierarchy.html":["cuda-index","dim3-index"],
+ "l5-indexing.html":["cuda-index","barrier"],
+ "l5-tiling.html":["tile"],
+ "l6-memory-types.html":["pitch","coalesce-lanes"],
+ "coalescing.html":["coalesce-lanes"],
+ "coalescing-transpose.html":["transpose"],
  "exam-midterm2.html":["cuda-index","barrier","transpose"],
  "lab.html":["cuda-index"]
 };

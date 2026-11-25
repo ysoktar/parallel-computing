@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Error checking and control flow · Parallel Computing</title>
+<title>Error checking · Lecture 7 · Error checking and control flow · Parallel Computing</title>
 <meta name="description" content="Lecture 7: CUDA error checking (cudaGetLastError, cudaPeekAtLastError, asynchronous errors), branching and divergence, branch predication vs prediction, pipelining, loop unrolling, signed vs unsigned loop counters.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
@@ -13,7 +13,7 @@
 <body data-page="l7-cuda-control">
 <main><div class="content">
 
-<h1>Error checking and control flow</h1>
+<h1>Error checking</h1>
 <p class="lead">If your kernel silently did nothing, how do you catch the error? Why does an <code>if</code> slow a warp down, and why does a GPU "mask" (predication) instead of "guess" (prediction)? How do loops get faster?</p>
 
 <div class="callout goals">
@@ -60,148 +60,6 @@ cudaError_t r2 = cudaDeviceSynchronize();  // errors during execution
 </table>
 <div class="callout gotcha">
   <p>In a program without error checks, even a crashed kernel looks "successful" and the results are garbage; the error is only reported at the next <code>cudaMemcpy</code>, on an unrelated line. What the exam wants: <code>cudaGetLastError()</code> after the launch, then <code>cudaDeviceSynchronize()</code>, checking the return value of both.</p>
-</div>
-
-<h2>Branching and divergence</h2>
-<ul>
-  <li>Any flow control instruction (<code>if</code>, <code>switch</code>, <code>do</code>, <code>for</code>, <code>while</code>) can significantly reduce instruction throughput by making threads of the same warp diverge (follow different paths).</li>
-  <li>If this happens, the different paths must be <strong>serialised</strong>, because all threads of a warp share <strong>one program counter</strong>. The total number of instructions executed by the warp increases. When the paths complete, the threads converge back to the same path.</li>
-  <li>When control flow depends on the thread ID, the condition should be written to minimise the number of divergent warps. This is possible because the distribution of warps over the block is deterministic.</li>
-  <li>A trivial example: if the condition depends only on <code>threadIdx / WSIZE</code> (WSIZE = warp size), it is perfectly aligned with the warps and no warp diverges.</li>
-</ul>
-<table class="simple">
-  <thead><tr><th>Condition (1D block, 128 threads = 4 warps)</th><th>Divergent warps</th><th>Why</th></tr></thead>
-  <tbody>
-    <tr><td><code>threadIdx.x % 2 == 0</code></td><td>4</td><td>half true, half false in every warp</td></tr>
-    <tr><td><code>threadIdx.x &lt; 64</code></td><td>0</td><td>warps 0, 1 all true; 2, 3 all false</td></tr>
-    <tr><td><code>threadIdx.x &lt; 70</code></td><td>1</td><td>only warp 2 (64–95) is mixed</td></tr>
-    <tr><td><code>threadIdx.x / 32 == 1</code></td><td>0</td><td>the condition depends on the warp number</td></tr>
-    <tr><td><code>threadIdx.y % 2 == 0</code> in a 16×16 block</td><td>8 (all)</td><td>each warp is two rows: one even, one odd</td></tr>
-  </tbody>
-</table>
-<p>Different warps taking different paths is <strong>not</strong> divergence; divergence happens <em>within</em> a warp. An example with a timing comparison: <a href="l4-cuda-intro.html">L4, thread divergence</a>.</p>
-
-<h2>Branch predication and branch prediction</h2>
-<p>Similar names, different things: <strong>predication ≠ prediction</strong>.</p>
-<div class="two-col">
-  <div>
-    <h3>CPU: branch prediction</h3>
-    <ul>
-      <li><strong>Guess</strong> whether a conditional branch will be taken.</li>
-      <li>Start <strong>speculative</strong> execution based on the guess (instructions that may or may not be needed).</li>
-      <li>When the condition is evaluated, see the real result: if the guess was right, keep going; if wrong, discard the speculative work and restart with the right branch.</li>
-    </ul>
-  </div>
-  <div>
-    <h3>GPU: branch predication</h3>
-    <ul>
-      <li><strong>None</strong> of the instructions that depend on the condition is skipped.</li>
-      <li>Each is associated with a per-thread <strong>predicate</strong> (condition code) set to true or false by the condition.</li>
-      <li>All are scheduled, but only those with a true predicate actually execute.</li>
-      <li>Instructions with a false predicate do <strong>not write</strong> results, do not evaluate addresses and do not read operands.</li>
-    </ul>
-  </div>
-</div>
-<p>Predication is ideal for short branches: instead of jumping over a few-instruction branch like <code>if (x &lt; 0) x = -x;</code> (a jump + draining the pipeline), the instruction is issued to everyone with a predicate and takes effect only in the threads where the condition holds. No divergence, no jump.</p>
-
-<h2>Branch optimisation and pipelining</h2>
-<ul>
-  <li>Branch optimisations are needed because of <strong>instruction pipelining</strong>.</li>
-  <li>A pipeline (fetch → decode → execute → write back) raises throughput by processing several instructions in different stages at the same time.</li>
-  <li>A branch makes the pipeline wait until the next instruction is known, or fill it with the wrong instructions; it cuts down the gain of pipelining. CPUs soften this with prediction, GPUs with predication and by switching warps.</li>
-</ul>
-
-<h2>Loop unrolling</h2>
-<ul>
-  <li>The compiler may unroll small loops with a known trip count by itself.</li>
-  <li>The programmer controls it with <code>#pragma unroll</code>. It must be placed <strong>immediately before</strong> the loop and applies <strong>only to that loop</strong>.</li>
-  <li>It optionally takes a number: <code>#pragma unroll 5</code> unrolls the loop 5 times. The compiler adds code for correctness (e.g. so that there are only n iterations when n &lt; 5).</li>
-  <li><code>#pragma unroll 1</code>: the compiler never unrolls the loop.</li>
-  <li>Without a number: the loop is completely unrolled if its trip count is constant, otherwise not at all.</li>
-  <li>Choosing the best unroll number is up to the programmer. The smaller the loop body, the bigger the gain.</li>
-</ul>
-<pre class="code" data-run="loops.cu" data-title="#pragma unroll 5 with an n known only at run time">
-float s = 0;
-#pragma unroll 5
-for (int i = 0; i < n; ++i)
-    s += in[i];
-</pre>
-<p>A detailed example and the costs (register pressure): <a href="coalescing.html#loop-unrolling">Coalescing page, loop unrolling</a>.</p>
-
-<h2>Loop counters: signed vs unsigned</h2>
-<ul>
-  <li>Since counters are always positive, declaring them <code>unsigned</code> is tempting. But for slightly better performance they should be <strong>signed</strong> (<code>int</code>).</li>
-  <li>Why? Compilers can optimise signed arithmetic more aggressively. Signed overflow is <strong>undefined</strong> in C/C++, so the compiler may assume "<code>i</code> never overflows": instead of recomputing <code>offset + stride*i</code> every iteration it can advance a pointer by <code>stride</code>, and safely switch to 64-bit address arithmetic.</li>
-  <li>With <code>unsigned</code>, overflow is <strong>defined</strong> (it wraps around at 2<sup>32</sup>); the compiler has to preserve that wrap-around possibility and cannot do some transformations.</li>
-</ul>
-<pre class="code" data-run="loops.cu">
-for (int i = 0; i < n; i++) {
-    out[i] = in[offset + stride*i];
-}
-</pre>
-
-<h2>Summary</h2>
-<ul>
-  <li>Runtime calls return <code>cudaError_t</code>; a kernel launch does not. Asynchronous errors appear at a later call (or at <code>cudaDeviceSynchronize()</code>).</li>
-  <li><code>cudaPeekAtLastError()</code> reads, <code>cudaGetLastError()</code> reads and resets. Pattern: clear first, launch, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
-  <li>Divergence: different paths within a warp run one after the other (one program counter). Aligning the condition with <code>threadIdx / 32</code> avoids divergence.</li>
-  <li>Predication (GPU): instructions are not skipped, they are masked with a per-thread predicate. Prediction (CPU): guessing the branch + speculative execution.</li>
-  <li><code>#pragma unroll N</code> unrolls N times (code is added for leftover iterations); <code>1</code> does not unroll; without a number: fully unrolls a constant trip count.</li>
-  <li>Make loop counters <code>int</code>: since signed overflow is undefined, the compiler optimises more.</li>
-</ul>
-<h3>Common mistakes</h3>
-<ul>
-  <li>Thinking "the launch returned no error, so it ran": a launch never returns an error; execution errors come later.</li>
-  <li>Calling <code>cudaGetLastError()</code> twice and expecting the error the second time too: the first call resets it.</li>
-  <li>Mixing up predication and prediction, or counting different warps taking different branches as divergence.</li>
-  <li>Writing <code>#pragma unroll</code> a few lines before the loop: it must be immediately before it.</li>
-</ul>
-<h3>Open-ended questions for the quiz</h3>
-<p><strong>1.</strong> Complete the unchecked call <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code>. What is the difference between Peek and Get?</p>
-<div class="hint"><p>First clear/check earlier errors (<code>cudaGetLastError()</code>), launch, <code>cudaError_t launch = cudaGetLastError();</code> (configuration/parameter errors), then <code>cudaError_t run = cudaDeviceSynchronize();</code> (execution errors); if either is not <code>cudaSuccess</code>, report and stop. Get reads and resets, Peek does not reset.</p></div>
-<p><strong>2.</strong> In a 128-thread 1D block, how many warps diverge for <code>if (threadIdx.x &lt; 40)</code> and for <code>if (threadIdx.x % 4 == 0)</code>?</p>
-<div class="hint"><p><code>&lt; 40</code>: warp 0 all true, warp 1 (32–63) mixed, warps 2–3 all false → <strong>1</strong>. <code>% 4 == 0</code>: 8 true, 24 false in every warp → <strong>4</strong> (all).</p></div>
-<p><strong>3.</strong> How is predication different from prediction? Why is <code>#pragma unroll 4</code> not always faster?</p>
-<div class="hint"><p>Prediction (CPU) guesses the branch and executes speculatively, rolling back if wrong. Predication (GPU) does not skip instructions; it masks them with a per-thread predicate, and false ones neither write results nor read operands. Unrolling reduces loop control but increases code size and register usage; register spills or lower occupancy can erase the gain.</p></div>
-<p><strong>4.</strong> A program reports "illegal memory access" at a <code>cudaMemcpy</code> call, but the <code>cudaMemcpy</code> parameters are correct. Why?</p>
-<div class="hint"><p>The error most likely happened in the previous <strong>kernel</strong> (asynchronously). A kernel launch returns no error; the error was reported at the next unrelated call, here the <code>cudaMemcpy</code>. Checking the return value of <code>cudaDeviceSynchronize()</code> right after the kernel shows the error in the right place.</p></div>
-
-<h2>Check yourself</h2>
-<div class="quiz" data-answer="3">
-  <p>Which error does <code>cudaGetLastError()</code> catch right after a kernel launch?</p>
-  <ol>
-    <li data-why="Errors during execution need a synchronisation.">An out-of-bounds access inside the kernel.</li>
-    <li data-why="Get resets; but the question is which kind of error it catches.">None; a kernel launch produces no errors.</li>
-    <li data-why="True: pre-launch (configuration/parameter) errors such as 2048 threads per block.">Pre-launch errors such as an invalid configuration.</li>
-    <li data-why="No call can know about future errors.">The errors of the next <code>cudaMemcpy</code>.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="2">
-  <p>The difference between <code>cudaPeekAtLastError()</code> and <code>cudaGetLastError()</code>?</p>
-  <ol>
-    <li data-why="Both read the same per-host-thread error variable.">Peek reads the device's error, Get the host's.</li>
-    <li data-why="True: Peek only reads, Get reads and resets to cudaSuccess.">Peek does not reset the variable, Get does.</li>
-    <li data-why="Neither blocks; synchronising needs cudaDeviceSynchronize.">Peek synchronises, Get does not.</li>
-    <li data-why="There is a difference: the reset.">There is no difference.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="4">
-  <p>Which is true of the GPU's branch predication?</p>
-  <ol>
-    <li data-why="That is the CPU's branch prediction.">It guesses the branch outcome and executes speculatively.</li>
-    <li data-why="Instructions are not skipped; all are scheduled.">The instructions of threads whose condition is false are skipped.</li>
-    <li data-why="Instructions with a false predicate read no operands and write no results.">Instructions with a false predicate read operands but do not write results.</li>
-    <li data-why="True: each instruction carries a per-thread predicate; only true ones take effect.">Each instruction is associated with a per-thread predicate; only true ones execute.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="1">
-  <p>What does <code>#pragma unroll</code> without a number do?</p>
-  <ol>
-    <li data-why="True: fully unrolls a constant trip count, otherwise not at all.">Fully unrolls the loop if its trip count is constant, otherwise not at all.</li>
-    <li data-why="There is no default of 4.">Unrolls the loop 4 times.</li>
-    <li data-why="That is #pragma unroll 1.">Prevents the loop from being unrolled.</li>
-    <li data-why="The pragma applies only to the loop right after it.">Unrolls every loop in the file.</li>
-  </ol>
 </div>
 
 </div></main>

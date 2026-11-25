@@ -4,14 +4,17 @@ import { h, $ } from "./lib/ui.js";
 import { t as tl, tx } from "./lib/i18n.js";
 
 const parts = $("#parts");
-for (const p of NAV.slice(1)) {
+for (const p of NAV.slice(1).filter((p) => !p.lecture)) {
   parts.append(h("div", { class: "card" },
     h("div", { class: "card-kicker" }, tx(p, "part") + (p.short ? ` · ${tx(p, "short")}` : "")),
     h("ol", {}, ...p.items.map((it) => h("li", {}, h("a", { href: `${it.id}.html` }, tx(it, "title")), h("div", { class: "small muted" }, tx(it, "desc")))))));
 }
 
 const lec = $("#lectures");
-if (lec) for (const it of NAV[1].items) lec.append(h("li", {}, h("a", { href: `${it.id}.html` }, tx(it, "title")), " ", h("span", { class: "small muted" }, it.lec)));
+if (lec) for (const p of NAV.filter((p) => p.lecture)) {
+  lec.append(h("li", {}, h("a", { href: `${p.items[0].id}.html` }, tx(p, "part")),
+    h("div", { class: "small muted" }, p.items.map((it) => `${it.num} ${tx(it, "title")}`).join(" · "))));
+}
 
 const el = $("#countdown");
 function tick() {

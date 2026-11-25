@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CGMA, memory types, tiling · Lecture 5 · CUDA programming · Parallel Computing</title>
+<meta name="description" content="Lecture 5: vector/matrix addition, matrix multiplication, cudaMalloc/cudaMemcpy/cudaFree, kernels and function qualifiers, blockIdx/threadIdx, __syncthreads, warps and latency hiding, CGMA, memory types, tiled matmul.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+</head>
+<body data-page="l5-tiling">
+<main><div class="content">
+
+<h1>CGMA, memory types, tiling</h1>
+
+<h2>Memory access efficiency: CGMA</h2>
+<ul>
+  <li>The simple kernel reaches only a small fraction of the hardware's potential: threads repeatedly load <strong>overlapping input data</strong> from global memory.</li>
+  <li>Global memory = DRAM: hundreds of clock cycles of latency, limited bandwidth. Latency hiding helps, but not if everyone accesses global memory all the time.</li>
+  <li><strong>CGMA</strong> (compute to global memory access): the number of FP operations per global memory access in a region. The matmul inner loop does 2 global reads and 1 multiply + 1 add per iteration → <strong>CGMA = 1</strong>.</li>
+</ul>
+<div class="formula-box">G80: 86.4 GB/s global bandwidth
+  86.4 / 4 B = 21.6 billion floats/s can be loaded
+  CGMA = 1  →  at most 21.6 GFLOPS
+  Peak 367 GFLOPS  →  21.6 / 367 ≈ 6%
+CGMA must be raised for higher performance.</div>
+
+<h2>CUDA memory types</h2>
+<p>All memory types together in one diagram, one table and one example kernel: <a href="l6-memory-map.html#gpu-memory-one-picture">L6, GPU memory: one picture</a>.</p>
+<table class="simple">
+  <thead><tr><th>Declaration</th><th>Memory</th><th>Scope</th><th>Lifetime</th><th>Speed / note</th></tr></thead>
+  <tbody>
+    <tr><td>Automatic scalar variable (<code>int i;</code>)</td><td>Register</td><td>Thread</td><td>Kernel/thread</td><td>Very fast, on-chip. Limited: spills if exceeded.</td></tr>
+    <tr><td>Automatic array (<code>float a[N];</code>)</td><td>Local (in global)</td><td>Thread</td><td>Kernel/thread</td><td>As slow as global (may go to registers if indexed with constants).</td></tr>
+    <tr><td><code>__shared__ float s[N];</code></td><td>Shared</td><td>Block</td><td>Kernel/block</td><td>Very fast, on-chip, cooperation within a block.</td></tr>
+    <tr><td><code>__device__ float g;</code> / <code>cudaMalloc</code></td><td>Global</td><td>Grid (+host API)</td><td>Application</td><td>Large, slow: one read from DRAM takes ≈ 400–600 clock cycles.</td></tr>
+    <tr><td><code>__constant__ float c[N];</code> (outside functions)</td><td>Constant</td><td>All grids</td><td>Application</td><td>In global memory but cached; very fast when all read the same address. ~64 KB total. Read-only from kernels.</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Global, local and constant memory can be written and read by the host via API calls. Registers and shared memory are on-chip.</li>
+  <li>The total registers are divided among the running threads. If the compiled code's registers per thread exceed the limit: <strong>register spill</strong>, the excess goes to local memory, i.e. per-thread global memory access; very slow.</li>
+  <li>The scope of a <code>__shared__</code> variable is the block: all threads of the block see the same version; its contents vanish when the kernel ends. For holding the portion of global data heavily used in an execution phase. Algorithms may need adjusting to create phases that focus on small portions of global memory.</li>
+  <li>A <code>__constant__</code> declaration must be outside any function body; its scope is all grids, its lifetime the whole application. Often used for input values to kernels.</li>
+</ul>
+
+<h2>Tiling with shared memory</h2>
+<p>The basic trade-off: global memory is large but slow, shared memory small but fast. Strategy: partition the data into <strong>tiles</strong> that each fit in shared memory; the computations on tiles must be doable independently. (Not every data structure can be tiled for every kernel.)</p>
+
+<h3>Overlapping accesses</h3>
+<p>The small example in the slides: P computed by four 2×2 blocks. The four threads of block (0,0) compute Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>. Each thread reads 4 elements of Md and 4 of Nd, and thread(0,0) and thread(1,0) <strong>both</strong> read all of row 0 of Md. During block (0,0) every Md and Nd element is read exactly twice: if the threads cooperate to load each element once, global traffic halves.</p>
+<p>In general: with N×N blocks the possible reduction is <strong>N times</strong>. 16×16 → global traffic 1/16.</p>
+<div class="formula-box">16×16 block, NO shared memory:  16·16 threads × (width + width) reads = 16·16·2·width
+16×16 block, WITH shared memory: each element read once          = 16·width·2
+Ratio: (16·16·2·width) / (16·width·2) = 16</div>
+<div class="callout discuss">
+  <p><strong>Slides 86 and 88: "What about 16×8?", "1024×1024 matrices, 32×8 blocks?"</strong> A BX×BY block computes a BY-row × BX-column tile of P. Without shared memory the block does <code>BX·BY·2·width</code> reads; with tiles it reads <code>BY·width</code> from M and <code>BX·width</code> from N. Reduction = <code>2·BX·BY / (BX + BY)</code>. 16×8: 256/24 ≈ <strong>10.7×</strong>. 32×8: 512/40 = <strong>12.8×</strong> (independent of the matrix size). For a square T×T it equals T.</p>
+</div>
+
+<h3>Intuition: tracing one phase with numbers</h3>
+<p>A small example: <code>width = 4</code>, <code>TILE_WIDTH = 2</code>, so 4 blocks of 2×2 and 4 threads per block. Block <code>(0,0)</code> computes the top-left 2×2 tile of P (P<sub>00</sub>, P<sub>01</sub>, P<sub>10</sub>, P<sub>11</sub>). The dot product has length 4, so there are <code>width/T = 2</code> phases:</p>
+<table class="simple">
+  <thead><tr><th>Phase</th><th>Into Mds (from M)</th><th>Into Nds (from N)</th><th>Added to each thread's Pvalue</th></tr></thead>
+  <tbody>
+    <tr><td>m = 0</td><td>M rows 0–1, columns 0–1</td><td>N rows 0–1, columns 0–1</td><td>terms k = 0, 1: M[r][0]·N[0][c] + M[r][1]·N[1][c]</td></tr>
+    <tr><td>m = 1</td><td>M rows 0–1, columns 2–3</td><td>N rows 2–3, columns 0–1</td><td>terms k = 2, 3: M[r][2]·N[2][c] + M[r][3]·N[3][c]</td></tr>
+  </tbody>
+</table>
+<p>After the two phases each thread has summed all 4 terms (as in the CPU version). The difference: the two elements of row 0 of M are read from global memory <strong>once</strong> per phase, and both threads of that row use them from shared memory. In a T×T tile each element is used by T threads, so global traffic drops T times.</p>
+<h3>The tiled kernel</h3>
+<p>Threads <strong>cooperatively</strong> load Md and Nd elements into shared memory, then use them in their dot products. Since shared memory is small, Md and Nd are divided into tiles that fit, and the dot product is split into <strong>phases</strong>: in phase <code>m</code> each thread loads one element from the M tile and one from the N tile.</p>
+<pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90">
+__global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
+{
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int Row = by * TILE_WIDTH + ty;     // this thread's row of P
+    int Col = bx * TILE_WIDTH + tx;     // this thread's column of P
+    float Pvalue = 0;
+    for (int m = 0; m < width / TILE_WIDTH; ++m) {           // phase loop
+        Mds[ty][tx] = Md[Row * width + (m * TILE_WIDTH + tx)];   // M[Row][m*T + tx]
+        Nds[ty][tx] = Nd[(m * TILE_WIDTH + ty) * width + Col];   // N[m*T + ty][Col]
+        __syncthreads();                                      // (1) tiles filled
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += Mds[ty][k] * Nds[k][tx];
+        __syncthreads();                                      // (2) everyone done using them
+    }
+    Pd[Row * width + Col] = Pvalue;
+}
+</pre>
+<ul>
+  <li><strong>Loading M:</strong> row <code>Row</code> fixed (the thread's row), column <code>m*T + tx</code>: column <code>tx</code> of the tile in phase m. <code>tx</code> is consecutive within a warp → coalesced.</li>
+  <li><strong>Loading N:</strong> row <code>m*T + ty</code>, column <code>Col</code>: row <code>ty</code> of the tile in phase m. Again <code>tx</code> (inside Col) is on the right → coalesced.</li>
+  <li><strong>Computing:</strong> <code>Mds[ty][k]</code> = element k of the P row, <code>Nds[k][tx]</code> = element k of the P column. In total <code>width/T</code> phases × <code>T</code> terms = <code>width</code> terms, as in the CPU version.</li>
+  <li><strong>Why two barriers?</strong> (1) After the writes: <code>Mds[ty][k]</code>, <code>Nds[k][tx]</code> loaded by other threads will be read; not before the tile is full. (2) After the computation: the next phase overwrites <code>Mds/Nds</code>; a fast thread must not write while others are still reading.</li>
+  <li>Global reads per thread: naive <code>2·width</code>, tiled <code>2·width/T</code> → T times fewer. This code assumes <code>width</code> is a multiple of <code>TILE_WIDTH</code>.</li>
+</ul>
+<div class="wgt-mount" data-widget="tiling"></div>
+<h3>Apply: M, N and P tile loads beside the code</h3>
+<div data-learning="tile"></div>
+<p>The same idea with a non-square block (e.g. <code>dim3(8,32)</code>): <a href="exam-midterm2.html#the-tiled-shared-memory-version-with-the-same-configuration">the solution in the midterm 2 guide</a>.</p>
+
+</div></main>
+</body>
+</html>

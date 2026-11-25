@@ -5,7 +5,7 @@ const site=new URL("../site/",import.meta.url);
 const src=path=>readFileSync(new URL(path,site),"utf8");
 test("block-wide barrier teaching lives at synchronization section, in both languages",()=>{
  for(const prefix of ["","en/"]){
-   const page=src(prefix+"l5-cuda-kernels.html");
+   const page=src(prefix+"l5-indexing.html");
    const idx=page.indexOf('data-learning="barrier"');
    assert.ok(idx>=0,prefix+"L5 missing inline barrier");
    const before=page.lastIndexOf("<h2>",idx),after=page.indexOf("<h2>",idx);

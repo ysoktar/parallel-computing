@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary and quiz · Lecture 6 · Compilation and memory · Parallel Computing</title>
+<meta name="description" content="Lecture 6: runtime and driver API, compiling with nvcc (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), initialisation and timing, register/shared limits, local, shared, constant and texture memory.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="l6-review">
+<main><div class="content">
+
+<h1>Summary and quiz</h1>
+
+<h2>Summary</h2>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (virtual ISA) → ptxas → SASS (cubin). A cubin for X.y runs only on X.z (z ≥ y); future GPUs need PTX + JIT. <code>-arch</code> selects the PTX, <code>-code</code> the binary.</li>
+  <li>Kernel launches are asynchronous: call <code>cudaDeviceSynchronize()</code> when timing; the first call includes initialisation.</li>
+  <li>Register and shared memory limits decide the threads/blocks per SM; too many registers → spill → local memory (as slow as global).</li>
+  <li>Global: coalescing (aligned 32/64/128 B segments), pitch in 2D. Local: variable-indexed arrays and spills.</li>
+  <li>Shared: 32 banks, bank = word index % 32; different words in the same bank = conflict; for <code>s[stride·tid]</code> the degree is gcd(stride, 32); <code>[32][33]</code> padding for column reads.</li>
+  <li>Constant: best when everyone reads the <strong>same</strong> address (broadcast). Texture: 2D locality, interpolation, boundary handling; read-only, needs a CUDA array.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Mixing up coalescing and bank conflicts: coalescing is about consecutive addresses in <strong>global</strong> memory; bank conflicts are about different words falling into the same bank of <strong>shared</strong> memory. <code>s[2*tid]</code> means half efficiency in global memory and a 2-way conflict in shared memory.</li>
+  <li>Taking the pitch for a number of elements: the pitch is in <strong>bytes</strong>, the row start is <code>(char*)p + r*pitch</code>.</li>
+  <li>Having consecutive threads read consecutive addresses of constant memory: that is the bad pattern for constant memory (32 separate requests).</li>
+  <li>Thinking a binary built with <code>-code=sm_70</code> runs on an 8.x GPU (not across a major change, and with no PTX there is no JIT).</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 32 threads read <code>s[8*threadIdx.x + 1]</code> from <code>__shared__ float s[1024]</code>. How many ways is the bank conflict?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → only 4 banks are used, with 8 different words each → <strong>8-way</strong> (gcd(8, 32) = 8; the offset does not change the degree).</p></div>
+<p><strong>2.</strong> Why is <code>tile[32][33]</code> used instead of <code>__shared__ float tile[32][32]</code> in the transpose? Show it with the bank calculation.</p>
+<div class="hint"><p>With width 32 the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank, so a warp reading a column makes a 32-way conflict. With width 33 the bank is <code>(33r + c) % 32 = (r + c) % 32</code>: 32 different banks for r = 0..31 → no conflict. The cost is 32 floats.</p></div>
+<p><strong>3.</strong> A kernel uses 40 registers per thread and an SM has 65,536 registers. With 256 threads per block, how many blocks fit on an SM at most (by registers)?</p>
+<div class="hint"><p>256·40 = 10,240 registers per block; 65,536 / 10,240 = 6.4 → <strong>6 blocks</strong> (1536 threads). Bringing it down to 32 registers allows 8 blocks (2048 threads): register usage directly decides occupancy.</p></div>
+<p><strong>4.</strong> When do you choose constant memory and when texture memory? One example each.</p>
+<div class="hint"><p>Constant: when all threads read the same small data at the same time, e.g. the coefficients of a convolution filter (every thread reads the same coefficient at the same moment → broadcast). Texture: reads that are local in 2D but irregular, and fractional coordinates, e.g. image rotation (<code>texRotate.cu</code>): neighbouring pixels come from the cache, bilinear interpolation and edge handling are done in hardware.</p></div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>Can a compute capability 8.6 GPU run an application compiled only with <code>-gencode arch=compute_70,code=sm_70</code>?</p>
+  <ol>
+    <li data-why="A cubin is forward-compatible within the same major; 7.x → 8.x changes the major.">Yes, the sm_70 binary runs on 8.6.</li>
+    <li data-why="True: the binary runs only on 7.z, and with no embedded PTX there is nothing to JIT.">No: binaries are not compatible across major versions and no PTX is embedded.</li>
+    <li data-why="JIT needs embedded PTX; code=sm_70 embeds only the binary.">Yes, the driver JIT-recompiles the sm_70 binary.</li>
+    <li data-why="Compatibility is decided by compute capability.">Only if compiled with the same driver version.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Why is <code>cudaDeviceSynchronize()</code> needed when timing a kernel?</p>
+  <ol>
+    <li data-why="Unrelated to allocation.">To complete memory allocation.</li>
+    <li data-why="cudaMemcpy is already synchronous; the question is about the kernel.">Because cudaMemcpy is asynchronous.</li>
+    <li data-why="The barrier is within a block; it does not hold the host.">To synchronise the blocks with each other.</li>
+    <li data-why="True: the launch returns immediately; without waiting you only measure the launch.">Kernel launches are asynchronous; timing without waiting for completion gives a far too short (wrong) time.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Which variable is most likely to be placed in local memory?</p>
+  <ol>
+    <li data-why="True: arrays the compiler cannot prove are indexed with constants go to local memory.">An automatic array accessed with an index computed at run time.</li>
+    <li data-why="Scalar automatic variables go to registers (unless spilled).">An <code>int</code> loop counter.</li>
+    <li data-why="__shared__ is explicitly shared memory.">A <code>__shared__</code> array.</li>
+    <li data-why="__constant__ is in constant memory.">A <code>__constant__</code> array.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Rows of 700 bytes were allocated with <code>cudaMallocPitch</code> (256 B alignment). How do you reach the start of row <code>r</code>?</p>
+  <ol>
+    <li data-why="Rows are pitch (768 B) apart, not 700.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch is in bytes; float* arithmetic multiplies by 4.">p + r * pitch</li>
+    <li data-why="True: pitch = 768 B; cast to char* first and add bytes.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="The pitch cannot be smaller than the width.">(float*)((char*)p + r * 512)</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

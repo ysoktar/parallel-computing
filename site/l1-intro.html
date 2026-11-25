@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Paralel hesaplamaya giriş · Paralel Hesaplama</title>
+<title>Neden paralel? Makineler · Lecture 1 · Giriş · Paralel Hesaplama</title>
 <meta name="description" content="Lecture 1: Moore yasası, güç duvarı, çok çekirdek, GPGPU, Flynn taksonomisi, paylaşımlı ve dağıtık bellek MIMD, CPU vs GPU, Blackwell, speedup, verim, Amdahl ve Gustafson-Barsis, gecikme ve throughput.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
@@ -14,7 +14,7 @@
 <body data-page="l1-intro">
 <main><div class="content">
 
-<h1>Paralel hesaplamaya giriş</h1>
+<h1>Neden paralel? Makineler</h1>
 <p class="lead">Neden artık her şey çok çekirdekli? Paralel makineler nasıl sınıflandırılır, ve paralel bir programın ne kadar hızlanabileceğini ne sınırlar?</p>
 
 <div class="callout goals">
@@ -80,114 +80,6 @@
   <li>B200: çift yonga (10 TB/s NV-HBI), 208 milyar transistör, 148 aktif SM = 18.944 CUDA çekirdeği, 592 Tensor çekirdeği.</li>
 </ul>
 <p>Diğer örnekler: <strong>AMD APU</strong> (CPU ve GPU aynı yongada, <strong>ortak bellek uzayı</strong> → veri aktarımı yok; HSA: gecikme odaklı LCU ve throughput odaklı TCU), Cell BE, çok çekirdekli CPU'lar (TILE-Gx8072, Intel Xeon Phi).</p>
-
-<h2>Performans ölçütleri</h2>
-<div class="formula-box">speedup    = t_seq / t_par
-efficiency = speedup / N = t_seq / (N · t_par)      (N = çekirdek sayısı)
-speedup = N  →  doğrusal (linear) speedup, %100 verim</div>
-<ul>
-  <li>Süreler programcının becerisine, derleyiciye ve bayraklarına, işletim sistemine, dosya sistemine, günün saatine bağlıdır.</li>
-  <li><strong>Altın kurallar:</strong> (1) seri ve paralel program aynı donanım/yazılımda, benzer koşullarda test edilmeli; (2) seri program, problemin bilinen <strong>en hızlı</strong> çözümü olmalı.</li>
-  <li>Speedup girdiye göre değişebilir: aynı boyutta birçok girdiyle ortalama (veya ort./maks./min.) raporlanır.</li>
-  <li>Speedup "hızlandırılabilir mi?" sorusunu, verim "kaynakları verimli kullanarak mı?" sorusunu cevaplar. Doğrusal speedup idealdir; koordinasyon (mesaj, paylaşılan kaynak) CPU zamanı yer.</li>
-</ul>
-
-<h2>Amdahl yasası</h2>
-<p>Varsayımlar: seri uygulama tek CPU'da T sürer; <strong>α</strong> (0 ≤ α ≤ 1) kısmı paralelleştirilebilir, (1 − α) seri yapılmalı; iletişim maliyeti yok, paralel kısım eşit bölünür.</p>
-<div class="formula-box">speedup = T / ((1 − α)T + αT/N) = 1 / ((1 − α) + α/N)
-N → ∞:  speedup → 1 / (1 − α)
-α = 0,9  →  speedup &lt; 10, kaç işlemci olursa olsun</div>
-<ul>
-  <li>"Karınca ordusu mu, fil sürüsü mü?" A işlemcisi B'den r = T<sub>B</sub>/T<sub>A</sub> kat hızlıysa, N<sub>B</sub> tane ucuz işlemciyle en iyi speedup <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. <code>r ≥ 1/(1−α)</code> ise speedup asla 1'i geçmez (α = %90, r = 10: tek pahalı CPU daha iyi).</li>
-  <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
-</ul>
-
-<h3>Sezgi: sayılarla Amdahl</h3>
-<p>Seri çalışan bir program <strong>100 saniye</strong> sürsün; bunun <strong>90 saniyesi</strong> paralelleştirilebilir (α = 0,9), <strong>10 saniyesi</strong> değil. N çekirdekte paralel kısım 90/N saniyeye iner, seri kısım hep 10 saniye kalır:</p>
-<table class="simple">
-  <thead><tr><th>N</th><th>Süre</th><th>Speedup</th><th>Verim</th></tr></thead>
-  <tbody>
-    <tr><td>1</td><td>10 + 90 = 100 s</td><td>1</td><td>%100</td></tr>
-    <tr><td>2</td><td>10 + 45 = 55 s</td><td>1,82</td><td>%91</td></tr>
-    <tr><td>10</td><td>10 + 9 = 19 s</td><td>5,26</td><td>%53</td></tr>
-    <tr><td>100</td><td>10 + 0,9 = 10,9 s</td><td>9,17</td><td>%9</td></tr>
-    <tr><td>∞</td><td>10 s</td><td>10</td><td>→ 0</td></tr>
-  </tbody>
-</table>
-<p>Ders: çekirdek eklemek sadece paralel kısmı küçültür; <strong>seri kısım bir taban oluşturur</strong> ve speedup asla 1/(1 − α)'yı geçemez. Her yeni çekirdek bir öncekinden daha az kazandırır, bu yüzden verim hızla düşer. Hızlanmak için önce seri kısmı küçültmek gerekir.</p>
-<h3>Uygula: Amdahl sınırını tahmin et</h3>
-<div data-learning="amdahl"></div>
-<h2>Gustafson-Barsis yasası</h2>
-<p>Paralel platform sadece seri programı hızlandırmaz, <strong>daha büyük problemleri</strong> çözebilir. Soru: paralel makinenin çözdüğü problemi seri makine ne kadar sürede çözer?</p>
-<p>Varsayımlar: paralel uygulama N CPU'da <strong>sabit</strong> T süresinde çalışır; zamanın α kısmında tüm makineler çalışır, (1 − α) kısmı seridir. T sabitken N artarsa yapılan iş artar.</p>
-<div class="formula-box">t_seq   = (1 − α)T + N·α·T
-speedup = t_seq / T = (1 − α) + N·α
-efficiency = speedup / N = (1 − α)/N + α</div>
-<p>Onun da kusuru var: iletişim maliyetini sıfır sayar. "Utanç verici derecede paralel" problemlerde bile N büyüdükçe iletişim belirleyici olur. Pratikte <strong>%90'ın üzerinde verim</strong> kayda değer bir başarıdır.</p>
-<div class="callout example">
-  <p>α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
-</div>
-
-<div class="callout key">
-  <p><strong>Amdahl mı, Gustafson mı?</strong> Soru şu: problem boyutu sabit mi? <strong>Aynı problemi daha hızlı</strong> çözmek istiyorsanız (strong scaling) Amdahl geçerlidir ve seri kısım sizi sınırlar. <strong>Aynı sürede daha büyük problem</strong> çözmek istiyorsanız (weak scaling: daha ince ızgara, daha çok piksel) Gustafson geçerlidir: paralel kısım N ile büyür, seri kısım büyümez, speedup neredeyse N olur. Süper bilgisayarlar ikinci senaryoda yaşar.</p>
-</div>
-<h2>Gecikme ve throughput</h2>
-<p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>
-
-<h2>Özet</h2>
-<ul>
-  <li>Moore yasası <strong>transistör sayısı</strong> hakkındadır, frekans hakkında değil. Frekans güç ve ısı yüzünden ~2005'te 2–4 GHz'de durdu (güç ∝ f³); fazla transistörler çekirdeklere harcandı.</li>
-  <li>Çok çekirdekten performans almak <strong>paralel yazılım</strong> ister; bu dersin konusu bu.</li>
-  <li>Flynn: SISD, SIMD, MISD, MIMD. Çok çekirdekli CPU'lar ve GPU'lar MIMD; GPU'nun programlama modeli SIMT.</li>
-  <li>Paylaşımlı bellek (ortak adres uzayı, kolay, sınırlı ölçek; NUMA) ↔ dağıtık bellek (mesajlaşma, zor, çok ölçeklenir).</li>
-  <li>CPU gecikme için (büyük önbellek, karmaşık kontrol), GPU throughput için (çok sayıda basit ALU, geniş bellek yolu) tasarlanır.</li>
-  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, verim = speedup/N. Amdahl: 1/((1−α) + α/N), tavan 1/(1−α). Gustafson: (1−α) + αN.</li>
-</ul>
-<h3>Sık yapılan hatalar</h3>
-<ul>
-  <li>α'yı seri kısım sanmak. Bu derste α <strong>paralelleştirilebilen</strong> kısım; seri kısım 1 − α.</li>
-  <li>Speedup ile verimi karıştırmak: 16 çekirdekte speedup 8 ise verim %50'dir, "8 kat verim" diye bir şey yok.</li>
-  <li>NUMA'yı dağıtık bellek sanmak: NUMA'da adresleme ortaktır, sadece uzak bellek daha yavaştır.</li>
-  <li>Seri programı yavaş bir versiyonla karşılaştırmak: altın kural, en hızlı bilinen seri çözümle kıyaslanır.</li>
-</ul>
-<h3>Final için açık uçlu sorular</h3>
-<p><strong>1.</strong> Bir programın %95'i paralelleştirilebiliyor. 19 çekirdekte speedup ve verim nedir? Sonsuz çekirdekte en fazla ne olur?</p>
-<div class="hint"><p>1/(0,05 + 0,95/19) = 1/(0,05 + 0,05) = <strong>10</strong>; verim 10/19 ≈ <strong>%53</strong>. Sınır: 1/0,05 = <strong>20</strong>.</p></div>
-<p><strong>2.</strong> Aynı program için Gustafson'a göre 19 çekirdekte speedup ve verim nedir? Neden Amdahl'dan farklı?</p>
-<div class="hint"><p>0,05 + 19·0,95 = 0,05 + 18,05 = <strong>18,1</strong>; verim 0,05/19 + 0,95 ≈ <strong>%95,3</strong>. Gustafson problem boyutunun çekirdek sayısıyla büyüdüğünü (sabit süre) varsayar, Amdahl problemi sabit tutar.</p></div>
-<p><strong>3.</strong> Saat frekansını artırmaya devam etmek neden mümkün olmadı? İki neden yazın.</p>
-<div class="hint"><p>(1) Güç frekansla çok hızlı (yaklaşık f³) artar: ısı atılamaz. (2) Yüksek frekanslı saat sinyalini üretmek ve yonga boyunca dağıtmak zorlaşır (dalga şekli bozulur). Voltajı düşürmek bir süre yardımcı oldu ama yetmedi.</p></div>
-<p><strong>4.</strong> Bir sunucu çiftliğinde 10.000 düğüm birlikte çalışacak. Paylaşımlı mı dağıtık bellek mi? Neden?</p>
-<div class="hint"><p>Dağıtık bellek: paylaşımlı bellek tek bir ortak ortamda (bellek yolu, önbellek tutarlılığı) darboğaz yapar ve onlarca-yüzlerce çekirdekte tıkanır. Dağıtık bellekte her düğüm kendi belleğine sahiptir, iletişim mesajla olur; pahalıdır ama paylaşılan bir darboğaz olmadığı için çok ölçeklenir.</p></div>
-
-<h2>Sınama</h2>
-<div class="quiz" data-answer="2">
-  <p>Bir programın %80'i paralelleştirilebiliyor. Amdahl'a göre sonsuz işlemciyle en fazla speedup?</p>
-  <ol>
-    <li data-why="Bu α'nın kendisi; formül 1/(1−α).">0,8</li>
-    <li data-why="1/(1 − 0,8) = 1/0,2 = 5.">5</li>
-    <li data-why="Gustafson'da sınır yok; Amdahl'da var.">Sınırsız</li>
-    <li data-why="1/0,8 = 1,25 seri kısımla paralel kısmı karıştırmak olur.">1,25</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="4">
-  <p>Hangisi dağıtık bellek MIMD için doğrudur?</p>
-  <ol>
-    <li data-why="Bu paylaşımlı bellek.">Tüm işlemciler ortak bir adres uzayını paylaşır.</li>
-    <li data-why="Programlaması daha zordur.">Programlaması paylaşımlı belleğe göre daha kolaydır.</li>
-    <li data-why="NUMA paylaşımlı bellek tasarımıdır.">NUMA bir dağıtık bellek tasarımıdır.</li>
-    <li data-why="Doğru: iletişim mesajlaşmayla; paylaşılan ortam olmadığı için çok yüksek ölçeklenir.">İletişim mesajlaşmayla olur ve çok yüksek ölçeklenebilir.</li>
-  </ol>
-</div>
-<div class="quiz" data-answer="1">
-  <p>16 çekirdekte speedup 12 ölçüldü. Verim nedir?</p>
-  <ol>
-    <li data-why="12/16 = 0,75.">%75</li>
-    <li data-why="16/12 ters oran.">%133</li>
-    <li data-why="Verim speedup'ın çekirdek sayısına oranı.">%12</li>
-    <li data-why="Doğrusal speedup olsaydı %100 olurdu.">%100</li>
-  </ol>
-</div>
 
 </div></main>
 </body>

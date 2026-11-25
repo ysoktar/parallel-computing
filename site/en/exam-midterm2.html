@@ -36,13 +36,13 @@
 <table class="simple">
   <thead><tr><th>Priority</th><th>Topic</th><th>Source</th><th>Page</th></tr></thead>
   <tbody>
-    <tr><td><span class="prio p1">1</span></td><td>Using shared memory (<code>__shared__</code>, tiling, cooperative loading)</td><td>L5 (slides 76–91)</td><td><a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Using shared memory (<code>__shared__</code>, tiling, cooperative loading)</td><td>L5 (slides 76–91)</td><td><a href="l5-tiling.html#tiling-with-shared-memory">L5</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td><code>__syncthreads()</code>: why, where, and where <em>not</em></td><td>L4, L5 (slides 42–46, 91)</td><td><a href="#problem-type-3-syncthreads">below</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Row/column indices, the elements a piece of code touches</td><td>L4, L5</td><td><a href="lab.html">Lab</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Global memory coalescing (32/64/128 B transactions, alignment, 2D access)</td><td>L6 (slides 43–55) + class</td><td><a href="coalescing.html">Coalescing</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Tiled matrix multiplication and thread mapping (e.g. <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>)</td><td>L5 + past exam question</td><td><a href="#problem-type-1-which-index-points-where">below</a></td></tr>
-    <tr><td><span class="prio p2">2</span></td><td>Naive matrix transpose (and transpose with shared memory)</td><td>Class (the instructor's example)</td><td><a href="coalescing.html#matrix-transpose">Coalescing</a></td></tr>
-    <tr><td><span class="prio p2">2</span></td><td>For-loop unrolling</td><td>Class</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Naive matrix transpose (and transpose with shared memory)</td><td>Class (the instructor's example)</td><td><a href="coalescing-transpose.html#matrix-transpose">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>For-loop unrolling</td><td>Class</td><td><a href="coalescing-review.html#loop-unrolling">Coalescing</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Memory types; CGMA; register/shared limits and choosing a block size</td><td>L5, L6</td><td><a href="#problem-type-5-numerical-questions">below</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Warps, latency hiding, assigning blocks to SMs, scalability</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
     <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant memory</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
@@ -202,7 +202,7 @@ __global__ void reverseBlock(int* d)
 <div class="callout class">
   <p><strong>"First just copy, without computing."</strong> If shared memory also needs data from outside the region you will write (e.g. the border/halo region in a convolution): first write the kernel so that it only does a "global → shared → global" copy and check that <strong>the output equals the input</strong>. Once the indices are right, add the computation. In the exam, too, check the shared-memory load indices separately.</p>
 </div>
-<p>The whole tiled matrix multiplication, with a phase-by-phase visualisation: <a href="l5-cuda-kernels.html#tiling-with-shared-memory">L5 page</a>. In short:</p>
+<p>The whole tiled matrix multiplication, with a phase-by-phase visualisation: <a href="l5-tiling.html#tiling-with-shared-memory">L5 page</a>. In short:</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90: tiled matmul (TILE_WIDTH × TILE_WIDTH block)">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
@@ -265,7 +265,7 @@ out[threadIdx.x] = s[threadIdx.x % 16];
   <li>Consecutive threads (<code>threadIdx.x</code>) should go to consecutive addresses: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
 </ul>
 <div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
-<p>Why the naive transpose is slow and how shared memory fixes it: <a href="coalescing.html#matrix-transpose">Coalescing page</a>. Summary:</p>
+<p>Why the naive transpose is slow and how shared memory fixes it: <a href="coalescing-transpose.html#matrix-transpose">Coalescing page</a>. Summary:</p>
 <div class="two-col">
 <pre class="code" data-run="transpose_simple.cu" data-title="Naive transpose: read ✓, write ✗">
 // in: height×width, out: width×height
@@ -412,7 +412,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <li>For an access pattern: the number of 32/128 B segments touched and the efficiency.</li>
   <li>Why the naive transpose is slow, how shared memory fixes it.</li>
   <li>Loop unrolling: what it gains, what it costs.</li>
-  <li>The memory types table (scope, lifetime, speed, who writes): <a href="l5-cuda-kernels.html#cuda-memory-types">L5</a>.</li>
+  <li>The memory types table (scope, lifetime, speed, who writes): <a href="l5-tiling.html#cuda-memory-types">L5</a>.</li>
   <li>The G80/GT200 numerical examples and CGMA.</li>
 </ul>
 

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Global, local, shared, constant · Lecture 6 · Compilation and memory · Parallel Computing</title>
+<meta name="description" content="Lecture 6: runtime and driver API, compiling with nvcc (PTX, cubin, JIT, -arch/-code/-gencode, __CUDA_ARCH__), initialisation and timing, register/shared limits, local, shared, constant and texture memory.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+<script type="module" src="../js/learning-widgets.js"></script>
+<script type="module" src="../js/widgets.js"></script>
+</head>
+<body data-page="l6-memory-types">
+<main><div class="content">
+
+<h1>Global, local, shared, constant</h1>
+
+<h2>Global memory</h2>
+<p>Four key points for efficient access (slide 35):</p>
+<ol>
+  <li><strong>Coalesce</strong> your accesses.</li>
+  <li>Watch for byte alignment (<strong>pitched</strong> accesses).</li>
+  <li>Read/write in large batches.</li>
+  <li>Use <strong>shared memory</strong>.</li>
+</ol>
+<p>Details, segment calculations, pitch and the transpose: <a href="coalescing.html">Coalescing page</a>. In short: <code>cudaMalloc</code> addresses are aligned to at least 256 bytes; but in a 2D array the start of the next row depends on the width, so <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code> pad the rows and return a pitch. An instruction accessing addressable memory (global, local, shared, constant, texture) may have to be re-issued several times depending on the distribution of addresses across the warp.</p>
+<pre class="code" data-run="pitch3d.cu" data-title="3D pitched access (slide 41)">
+cudaExtent extent = make_cudaExtent(width * sizeof(float), height, depth);
+cudaPitchedPtr devPitchedPtr;
+cudaMalloc3D(&devPitchedPtr, extent);
+
+__global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, int depth) {
+    char* devPtr = (char*)devPitchedPtr.ptr;
+    size_t pitch = devPitchedPtr.pitch;
+    size_t slicePitch = pitch * height;
+    for (int z = 0; z < depth; ++z) {
+        char* slice = devPtr + z * slicePitch;
+        for (int y = 0; y < height; ++y) {
+            float* row = (float*)(slice + y * pitch);
+            for (int x = 0; x < width; ++x) { float element = row[x]; }
+        }
+    }
+}
+</pre>
+
+<h3>Apply: pitch, row stride and padding</h3>
+<div data-learning="pitch"></div>
+<h3>Apply: warp accesses and segments</h3>
+<div data-learning="coalesce-lanes"></div>
+<h2>Local memory</h2>
+<ul>
+  <li>Only some automatic variables go to local memory: <strong>(1)</strong> arrays the compiler cannot determine are indexed with constants, <strong>(2)</strong> large structs/arrays that would consume too many registers, <strong>(3)</strong> any variable if the kernel uses more registers than available (<strong>register spilling</strong>).</li>
+  <li>In PTX (<code>-ptx</code> or <code>-keep</code>) it is declared with <code>.local</code> and accessed with <code>ld.local</code>/<code>st.local</code>. Later compilation phases may still decide otherwise: inspect the cubin with <code>cuobjdump</code>; <code>--ptxas-options=-v</code> reports total local usage (<code>lmem</code>). Some math functions may use local memory too.</li>
+  <li>It resides in device memory: as high latency and low bandwidth as global, same coalescing rules. But it is organised so consecutive 32-bit words go to consecutive thread IDs: fully coalesced if all threads of a warp access the <strong>same relative address</strong> (same array index, same struct member). 5.x onwards: cached in L2.</li>
+</ul>
+
+<h2>Shared memory</h2>
+<ul>
+  <li>On-chip; much higher bandwidth and much lower latency than local/global.</li>
+  <li>Its use comes with synchronisation (<code>__syncthreads()</code>). The amount used directly affects the number of blocks per SM.</li>
+  <li>Unlike global memory access, a shared memory access does not cause another ready warp to run to hide the delay.</li>
+  <li>Usage and tiled matmul: <a href="l5-tiling.html#tiling-with-shared-memory">L5</a>.</li>
+</ul>
+<h3>Banks and bank conflicts</h3>
+<p><strong>Analogy:</strong> shared memory is like a shop with 32 tills. Each customer (thread) goes to the till of their item. If 32 customers spread over 32 different tills, everyone pays at once. If they all pile up at the same till, they wait in turn. Exception: customers who want the same item (the same word) are served together (a broadcast).</p>
+<ul>
+  <li>Shared memory is divided into <strong>32 banks</strong> that can be accessed at the same time. Consecutive 4-byte words go to consecutive banks (newer architectures also have an 8-byte mode):</li>
+</ul>
+<div class="formula-box">bank = (byte address / 4) % 32  =  (float/int array index) % 32
+s[0] → bank 0, s[1] → bank 1, …, s[31] → bank 31, s[32] → bank 0 again</div>
+<ul>
+  <li>If the addresses of a warp's request fall into 32 different banks, the request is served <strong>in one round</strong>.</li>
+  <li>If <strong>different</strong> words fall into the same bank: a <strong>bank conflict</strong>; the hardware splits the request into conflict-free parts and performs them in turn. If at most n different words fall into one bank: an n-way conflict, throughput / n.</li>
+  <li>Threads reading the same word do not conflict (broadcast).</li>
+  <li>Unlike global memory, a wait on shared memory is not hidden by switching to another warp; a conflict slows down directly.</li>
+</ul>
+<h4>Examples (32 threads, 4-byte elements)</h4>
+<table class="simple">
+  <thead><tr><th>Access</th><th>Bank of thread i</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td><code>s[tid]</code></td><td>i % 32: all different</td><td>no conflict</td></tr>
+    <tr><td><code>s[2*tid]</code></td><td>0, 2, 4, …, 30, 0, 2, …: threads i and i+16 same bank, different words</td><td>2-way</td></tr>
+    <tr><td><code>s[3*tid]</code></td><td>0, 3, 6, …: 3 and 32 are coprime → all different</td><td>no conflict</td></tr>
+    <tr><td><code>s[4*tid]</code></td><td>only 8 banks are used, 4 words each</td><td>4-way</td></tr>
+    <tr><td><code>s[32*tid]</code></td><td>all bank 0</td><td>32-way (the worst)</td></tr>
+    <tr><td><code>s[0]</code></td><td>all the same word</td><td>no conflict (broadcast)</td></tr>
+  </tbody>
+</table>
+<p>General rule: for <code>s[stride*tid]</code> the conflict degree is <strong>gcd(stride, 32)</strong>. An odd stride is always conflict-free.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="s2"></div>
+<h4>Reading a column of a 2D array, and padding</h4>
+<p>In <code>__shared__ float tile[32][32];</code> the element <code>tile[r][c]</code> has index <code>r·32 + c</code> and bank <code>(r·32 + c) % 32 = c</code>. So <strong>all elements of a column are in the same bank</strong>. The store phase of the transpose reads a column with <code>tile[threadIdx.x][j]</code>: the 32 threads of the warp want 32 different words from the same bank → a <strong>32-way conflict</strong>.</p>
+<p>The fix: make each row one element longer (padding):</p>
+<div class="formula-box">__shared__ float tile[32][33];           // 33 elements per row
+tile[r][c] → index r·33 + c → bank (r·33 + c) % 32 = (r + c) % 32
+in column c, r = 0..31 → banks c, c+1, …, c+31 (mod 32): all different → no conflict</div>
+<p>The cost: 32 extra floats (128 B) of shared memory. In NVIDIA's transpose measurements this one line takes the coalesced transpose from 51 GB/s to 99.5 GB/s (95% of copy): <a href="coalescing-transpose.html#matrix-transpose">Coalescing page</a>.</p>
+<div class="wgt-mount" data-widget="banks" data-preset="col32"></div>
+
+<h2>L2 cache control</h2>
+<p>If a kernel accesses a global memory region repeatedly those accesses are <strong>persisting</strong>; if only once, <strong>streaming</strong>. With CUDA 11.0 and compute capability 8.0+, a portion of L2 can be set aside for persisting accesses; normal/streaming accesses use that portion only when it is unused.</p>
+
+<h2>Constant memory</h2>
+<ul>
+  <li>Resides in device memory (global), cached in the read-only <strong>constant cache</strong>.</li>
+  <li>A request is split into as many separate requests as there are <strong>different addresses</strong> in it (throughput drops accordingly); served at constant-cache speed on a hit, at device-memory speed otherwise.</li>
+  <li><strong>Best scenario: all threads read the same address</strong> (the opposite of global memory, where consecutive addresses are good).</li>
+</ul>
+<pre class="code" data-run="constant.cu" data-title="Usage">
+__constant__ float constData[256];          // outside any function
+float data[256];                             // host-side buffer
+cudaMemcpyToSymbol(constData, data, sizeof(data));   // copy before the kernel launch
+</pre>
+
+</div></main>
+</body>
+</html>

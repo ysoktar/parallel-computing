@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 2 · Tasarım · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 2: PCAM (partitioning, communication, agglomeration, mapping), ayrıştırma desenleri (task, divide-and-conquer, geometrik, özyinelemeli veri, pipeline, olay tabanlı), program yapısı desenleri (SPMD, MPMD, master-worker, map-reduce, fork/join, loop parallelism).">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l2-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (olabildiğince çok parça, işlemci sayısının 10–100 katı), <strong>C</strong>ommunication (bağımlılık grafı), <strong>A</strong>gglomeration (iletişimi azaltmak için grupla, ~10 katı), <strong>M</strong>apping (yük dengesi + iletişim; genel hâli NP-complete).</li>
+  <li>Ayrıştırma: fonksiyonel (adımlara göre), veri (veriye göre), veri akışı (pipeline, olay).</li>
+  <li>Pipeline'ın hızını <strong>en yavaş aşama</strong> belirler; fayda ancak aşamalar eş zamanlı çalışırsa.</li>
+  <li>Divide-and-conquer'da paralellik <strong>bağımlılık grafından</strong> okunur, çağrı grafından değil.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Task parallelism'i ölçeklenir sanmak: görev sayısı sabit olduğu için çekirdek sayısını takip edemez.</li>
+  <li>Pipeline'ın toplam gecikmesini throughput'u ile karıştırmak: 2+5+3 ms'lik pipeline'da bir öğenin gecikmesi 10 ms, ama kararlı durumda her 5 ms'de bir çıktı.</li>
+  <li>Agglomeration'ı unutmak: N² minik görev teoride çok paralel, pratikte iletişim ve görev yönetimi maliyeti yüzünden yavaş.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir histogram hesabını (Exercise 1) PCAM adımlarıyla tasarlayın. Hangi adımda yarış (race) sorunu çıkar, nasıl çözersiniz?</p>
+<div class="hint"><p>P: her piksel bir görev (veri ayrıştırması). C: her görev 256 kutudan birini günceller: tüm görevler aynı küçük diziye yazar, yani yoğun iletişim ve <strong>yarış</strong>. A: pikselleri thread başına parçalara grupla; her thread önce <strong>kendi yerel histogramını</strong> tutsun, sonunda yerel histogramlar toplanır (iletişim sona kalır). M: eşit büyüklükte parçalar. Ortak histograma doğrudan yazılacaksa atomic ya da mutex gerekir (L3); GPU'da blok başına shared memory histogramı + atomicAdd.</p></div>
+<p><strong>2.</strong> 4 aşamalı bir pipeline'da aşama süreleri 4, 4, 8, 4 ms. 100 öğe ne kadar sürer? Darboğazı nasıl gidersiniz?</p>
+<div class="hint"><p>İlk çıktı 20 ms'de (doluş), sonra her 8 ms'de bir: yaklaşık 20 + 99·8 = <strong>812 ms</strong>. Darboğaz 8 ms'lik aşama: onu ikiye bölün (4+4) ya da o aşamayı iki kopya hâlinde paralel çalıştırın; o zaman her 4 ms'de bir çıktı alınır (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> SPMD ile master-worker arasındaki farkı birer örnekle açıklayın.</p>
+<div class="hint"><p>SPMD: herkes aynı programı çalıştırır, benzersiz ID'sine göre farklı veriyi işler (CUDA kernel'i, MPI). Master-worker: roller farklı: master iş dağıtır ve sonuç toplar, işçiler iş yapar; boşta kalan işçiye yeni iş verildiği için yük dengesi kendiliğinden olur (ör. bir render çiftliğinde kare dağıtmak).</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p>PCAM'da yoğun iletişim kuran görevleri tek bir gruba toplamak hangi adımdır?</p>
+  <ol>
+    <li data-why="Partitioning parçalara böler, birleştirmez.">Partitioning</li>
+    <li data-why="Communication iletişim hacmini belirler.">Communication</li>
+    <li data-why="Doğru: agglomeration görevleri gruplayarak grup içi iletişimi yok eder.">Agglomeration</li>
+    <li data-why="Mapping grupları düğümlere atar.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Aşama süreleri 2, 5, 3 ms olan 3 aşamalı bir pipeline'ın kararlı durumdaki throughput'u?</p>
+  <ol>
+    <li data-why="En yavaş aşama 5 ms → 5 ms'de bir çıktı = 200 çıktı/s.">5 ms'de bir öğe</li>
+    <li data-why="Toplam 10 ms, tek öğenin gecikmesidir; throughput değil.">10 ms'de bir öğe</li>
+    <li data-why="Ortalama aşama süresi pipeline'ı belirlemez.">3,33 ms'de bir öğe</li>
+    <li data-why="En hızlı aşama değil, en yavaş aşama belirler.">2 ms'de bir öğe</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>CUDA kernel'leri hangi program yapısı desenine en çok uyar?</p>
+  <ol>
+    <li data-why="Görev sayısı sınırlı; CUDA veri paralel.">Task parallelism</li>
+    <li data-why="Her thread farklı program çalıştırmaz.">MPMD</li>
+    <li data-why="Olay tabanlı değil.">Event-based coordination</li>
+    <li data-why="Doğru: tek program (kernel), her thread kendi ID'siyle farklı veri.">SPMD</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

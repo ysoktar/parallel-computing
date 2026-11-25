@@ -36,13 +36,13 @@
 <table class="simple">
   <thead><tr><th>Öncelik</th><th>Konu</th><th>Kaynak</th><th>Sayfa</th></tr></thead>
   <tbody>
-    <tr><td><span class="prio p1">1</span></td><td>Shared memory kullanımı (<code>__shared__</code>, tiling, işbirliğiyle yükleme)</td><td>L5 (slayt 76–91)</td><td><a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5</a></td></tr>
+    <tr><td><span class="prio p1">1</span></td><td>Shared memory kullanımı (<code>__shared__</code>, tiling, işbirliğiyle yükleme)</td><td>L5 (slayt 76–91)</td><td><a href="l5-tiling.html#tiling-ile-shared-memory">L5</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td><code>__syncthreads()</code>: neden, nerede, nerede <em>olmaz</em></td><td>L4, L5 (slayt 42–46, 91)</td><td><a href="#soru-tipi-3-syncthreads">aşağıda</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Row/column indeksleri, bir kodun dokunduğu elemanlar</td><td>L4, L5</td><td><a href="lab.html">Lab</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Global bellek coalescing (32/64/128 B transaction'lar, hizalama, 2D erişim)</td><td>L6 (slayt 43–55) + ders</td><td><a href="coalescing.html">Coalescing</a></td></tr>
     <tr><td><span class="prio p1">1</span></td><td>Tiled matris çarpımı ve thread eşlemesi (ör. <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>)</td><td>L5 + geçmiş yıl sorusu</td><td><a href="#soru-tipi-1-hangi-indeks-nereyi-gosteriyor">aşağıda</a></td></tr>
-    <tr><td><span class="prio p2">2</span></td><td>Naive matris transpose (ve shared memory ile transpose)</td><td>Ders (hocanın örneği)</td><td><a href="coalescing.html#matris-transpose">Coalescing</a></td></tr>
-    <tr><td><span class="prio p2">2</span></td><td>For loop unrolling</td><td>Ders</td><td><a href="coalescing.html#loop-unrolling">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>Naive matris transpose (ve shared memory ile transpose)</td><td>Ders (hocanın örneği)</td><td><a href="coalescing-transpose.html#matris-transpose">Coalescing</a></td></tr>
+    <tr><td><span class="prio p2">2</span></td><td>For loop unrolling</td><td>Ders</td><td><a href="coalescing-review.html#loop-unrolling">Coalescing</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Bellek türleri; CGMA; register/shared limitleri ve blok boyutu seçimi</td><td>L5, L6</td><td><a href="#soru-tipi-5-sayisal-sorular">aşağıda</a></td></tr>
     <tr><td><span class="prio p2">2</span></td><td>Warp, latency hiding, blokların SM'lere atanması, ölçeklenebilirlik</td><td>L4, L5</td><td><a href="l4-cuda-intro.html">L4</a></td></tr>
     <tr><td><span class="prio p3">3</span></td><td>nvcc, PTX/cubin, compute capability, pitch, local/constant bellek</td><td>L6</td><td><a href="l6-cuda-memory.html">L6</a></td></tr>
@@ -202,7 +202,7 @@ __global__ void reverseBlock(int* d)
 <div class="callout class">
   <p><strong>"Önce işlem yapmadan sadece kopyala."</strong> Shared memory'ye, yazacağınız bölgenin dışından da veri (ör. konvolüsyonda kenar/halo bölgesi) gerekiyorsa: önce kernel'i sadece "global → shared → global" kopyası yapacak şekilde yazın ve <strong>çıktının girdiyle aynı olduğunu</strong> doğrulayın. İndeksler doğruysa hesaplamayı sonra ekleyin. Sınavda da shared'a yükleme indekslerini ayrı ayrı kontrol edin.</p>
 </div>
-<p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-cuda-kernels.html#tiling-ile-shared-memory">L5 sayfası</a>. Kısa hâli:</p>
+<p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-tiling.html#tiling-ile-shared-memory">L5 sayfası</a>. Kısa hâli:</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90: tiled matmul (TILE_WIDTH × TILE_WIDTH blok)">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
@@ -265,7 +265,7 @@ out[threadIdx.x] = s[threadIdx.x % 16];
   <li>Ardışık thread'ler (<code>threadIdx.x</code>) ardışık adreslere gitmeli: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
 </ul>
 <div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
-<p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing.html#matris-transpose">Coalescing sayfası</a>. Özet:</p>
+<p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing-transpose.html#matris-transpose">Coalescing sayfası</a>. Özet:</p>
 <div class="two-col">
 <pre class="code" data-run="transpose_simple.cu" data-title="Naive transpose: okuma ✓, yazma ✗">
 // in: height×width, out: width×height
@@ -412,7 +412,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <li>Bir erişim deseni için dokunulan 32/128 B segment sayısı ve verim.</li>
   <li>Naive transpose neden yavaş, shared memory ile nasıl düzelir.</li>
   <li>Loop unrolling: ne kazandırır, maliyeti.</li>
-  <li>Bellek türleri tablosu (kapsam, ömür, hız, kim yazar): <a href="l5-cuda-kernels.html#cuda-bellek-turleri">L5</a>.</li>
+  <li>Bellek türleri tablosu (kapsam, ömür, hız, kim yazar): <a href="l5-tiling.html#cuda-bellek-turleri">L5</a>.</li>
   <li>G80/GT200 sayısal örnekleri ve CGMA.</li>
 </ul>
 

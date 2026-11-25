@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Özet ve sınama · Lecture 5 · CUDA programlama · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 5: vektör/matris toplama, matris çarpımı, cudaMalloc/cudaMemcpy/cudaFree, kernel ve fonksiyon niteleyicileri, blockIdx/threadIdx, __syncthreads, warp ve latency hiding, CGMA, bellek türleri, tiled matmul.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/widgets.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l5-review">
+<main><div class="content">
+
+<h1>Özet ve sınama</h1>
+
+<h2>Özet</h2>
+<ul>
+  <li>Kernel = döngünün gövdesi; dıştaki döngüler thread'lere dönüşür. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global indeks = <code>blockIdx·blockDim + threadIdx</code> (her eksende); row-major adres <code>row·width + col</code>; grid'i yukarı yuvarla, sınırı kontrol et.</li>
+  <li><code>__syncthreads()</code>: blok içi bariyer, bloktaki herkes çalıştırmalı.</li>
+  <li>Bloklar SM'lere blok blok atanır; warp = 32 thread, zamanlama birimi; çok warp = gecikme gizleme.</li>
+  <li>Naive matmul CGMA = 1 → bant genişliği sınırlı (~%6 verim). Tiling: karoyu shared'a bir kez yükle, T kez kullan → global trafik T kat az, CGMA = T.</li>
+  <li>Tiled kernel'de iki bariyer: yüklemeden sonra (karo dolsun) ve hesaptan sonra (üzerine yazılmasın).</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li><code>cudaMalloc</code>/<code>cudaMemcpy</code>'ye eleman sayısını vermek: boyut her zaman <strong>bayt</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Row için x, col için y kullanmak: ardışık thread'ler bellekte uzak elemanlara gider (coalescing bozulur) ve matris transpoze hesaplanır.</li>
+  <li>Tiled kernel'de ikinci <code>__syncthreads()</code>'i unutmak: hızlı thread bir sonraki fazın karosunu diğerleri okurken yazar.</li>
+  <li>Kernel'den hemen sonra süre ölçmek: başlatma asenkron, önce <code>cudaDeviceSynchronize()</code>.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>n</code> elemanlı bir diziyi <code>s</code> ile çarpan bir kernel ve onu başlatan host kodunu yazın (blok başına 256 thread, <code>n</code> 256'nın katı olmayabilir).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // fazla thread'ler bir şey yapmaz
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> TILE_WIDTH = T olan tiled matmul'ün CGMA oranı nedir? Gösterin.</p>
+<div class="hint"><p>Her fazda bir thread <strong>2 global okuma</strong> yapar (Mds ve Nds'ye birer eleman) ve iç döngüde T çarpma + T toplama = <strong>2T FP işlem</strong>. CGMA = 2T / 2 = <strong>T</strong>. T = 16 ile 16 kat iyileşme: G80'de 21,6 GFLOPS sınırı ~345 GFLOPS'a çıkar (tepe 367'ye yakın).</p></div>
+<p><strong>3.</strong> 16×16 tile matmul'de shared bellek kullanımını ve G80'de SM başına kaç blok sığacağını hesaplayın. Sınırlayan nedir?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/blok</strong>; 16 KB/SM → shared'a göre 8 blok. Ama 256 thread/blok ile 768/256 = <strong>3 blok</strong>. Sınırlayan: SM başına thread sayısı (shared değil).</p></div>
+
+<h2>Sınama</h2>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMalloc((void**)&amp;Md, size)</code> çağrısında neden <code>&amp;Md</code> veriliyor?</p>
+  <ol>
+    <li data-why="Md bir host pointer'ı değil; cihaz adresini tutacak bir değişken.">Md host belleğinde ayrılacağı için.</li>
+    <li data-why="size zaten bayt cinsinden; &amp; ile ilgisi yok.">Boyutu bayt cinsinden vermek için.</li>
+    <li data-why="Doğru: fonksiyon ayırdığı cihaz adresini bu pointer değişkenine yazar.">Fonksiyon ayırdığı adresi Md değişkenine yazabilsin diye.</li>
+    <li data-why="cudaMalloc sadece ayırır; kopyalama cudaMemcpy'nin işi.">Veriyi Md'ye kopyalamak için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>256 thread'lik bloklarla bir SM'de 3 blok varsa SM'de kaç warp vardır?</p>
+  <ol>
+    <li data-why="Bu tek bir bloğun warp sayısı.">8</li>
+    <li data-why="256/32 = 8 warp/blok × 3 = 24.">24</li>
+    <li data-why="768 thread sayısı, warp değil.">768</li>
+    <li data-why="Warp 32 thread'tir; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Naive matmul'ün CGMA oranı neden 1'dir?</p>
+  <ol>
+    <li data-why="Shared memory naive kernelde kullanılmıyor.">Her shared bellek erişimine bir FP işlem düşer.</li>
+    <li data-why="Thread başına toplam 2·width okuma var; oran tur başına hesaplanır.">Her thread bir eleman okur.</li>
+    <li data-why="CGMA FP işlem / global erişim; register'larla ilgisi yok.">Her thread bir register kullanır.</li>
+    <li data-why="Doğru: döngü turunda 2 global okuma (M ve N) ve 2 FP işlem (çarpma + toplama).">Her turda 2 global okuma ve 2 FP işlem (çarpma, toplama) yapılır.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Tiled kernel'deki <strong>ikinci</strong> <code>__syncthreads()</code> kaldırılırsa ne olabilir?</p>
+  <ol>
+    <li data-why="Doğru: hızlı bir thread bir sonraki fazın verisini Mds/Nds'ye yazarken yavaş bir thread hâlâ eski fazın değerlerini okuyor olabilir.">Bir thread bir sonraki fazın karosunu yüklerken başka bir thread hâlâ önceki fazın değerlerini okuyor olabilir.</li>
+    <li data-why="Derleyici bariyer eksikliğini yakalamaz.">Derleme hatası olur.</li>
+    <li data-why="Global yazma döngüden sonra; sorun shared bellekte.">Pd'ye yazma coalesced olmaz.</li>
+    <li data-why="Yarış koşulu tanımsız sonuç verir; her zaman doğru çıkma garantisi yok.">Hiçbir şey olmaz; ikinci bariyer gereksizdir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>__constant__</code> değişkenler için hangisi doğru?</p>
+  <ol>
+    <li data-why="Constant bellek on-chip değil; global bellekte, önbellekli.">On-chip ayrı bir bellekte tutulur, önbelleğe gerek yoktur.</li>
+    <li data-why="Bildirim fonksiyon gövdesinin dışında olmalı.">Kernel içinde bildirilir.</li>
+    <li data-why="Doğru: kapsam tüm grid'ler, ömür uygulama boyu, global bellekte ama önbellekli.">Tüm grid'ler aynı versiyonu görür; global bellekte saklanır ama önbelleklenir.</li>
+    <li data-why="Kernel'den salt okunur; host cudaMemcpyToSymbol ile yazar.">Kernel'ler içine yazabilir.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

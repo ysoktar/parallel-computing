@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performans ve hızlanma · Lecture 1 · Giriş · Paralel Hesaplama</title>
+<meta name="description" content="Lecture 1: Moore yasası, güç duvarı, çok çekirdek, GPGPU, Flynn taksonomisi, paylaşımlı ve dağıtık bellek MIMD, CPU vs GPU, Blackwell, speedup, verim, Amdahl ve Gustafson-Barsis, gecikme ve throughput.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+<script type="module" src="js/learning-widgets.js"></script>
+</head>
+<body data-page="l1-performance">
+<main><div class="content">
+
+<h1>Performans ve hızlanma</h1>
+
+<h2>Performans ölçütleri</h2>
+<div class="formula-box">speedup    = t_seq / t_par
+efficiency = speedup / N = t_seq / (N · t_par)      (N = çekirdek sayısı)
+speedup = N  →  doğrusal (linear) speedup, %100 verim</div>
+<ul>
+  <li>Süreler programcının becerisine, derleyiciye ve bayraklarına, işletim sistemine, dosya sistemine, günün saatine bağlıdır.</li>
+  <li><strong>Altın kurallar:</strong> (1) seri ve paralel program aynı donanım/yazılımda, benzer koşullarda test edilmeli; (2) seri program, problemin bilinen <strong>en hızlı</strong> çözümü olmalı.</li>
+  <li>Speedup girdiye göre değişebilir: aynı boyutta birçok girdiyle ortalama (veya ort./maks./min.) raporlanır.</li>
+  <li>Speedup "hızlandırılabilir mi?" sorusunu, verim "kaynakları verimli kullanarak mı?" sorusunu cevaplar. Doğrusal speedup idealdir; koordinasyon (mesaj, paylaşılan kaynak) CPU zamanı yer.</li>
+</ul>
+
+<h2>Amdahl yasası</h2>
+<p>Varsayımlar: seri uygulama tek CPU'da T sürer; <strong>α</strong> (0 ≤ α ≤ 1) kısmı paralelleştirilebilir, (1 − α) seri yapılmalı; iletişim maliyeti yok, paralel kısım eşit bölünür.</p>
+<div class="formula-box">speedup = T / ((1 − α)T + αT/N) = 1 / ((1 − α) + α/N)
+N → ∞:  speedup → 1 / (1 − α)
+α = 0,9  →  speedup &lt; 10, kaç işlemci olursa olsun</div>
+<ul>
+  <li>"Karınca ordusu mu, fil sürüsü mü?" A işlemcisi B'den r = T<sub>B</sub>/T<sub>A</sub> kat hızlıysa, N<sub>B</sub> tane ucuz işlemciyle en iyi speedup <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. <code>r ≥ 1/(1−α)</code> ise speedup asla 1'i geçmez (α = %90, r = 10: tek pahalı CPU daha iyi).</li>
+  <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
+</ul>
+
+<h3>Sezgi: sayılarla Amdahl</h3>
+<p>Seri çalışan bir program <strong>100 saniye</strong> sürsün; bunun <strong>90 saniyesi</strong> paralelleştirilebilir (α = 0,9), <strong>10 saniyesi</strong> değil. N çekirdekte paralel kısım 90/N saniyeye iner, seri kısım hep 10 saniye kalır:</p>
+<table class="simple">
+  <thead><tr><th>N</th><th>Süre</th><th>Speedup</th><th>Verim</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>10 + 90 = 100 s</td><td>1</td><td>%100</td></tr>
+    <tr><td>2</td><td>10 + 45 = 55 s</td><td>1,82</td><td>%91</td></tr>
+    <tr><td>10</td><td>10 + 9 = 19 s</td><td>5,26</td><td>%53</td></tr>
+    <tr><td>100</td><td>10 + 0,9 = 10,9 s</td><td>9,17</td><td>%9</td></tr>
+    <tr><td>∞</td><td>10 s</td><td>10</td><td>→ 0</td></tr>
+  </tbody>
+</table>
+<p>Ders: çekirdek eklemek sadece paralel kısmı küçültür; <strong>seri kısım bir taban oluşturur</strong> ve speedup asla 1/(1 − α)'yı geçemez. Her yeni çekirdek bir öncekinden daha az kazandırır, bu yüzden verim hızla düşer. Hızlanmak için önce seri kısmı küçültmek gerekir.</p>
+<h3>Uygula: Amdahl sınırını tahmin et</h3>
+<div data-learning="amdahl"></div>
+<h2>Gustafson-Barsis yasası</h2>
+<p>Paralel platform sadece seri programı hızlandırmaz, <strong>daha büyük problemleri</strong> çözebilir. Soru: paralel makinenin çözdüğü problemi seri makine ne kadar sürede çözer?</p>
+<p>Varsayımlar: paralel uygulama N CPU'da <strong>sabit</strong> T süresinde çalışır; zamanın α kısmında tüm makineler çalışır, (1 − α) kısmı seridir. T sabitken N artarsa yapılan iş artar.</p>
+<div class="formula-box">t_seq   = (1 − α)T + N·α·T
+speedup = t_seq / T = (1 − α) + N·α
+efficiency = speedup / N = (1 − α)/N + α</div>
+<p>Onun da kusuru var: iletişim maliyetini sıfır sayar. "Utanç verici derecede paralel" problemlerde bile N büyüdükçe iletişim belirleyici olur. Pratikte <strong>%90'ın üzerinde verim</strong> kayda değer bir başarıdır.</p>
+<div class="callout example">
+  <p>α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
+</div>
+
+<div class="callout key">
+  <p><strong>Amdahl mı, Gustafson mı?</strong> Soru şu: problem boyutu sabit mi? <strong>Aynı problemi daha hızlı</strong> çözmek istiyorsanız (strong scaling) Amdahl geçerlidir ve seri kısım sizi sınırlar. <strong>Aynı sürede daha büyük problem</strong> çözmek istiyorsanız (weak scaling: daha ince ızgara, daha çok piksel) Gustafson geçerlidir: paralel kısım N ile büyür, seri kısım büyümez, speedup neredeyse N olur. Süper bilgisayarlar ikinci senaryoda yaşar.</p>
+</div>
+<h2>Gecikme ve throughput</h2>
+<p>t = 0'da bir iş isteği gelir. <strong>Gecikme odaklı işlemci</strong> (CPU) ilk sonucu çabuk üretir (düşük gecikme). <strong>Throughput odaklı işlemci</strong> (GPU) ilk sonucu geç üretir (yüksek gecikme) ama birim zamanda çok daha fazla çıktı verir (yüksek throughput).</p>
+
+</div></main>
+</body>
+</html>
