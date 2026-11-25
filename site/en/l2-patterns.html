@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Decomposition and program patterns</h1>
+<p class="lead">PCAM tells you which steps to take; patterns are ready answers for common problems: how to split the work and how to structure the program.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Tell apart task parallelism, divide and conquer, geometric decomposition and pipeline.</li>
+    <li>Choose a decomposition pattern for a problem and spot the need for halo cells.</li>
+    <li>Recognise program structure patterns such as SPMD, master-worker and fork/join.</li>
+  </ul>
+</div>
 
 <h2>Decomposition patterns</h2>
 <p>The six patterns of Mattson et al.; functional and data decomposition are joined by <strong>data flow</strong> decomposition. There is no strict separation; a problem can be decomposed in several ways.</p>
@@ -82,6 +91,26 @@ DnC(A) {
   </tbody>
 </table>
 <p>Platforms impose patterns: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="2">
+  <p>An image is split into four horizontal strips, one per thread, and a 3×3 filter is applied. Which pattern is this and what is needed?</p>
+  <ol>
+    <li data-why="A pipeline is data flowing between stages; there are no stages here.">Pipeline; queues between stages</li>
+    <li data-why="Correct: geometric decomposition; at strip borders a row of the neighbouring strip (halo) is needed.">Geometric decomposition; halo rows at the borders</li>
+    <li data-why="Divide and conquer splits the problem recursively and merges the results.">Divide and conquer; merging results</li>
+    <li data-why="Event-based coordination is for irregular interactions.">Event-based coordination</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>A CUDA kernel is an example of which program structure pattern?</p>
+  <ol>
+    <li data-why="Correct: all threads run the same program and process different data according to their ID (blockIdx/threadIdx).">SPMD</li>
+    <li data-why="In master-worker the roles differ; all kernel threads run the same code.">Master-worker</li>
+    <li data-why="In a pipeline each stage does different work.">Pipeline</li>
+    <li data-why="Fork/join creates and joins threads dynamically; a kernel&#x27;s threads are fixed from the start.">Fork/join</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Frekans artışının neden durduğunu ve çok çekirdeğe geçişi açıklamak.</li>
-    <li>Flynn taksonomisini ve paylaşımlı/dağıtık bellek MIMD farkını söylemek.</li>
-    <li>Speedup, verim, Amdahl ve Gustafson-Barsis formüllerini kullanmak.</li>
+    <li>Frekans artışının neden durduğunu (güç duvarı) ve çok çekirdeğe geçişi açıklamak.</li>
+    <li>Flynn taksonomisindeki dört sınıfı ve paylaşımlı/dağıtık bellek MIMD farkını söylemek.</li>
+    <li>CPU ile GPU'nun aynı silikonu neden farklı harcadığını özetlemek.</li>
   </ul>
 </div>
 
@@ -80,6 +80,26 @@
   <li>B200: çift yonga (10 TB/s NV-HBI), 208 milyar transistör, 148 aktif SM = 18.944 CUDA çekirdeği, 592 Tensor çekirdeği.</li>
 </ul>
 <p>Diğer örnekler: <strong>AMD APU</strong> (CPU ve GPU aynı yongada, <strong>ortak bellek uzayı</strong> → veri aktarımı yok; HSA: gecikme odaklı LCU ve throughput odaklı TCU), Cell BE, çok çekirdekli CPU'lar (TILE-Gx8072, Intel Xeon Phi).</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>2004–2005 civarında saat frekansının 2–4 GHz'de durmasının ana nedeni nedir?</p>
+  <ol>
+    <li data-why="Moore yasası transistör sayısı içindir ve o yıllarda da sürdü.">Moore yasası sona erdi.</li>
+    <li data-why="Doğru: yüksek frekans daha çok ısı demek; voltaj düşürmek de yetmedi (güç duvarı).">Güç ve ısı: güç duvarı.</li>
+    <li data-why="Bellek yavaşlığı ayrı bir sorundur; frekansı durduran ısıdır.">Bellek frekansı düştü.</li>
+    <li data-why="Çok çekirdek frekans durduktan sonra gelen çözümdür, nedeni değil.">Çok çekirdekli yongalar frekansı düşürmeyi zorunlu kıldı.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Bir GPU'nun warp'ı aynı komutu 32 thread'e farklı verilerle uyguluyor. Flynn taksonomisinde buna en yakın sınıf hangisi?</p>
+  <ol>
+    <li data-why="SISD tek komut, tek veri: sıralı tek çekirdek.">SISD</li>
+    <li data-why="MISD pratikte nadirdir (farklı komutlar, aynı veri).">MISD</li>
+    <li data-why="Doğru: tek komut, çok veri. GPU&#x27;nun SIMT modeli SIMD&#x27;nin thread&#x27;li hâlidir.">SIMD</li>
+    <li data-why="Bütün GPU birden çok bağımsız SM ile MIMD gibi davranabilir, ama tek warp SIMD&#x27;dir.">MIMD</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

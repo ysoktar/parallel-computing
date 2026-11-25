@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Texture bellek ve bellek türleri özeti</h1>
+<p class="lead">Bellek türlerinin sonuncusu texture; ardından bütün bellekleri tek bir tabloda karşılaştırıyoruz. Final için bank conflict'lerle birlikte texture da kapsamda.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Texture belleğin 2D yerellik için optimize edildiğini ve ne zaman tercih edileceğini söylemek.</li>
+    <li>Texture'ın sunduğu ücretsiz işlemleri (filtreleme, sınır modları, normalize koordinat) saymak.</li>
+    <li>Bütün bellek türlerini kapsam, ömür, hız ve erişim kuralı ile karşılaştırmak.</li>
+  </ul>
+</div>
 
 <h2>Texture memory</h2>
 <div class="callout key"><p><strong>Texture ne zaman?</strong> Erişim deseni düzensiz ama 2D'de yerel olduğunda (görüntü döndürme, ölçekleme, çarpıtma: komşu pikseller birlikte okunur), koordinatlar kesirli olduğunda (bilineer interpolasyon bedava) ve sınır dışı okumaların otomatik ele alınması istendiğinde (clamp/border/wrap/mirror). Bedel: veriyi bir CUDA array'e kopyalamak ve salt okunurluk.</p></div>
@@ -89,6 +98,26 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
   <li>Okumaların hem birleşik L1/texture cache'te hem L2'de mi, yoksa sadece L2'de mi önbelleklendiği load komutunun niteleyicileriyle kısmen ayarlanabilir. Pointer'ları <strong><code>const</code> ve <code>__restrict__</code></strong> ile işaretlemek derleyicinin salt-okunur durumu fark etme ihtimalini artırır.</li>
   <li>Shared memory'yi açıkça kullanmadığınız sürece verinizin önbelleğe alınacağını ya da hangi önbelleğin kullanılacağını <strong>asla varsaymayın</strong>.</li>
 </ul>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="4">
+  <p>Bir görüntüyü döndüren kernel'de komşu pikseller düzensiz ama 2D'de birbirine yakın okunuyor. Hangi bellek en uygun?</p>
+  <ol>
+    <li data-why="Constant, warp aynı adresi okuduğunda iyidir; farklı adreslerde sıralanır.">Constant memory</li>
+    <li data-why="Global&#x27;de düzensiz erişim coalesce olmaz.">Doğrudan global bellek</li>
+    <li data-why="Shared mümkündür ama hangi bölgenin gerekeceği önceden belli değildir.">Shared memory</li>
+    <li data-why="Doğru: texture cache 2D uzaysal yerellik için optimize edilmiştir; bilinear filtreleme ve sınır modları da ücretsizdir.">Texture memory</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Texture belleğin bir kısıtı hangisidir?</p>
+  <ol>
+    <li data-why="Texture 2D ve 3D veriyi destekler.">Sadece 1D veriyle çalışır</li>
+    <li data-why="Doğru: kernel texture&#x27;dan okur; texture üzerinden yazma yoktur.">Kernel içinden sadece okunabilir</li>
+    <li data-why="Texture önbelleklidir; bu bir avantajdır.">Önbelleği yoktur</li>
+    <li data-why="Doğrusal filtreleme donanımda ücretsizdir.">Doğrusal filtreleme çok pahalıdır</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

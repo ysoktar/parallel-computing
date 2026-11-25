@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Parallel Computing · BİL 455/533 study site</title>
-<meta name="description" content="A bilingual study site for BİL 455/533 Parallel Computing (TOBB ETÜ, Fall 2026): Lectures 1–6 with midterm 2 first (CUDA, shared memory, __syncthreads, coalescing, tiled matmul, transpose).">
+<meta name="description" content="A bilingual study site for BİL 455/533 Parallel Computing (TOBB ETÜ, Fall 2026): Lectures 1–7 split into short subpages, each with worked examples, interactive figures and questions; the whole term for the final.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
@@ -36,7 +36,7 @@
 <h2>Pages</h2>
 <p>The pages follow the order of the course; the buttons at the end of each page lead to the next lecture. The exam pages come last.</p>
 <div class="callout note" data-label="Next exam: the final">
-  <p><strong>Final:</strong> the whole term. Shared memory bank conflicts and texture memory, left out of midterm 2, are now in scope (<a href="l6-cuda-memory.html">L6</a>). Every lecture ends with a summary, common mistakes and final-style open-ended questions. Midterm 2 material: <a href="exam-midterm2.html">study guide</a>, <a href="cheatsheet.html">ready cheat sheet</a>, <a href="mock-exam.html">coding mock exam</a>.</p>
+  <p><strong>Final:</strong> the whole term. Shared memory bank conflicts and texture memory, left out of midterm 2, are now in scope (<a href="l6-memory-types.html">6.3 banks</a>, <a href="l6-texture.html">6.4 texture</a>). Every subpage ends with its own questions; the last page of each lecture has a summary, common mistakes and final-style open-ended questions. Midterm 2 material: <a href="exam-midterm2.html">study guide</a>, <a href="cheatsheet.html">ready cheat sheet</a>, <a href="mock-exam.html">coding mock exam</a>.</p>
 </div>
 <div class="cards" id="parts"></div>
 
@@ -46,7 +46,8 @@
   <li><strong>How to design? (L2)</strong> PCAM: partition the problem, identify communication, agglomerate the pieces, map them to processors. Decomposition patterns (geometric, pipeline, …) and program structures (SPMD, master-worker, map-reduce, fork/join).</li>
   <li><strong>Shared memory on the CPU (L3)</strong> C++11 threads; preventing data races with mutexes, semaphores, atomics and monitors.</li>
   <li><strong>Data parallelism on the GPU (L4–L5)</strong> One thread per data element: grid → block → thread, indexing with <code>blockIdx/threadIdx</code>, warps, synchronisation within a block, and tiling with shared memory.</li>
-  <li><strong>Feeding the memory (L6)</strong> Arithmetic is cheap, memory is expensive: register/shared limits, coalescing, pitch, constant memory (texture is not on this midterm). The transpose example brings all of this together.</li>
+  <li><strong>Feeding the memory (L6)</strong> Arithmetic is cheap, memory is expensive: register/shared limits, coalescing, pitch, shared-memory banks, constant and texture memory. The transpose example brings all of this together.</li>
+  <li><strong>Handling errors and branches (L7)</strong> Kernel errors arrive asynchronously: <code>cudaGetLastError()</code> after the launch, then <code>cudaDeviceSynchronize()</code>. Because a warp shares one program counter, <code>if</code>s should align with warp boundaries; loops get faster with unrolling and signed counters.</li>
 </ol>
 
 <h2>Using the site</h2>
@@ -68,10 +69,10 @@
 </div>
 
 <h2>Experiment with code while reading</h2>
-<p>The interactive exercises live next to their concepts: <a href="l1-intro.html">Amdahl speedup</a>, <a href="l2-design.html">decomposition and halo cells</a>, <a href="l3-threads.html">race conditions</a>, <a href="l4-cuda-intro.html">CUDA thread–matrix indexing</a>, <a href="l5-cuda-kernels.html">tiled matmul</a>, and <a href="l6-cuda-memory.html">pitch and coalescing</a>. Hover a cell to highlight the code, and click to pin the selection.</p>
+<p>The interactive exercises live next to their concepts: <a href="l1-performance.html">Amdahl speedup</a>, <a href="l2-patterns.html">decomposition and halo cells</a>, <a href="l3-threads.html">race conditions</a>, <a href="l4-hierarchy.html">CUDA thread–matrix indexing</a>, <a href="l5-tiling.html">tiled matmul</a>, and <a href="l6-memory-types.html">pitch and coalescing</a>. Hover a cell to highlight the code, and click to pin the selection.</p>
 <h2>Sources</h2>
 <ul>
-  <li>Lecture slides: Lecture 1 (introduction), 2 (design), 3 (threads), 4 (introduction to CUDA), 5 (CUDA programming), 6 (CUDA programming interface and memory).</li>
+  <li>Lecture slides: Lecture 1 (introduction), 2 (design), 3 (threads), 4 (introduction to CUDA), 5 (CUDA programming), 6 (CUDA programming interface and memory), 7 (error checking and control flow).</li>
   <li>Exercises: Exercise 1–2 (histogram, integral array/image, 2D convolution, matrix multiplication with C++ threads), Exercise 3–4 (their CUDA versions). Sample code: semaphore synchronisation, image rotation with textures (<code>texRotate.cu</code>).</li>
   <li>NVIDIA, <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-programming-guide/" target="_blank" rel="noopener">CUDA C++ Programming Guide</a> and <a href="https://docs.nvidia.com/cuda/archive/12.2.2/cuda-c-best-practices-guide/" target="_blank" rel="noopener">Best Practices Guide</a> (recommended by the slides).</li>
   <li>M. Harris, <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">An Efficient Matrix Transpose in CUDA C/C++</a> (the transpose example).</li>

@@ -15,6 +15,7 @@
 <main><div class="content">
 
 <h1>Özet ve sınama</h1>
+<p class="lead">Lecture 3'ün tamamını toparlar: thread'ler ve senkronizasyonun ana fikirleri, sık yapılan hatalar, açık uçlu sorular ve karışık bir sınama.</p>
 
 <h2>Dersin ana fikirleri</h2>
 <ul>
@@ -35,7 +36,7 @@
 </ul>
 <h3>Final için açık uçlu sorular</h3>
 <p><strong>1.</strong> 4 thread her biri 1000 kez korumasız <code>counter++</code> yapıyor. Son değer en az kaç, en çok kaç olabilir? Neden 4000'den az çıkar?</p>
-<div class="hint"><p>En çok 4000 (hiç çakışma olmazsa). Pratikte daha az çünkü oku-ekle-yaz adımları iç içe geçer ve güncellemeler kaybolur (yukarıdaki tablo). Teorik alt sınır çok küçüktür (kötü bir sıralamayla 2'ye kadar inebilir); sınavda önemli olan nedenini açıklamaktır: güncellemeler kaybolur, sonuç belirsizdir.</p></div>
+<div class="hint"><p>En çok 4000 (hiç çakışma olmazsa). Pratikte daha az çünkü oku-ekle-yaz adımları iç içe geçer ve güncellemeler kaybolur (<a href="l3-threads.html">3.1</a>'deki adım adım <code>counter++</code> tablosu). Teorik alt sınır çok küçüktür (kötü bir sıralamayla 2'ye kadar inebilir); sınavda önemli olan nedenini açıklamaktır: güncellemeler kaybolur, sonuç belirsizdir.</p></div>
 <p><strong>2.</strong> Producer-consumer'da tüketici şu sırayla yazılmış: <code>l.acquire(); resAvail.acquire(); …</code>. Ne olur?</p>
 <div class="hint"><p>Tampon boşken tüketici mutex'i alır, sonra <code>resAvail</code>'de uyur, <strong>mutex'i tutarak</strong>. Üretici öğe koymak için mutex'i alamaz → kimse ilerleyemez: <strong>deadlock</strong>. Doğrusu önce semafor, sonra mutex.</p></div>
 <p><strong>3.</strong> Bir web sunucusu aynı anda en fazla 8 veritabanı bağlantısı açabiliyor. Hangi senkronizasyon aracını kullanırsınız? Kodun iskeletini yazın.</p>

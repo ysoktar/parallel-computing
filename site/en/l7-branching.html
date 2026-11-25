@@ -14,6 +14,15 @@
 <main><div class="content">
 
 <h1>Branching, predication and loops</h1>
+<p class="lead">The errors of 7.1 were about correctness; this page moves to performance. Because a warp's 32 threads share one program counter, how you write <code>if</code>s and loops directly affects the time.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute how many warps a condition makes diverge.</li>
+    <li>Tell the CPU's branch prediction from the GPU's branch predication.</li>
+    <li>Explain the forms of <code>#pragma unroll</code> and why signed loop counters are recommended.</li>
+  </ul>
+</div>
 
 <h2>Branching and divergence</h2>
 <ul>
@@ -92,6 +101,26 @@ for (int i = 0; i < n; i++) {
     out[i] = in[offset + stride*i];
 }
 </pre>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="1">
+  <p>In a 256-thread block, how many warps diverge on <code>if (threadIdx.x % 64 &lt; 32)</code>?</p>
+  <ol>
+    <li data-why="Correct: the condition is aligned to groups of 32; each warp is either all in or all out → 0.">0</li>
+    <li data-why="The condition changes at warp boundaries, not inside a warp.">4</li>
+    <li data-why="Not all of them diverge.">8</li>
+    <li data-why="Half take the branch, but there is no difference inside a warp.">Half (4)</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Why is <code>int</code> (signed) preferred for a loop counter?</p>
+  <ol>
+    <li data-why="Both are the same size.">It uses fewer registers</li>
+    <li data-why="Correct: signed overflow is undefined, so the compiler may assume it never happens and optimise harder; unsigned must keep its wrap-around behaviour.">Signed overflow is undefined, so the compiler can optimise harder</li>
+    <li data-why="Negative values are not required.">Loops must count down to negative values</li>
+    <li data-why="unsigned is supported on GPUs.">GPUs have no unsigned type</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

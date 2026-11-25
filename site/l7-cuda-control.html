@@ -18,15 +18,14 @@
 
 <div class="callout goals">
   <ul>
-    <li>Senkron ve asenkron hataları ayırt etmek; bir kernel başlatmasını doğru şekilde kontrol etmek.</li>
+    <li>Senkron hataları (başlatma anında) asenkron hatalardan (kernel çalışırken) ayırt etmek.</li>
+    <li>Bir kernel başlatmasını <code>cudaGetLastError()</code> ve <code>cudaDeviceSynchronize()</code> ile doğru sırada kontrol etmek.</li>
     <li><code>cudaPeekAtLastError()</code> ile <code>cudaGetLastError()</code> farkını söylemek.</li>
-    <li>Bir koşulun kaç warp'ı diverge ettirdiğini hesaplamak; predication ile prediction'ı ayırt etmek.</li>
-    <li><code>#pragma unroll</code> çeşitlerinin anlamını ve signed sayaç tavsiyesinin nedenini söylemek.</li>
   </ul>
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>GPU, siparişi alıp hemen "tamam" diyen bir mutfaktır.</strong> Kernel başlatınca CPU beklemez (asenkron); kernel içindeki bir hatayı ancak sonra, "bitti mi?" diye sorunca (<code>cudaDeviceSynchronize()</code>) öğrenirsiniz. Bu dersin ilk yarısı hataları doğru yerde yakalamak. İkinci yarısı performans: warp'ın 32 thread'i tek komut sayacını paylaştığı için dallanmalar dikkat ister; döngüler de unrolling ve doğru sayaç tipiyle hızlanır.</p>
+  <p><strong>GPU, siparişi alıp hemen "tamam" diyen bir mutfaktır.</strong> Kernel başlatınca CPU beklemez (asenkron); kernel içindeki bir hatayı ancak sonra, "bitti mi?" diye sorunca (<code>cudaDeviceSynchronize()</code>) öğrenirsiniz. Bu dersin ilk yarısı (bu sayfa) hataları doğru yerde yakalamak. İkinci yarısı (<a href="l7-branching.html">7.2</a>) performans: warp'ın 32 thread'i tek komut sayacını paylaştığı için dallanmalar dikkat ister; döngüler de unrolling ve doğru sayaç tipiyle hızlanır.</p>
 </div>
 
 <h2>Hatalar nerede ve ne zaman yakalanır?</h2>
@@ -60,6 +59,26 @@ cudaError_t r2 = cudaDeviceSynchronize();  // errors during execution
 </table>
 <div class="callout gotcha">
   <p>Hata kontrolsüz bir programda kernel çökse bile program "başarılı" görünür, sonuçlar çöp çıkar; hata ancak bir sonraki <code>cudaMemcpy</code>'de, alakasız bir satırda raporlanır. Sınavda istenen: launch'tan sonra <code>cudaGetLastError()</code>, ardından <code>cudaDeviceSynchronize()</code> ve ikisinin de dönüşünü kontrol etmek.</p>
+</div>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="1">
+  <p>Blok başına 2048 thread ile başlatılan bir kernel'in hatası ne zaman ve nasıl yakalanır?</p>
+  <ol>
+    <li data-why="Doğru: geçersiz başlatma yapılandırması senkron bir hatadır; başlatmadan hemen sonra cudaGetLastError() onu döndürür.">Hemen, başlatmadan sonra cudaGetLastError() ile</li>
+    <li data-why="Kernel hiç çalışmaz; çalışma sırasında hata oluşmaz.">Sadece cudaDeviceSynchronize() sonrasında</li>
+    <li data-why="CUDA bu hatayı sessizce düzeltmez.">Hiç; CUDA blok boyutunu otomatik düşürür</li>
+    <li data-why="Blok boyutu çalışma zamanı parametresidir; derleyici yakalamaz.">Derleme sırasında</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>cudaPeekAtLastError()</code> ile <code>cudaGetLastError()</code> arasındaki fark nedir?</p>
+  <ol>
+    <li data-why="İkisi de son hatayı döndürür.">Peek sadece senkron hataları görür</li>
+    <li data-why="İkisi de host&#x27;tan çağrılır.">Get sadece kernel içinden çağrılabilir</li>
+    <li data-why="Doğru: Get hata değişkenini cudaSuccess&#x27;e sıfırlar, Peek sıfırlamaz.">Get hatayı sıfırlar, Peek sıfırlamaz</li>
+    <li data-why="Senkronizasyon cudaDeviceSynchronize&#x27;ın işidir.">Peek GPU'yu bekler, Get beklemez</li>
+  </ol>
 </div>
 
 </div></main>

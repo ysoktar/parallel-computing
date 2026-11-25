@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Texture memory and a summary of memory types</h1>
+<p class="lead">The last memory type is texture; then we compare all memories in one table. For the final, texture is in scope together with bank conflicts.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>State that texture memory is optimised for 2D locality and when to prefer it.</li>
+    <li>List the free operations texture gives (filtering, border modes, normalised coordinates).</li>
+    <li>Compare all memory types by scope, lifetime, speed and access rule.</li>
+  </ul>
+</div>
 
 <h2>Texture memory</h2>
 <div class="callout key"><p><strong>When texture?</strong> When the access pattern is irregular but local in 2D (rotating, scaling, warping an image: neighbouring pixels are read together), when coordinates are fractional (bilinear interpolation for free), and when out-of-range reads should be handled automatically (clamp/border/wrap/mirror). The cost: copying the data into a CUDA array, and read-only access.</p></div>
@@ -89,6 +98,26 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
   <li>Whether reads are cached in both the unified L1/texture cache and L2, or in L2 only, can be partly configured per access with load-instruction modifiers. Marking pointers <strong><code>const</code> and <code>__restrict__</code></strong> increases the likelihood that the compiler detects the read-only condition.</li>
   <li>Unless you use shared memory explicitly, <strong>never assume</strong> your data will be cached, or which cache will be used.</li>
 </ul>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="4">
+  <p>An image-rotation kernel reads neighbouring pixels irregularly but close together in 2D. Which memory fits best?</p>
+  <ol>
+    <li data-why="Constant is good when a warp reads the same address; different addresses are serialised.">Constant memory</li>
+    <li data-why="Irregular accesses to global memory do not coalesce.">Global memory directly</li>
+    <li data-why="Shared is possible but which region is needed is not known in advance.">Shared memory</li>
+    <li data-why="Correct: the texture cache is optimised for 2D spatial locality; bilinear filtering and border modes come for free.">Texture memory</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Which is a limitation of texture memory?</p>
+  <ol>
+    <li data-why="Texture supports 2D and 3D data.">It works only with 1D data</li>
+    <li data-why="Correct: the kernel reads through a texture; there is no writing through it.">It is read-only inside the kernel</li>
+    <li data-why="Texture is cached; that is an advantage.">It has no cache</li>
+    <li data-why="Linear filtering is free in hardware.">Linear filtering is very expensive</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

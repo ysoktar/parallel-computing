@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Ayrıştırma ve program desenleri</h1>
+<p class="lead">PCAM'ın hangi adımı atacağınızı söyler; desenler ise sık karşılaşılan problemler için hazır cevaplardır: işi nasıl bölersiniz, programı nasıl kurarsınız.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Task parallelism, böl ve yönet, geometrik ayrıştırma ve pipeline desenlerini ayırt etmek.</li>
+    <li>Bir problem için uygun ayrıştırma desenini seçip halo ihtiyacını görmek.</li>
+    <li>SPMD, master-worker, fork/join gibi program yapısı desenlerini tanımak.</li>
+  </ul>
+</div>
 
 <h2>Ayrıştırma desenleri</h2>
 <p>Mattson ve diğerlerinin altı deseni; fonksiyonel ve veri ayrıştırmasına <strong>veri akışı</strong> (data flow) ayrıştırması eklenir. Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
@@ -82,6 +91,26 @@ DnC(A) {
   </tbody>
 </table>
 <p>Platformlar desen dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>Bir görüntü dört yatay şeride bölünüp her şerit ayrı thread'e veriliyor; 3×3 filtre uygulanacak. Bu hangi desen ve ne gerekir?</p>
+  <ol>
+    <li data-why="Pipeline aşamalar arasında veri akışıdır; burada aşama yok.">Pipeline; aşamalar arası kuyruk</li>
+    <li data-why="Doğru: geometrik ayrıştırma; şerit sınırlarında komşu şeridin bir satırı (halo) gerekir.">Geometrik ayrıştırma; sınırlarda halo satırları</li>
+    <li data-why="Böl ve yönet problemi özyinelemeli olarak böler ve sonuçları birleştirir.">Böl ve yönet; sonuçları birleştirme</li>
+    <li data-why="Olay tabanlı koordinasyon düzensiz etkileşimler içindir.">Olay tabanlı koordinasyon</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Bir CUDA kernel'i hangi program yapısı desenine örnektir?</p>
+  <ol>
+    <li data-why="Doğru: bütün thread&#x27;ler aynı programı çalıştırır, kimliklerine (blockIdx/threadIdx) göre farklı veri işler.">SPMD</li>
+    <li data-why="Master-worker&#x27;da roller farklıdır; kernel&#x27;deki thread&#x27;lerin hepsi aynı kodu çalıştırır.">Master-worker</li>
+    <li data-why="Pipeline&#x27;da her aşama farklı iş yapar.">Pipeline</li>
+    <li data-why="Fork/join dinamik olarak thread açıp kapatır; kernel&#x27;in thread&#x27;leri baştan sabittir.">Fork/join</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

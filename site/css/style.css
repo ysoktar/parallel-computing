@@ -1379,3 +1379,10 @@ figure.memmap figcaption { font-size: 0.86rem; color: var(--text-2); margin-top:
 .gloss dt .gloss-alt { font-weight: 400; color: var(--muted); font-size: 0.85rem; margin-left: 6px; }
 .gloss dt .chip { margin-left: 6px; font-size: 0.72rem; }
 .gloss dd { margin-bottom: 0.4rem; }
+
+/* Road map of the current lecture's pages, under the H1 */
+.lec-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.2rem 0 1rem; font-size: 0.82rem; }
+.lec-steps a { padding: 3px 9px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-2); text-decoration: none; background: var(--bg); }
+.lec-steps a:hover { border-color: var(--accent); color: var(--text); }
+.lec-steps a[aria-current] { border-color: var(--accent); color: var(--text); font-weight: 600; }
+.lec-step-num { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }

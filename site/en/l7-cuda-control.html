@@ -18,15 +18,14 @@
 
 <div class="callout goals">
   <ul>
-    <li>Tell synchronous from asynchronous errors; check a kernel launch correctly.</li>
+    <li>Tell synchronous errors (at launch) from asynchronous errors (while the kernel runs).</li>
+    <li>Check a kernel launch with <code>cudaGetLastError()</code> and <code>cudaDeviceSynchronize()</code> in the right order.</li>
     <li>State the difference between <code>cudaPeekAtLastError()</code> and <code>cudaGetLastError()</code>.</li>
-    <li>Count how many warps a condition makes diverge; tell predication from prediction.</li>
-    <li>State what the forms of <code>#pragma unroll</code> mean and why signed loop counters are recommended.</li>
   </ul>
 </div>
 
 <div class="callout why" data-label="The big picture">
-  <p><strong>A GPU is a kitchen that takes the order and says "OK" at once.</strong> A kernel launch does not make the CPU wait (asynchronous); you learn about an error inside the kernel only later, when you ask "is it done?" (<code>cudaDeviceSynchronize()</code>). The first half of this lecture is catching errors in the right place. The second half is performance: a warp's 32 threads share one program counter, so branches need care; loops get faster with unrolling and the right counter type.</p>
+  <p><strong>A GPU is a kitchen that takes the order and says "OK" at once.</strong> A kernel launch does not make the CPU wait (asynchronous); you learn about an error inside the kernel only later, when you ask "is it done?" (<code>cudaDeviceSynchronize()</code>). The first half of this lecture (this page) is catching errors in the right place. The second half (<a href="l7-branching.html">7.2</a>) is performance: a warp's 32 threads share one program counter, so branches need care; loops get faster with unrolling and the right counter type.</p>
 </div>
 
 <h2>Where and when errors are caught</h2>
@@ -60,6 +59,26 @@ cudaError_t r2 = cudaDeviceSynchronize();  // errors during execution
 </table>
 <div class="callout gotcha">
   <p>In a program without error checks, even a crashed kernel looks "successful" and the results are garbage; the error is only reported at the next <code>cudaMemcpy</code>, on an unrelated line. What the exam wants: <code>cudaGetLastError()</code> after the launch, then <code>cudaDeviceSynchronize()</code>, checking the return value of both.</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="1">
+  <p>A kernel is launched with 2048 threads per block. When and how is the error caught?</p>
+  <ol>
+    <li data-why="Correct: an invalid launch configuration is a synchronous error; cudaGetLastError() right after the launch returns it.">Right away, with cudaGetLastError() after the launch</li>
+    <li data-why="The kernel never runs; no error happens during execution.">Only after cudaDeviceSynchronize()</li>
+    <li data-why="CUDA does not fix this silently.">Never; CUDA lowers the block size automatically</li>
+    <li data-why="The block size is a run-time parameter; the compiler does not catch it.">At compile time</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>What is the difference between <code>cudaPeekAtLastError()</code> and <code>cudaGetLastError()</code>?</p>
+  <ol>
+    <li data-why="Both return the last error.">Peek sees only synchronous errors</li>
+    <li data-why="Both are called from the host.">Get can only be called inside a kernel</li>
+    <li data-why="Correct: Get resets the error variable to cudaSuccess, Peek does not.">Get resets the error, Peek does not</li>
+    <li data-why="Synchronising is cudaDeviceSynchronize&#x27;s job.">Peek waits for the GPU, Get does not</li>
+  </ol>
 </div>
 
 </div></main>

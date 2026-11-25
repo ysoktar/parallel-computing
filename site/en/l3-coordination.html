@@ -15,6 +15,15 @@
 <main><div class="content">
 
 <h1>Deadlock, atomics, monitors</h1>
+<p class="lead">The tools of 3.1 prevent races; this page covers what happens when you combine them: in what order memory becomes visible, how locks deadlock, and how threads wait for each other.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Define deadlock, livelock and starvation, and give the practical way to prevent deadlock.</li>
+    <li>Solve producer-consumer with semaphores and a mutex in the right order.</li>
+    <li>Explain atomic operations, CAS and the use of monitors/condition variables.</li>
+  </ul>
+</div>
 
 <h2>Memory consistency models</h2>
 <ul>
@@ -93,6 +102,26 @@ public:
 </ul>
 <div class="callout key">
   <p><strong>The CPU ↔ GPU bridge:</strong> <code>std::thread</code> + <code>join</code> ≈ kernel launch + <code>cudaDeviceSynchronize()</code>; a barrier ≈ <code>__syncthreads()</code> (but within a block only); <code>std::atomic</code> ≈ <code>atomicAdd</code>; the histogram exercise shows the same race problem in both worlds.</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="4">
+  <p>Thread A locks m1 then m2, thread B locks m2 then m1. What is the simplest fix?</p>
+  <ol>
+    <li data-why="Removing the locks brings the race back.">Remove the locks</li>
+    <li data-why="A delay makes deadlock rarer but does not prevent it.">Put a sleep between the locks</li>
+    <li data-why="More threads make the problem bigger.">Use more threads</li>
+    <li data-why="Correct: if everyone takes the locks in the same order, circular wait cannot happen (or use std::scoped_lock(m1, m2)).">Both threads take the locks in the same order</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Why is the condition checked in a <code>while</code> loop when waiting on a condition variable?</p>
+  <ol>
+    <li data-why="Correct: a thread can wake spuriously, or another thread may have made the condition false again.">Spurious wakeups, and the condition may have been broken again</li>
+    <li data-why="It is for correctness, not speed.">Because a loop is faster</li>
+    <li data-why="wait() releases the mutex and reacquires it on wake-up; the loop does not do that.">To release the mutex</li>
+    <li data-why="It is not a compiler requirement.">Because the compiler does not allow if</li>
+  </ol>
 </div>
 
 </div></main>

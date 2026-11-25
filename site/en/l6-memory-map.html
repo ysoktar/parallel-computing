@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>GPU memory: one picture and its limits</h1>
+<p class="lead">Instead of memorising the memory types one by one, we place them on a single map; then we look at how their limited size decides how many threads can run on an SM at once.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Place each memory with three questions (where is it, who sees it, how should it be accessed).</li>
+    <li>Say which memory each variable of a kernel lives in.</li>
+    <li>Compute blocks and threads per SM from the register and shared-memory limits.</li>
+  </ul>
+</div>
 
 <h2>Three questions, one memory map</h2>
 <p>Instead of memorising the memory types one by one, let us place them in a structure using <strong>three questions</strong>. Every memory type is a combination of answers to these three questions:</p>
@@ -118,7 +127,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <li><strong>None of these</strong> (large input/output arrays) → <strong>global</strong>; make the accesses coalesced, use a pitch in 2D.</li>
 </ol>
 <div class="callout example">
-  <p><strong>Read tiled matmul through this lens:</strong> <code>M</code>, <code>N</code>, <code>P</code> are in global memory (large, everyone sees them; the loads are coalesced). The tiles <code>Mds</code>, <code>Nds</code> are in shared memory (16 threads of the block use the same element). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> are in registers (private to the thread). The barrier is the price of sharing shared memory. The sections below detail each piece of this picture.</p>
+  <p><strong>Read tiled matmul through this lens:</strong> <code>M</code>, <code>N</code>, <code>P</code> are in global memory (large, everyone sees them; the loads are coalesced). The tiles <code>Mds</code>, <code>Nds</code> are in shared memory (16 threads of the block use the same element). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> are in registers (private to the thread). The barrier is the price of sharing shared memory. The pieces of this picture are detailed on <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) and <a href="l6-texture.html">6.4</a> (texture).</p>
 </div>
 <h2>Memory limits and their effects</h2>
 <ul>
@@ -133,6 +142,26 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <p><strong>Matmul:</strong> 16×16 tiles → Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/block → 8 blocks fit (the G80 limit anyway). But the real limit is 768 threads per SM: 768 / 256 = <strong>3 blocks</strong> → only 3·2 = 6 KB of shared memory used. All these limits are device-dependent.</p>
 </div>
 <p>Architecture list (~20 types as of 2023): Tesla (1.0, 1.1), Fermi (2.0, 3.0), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Memory behaviour is device-dependent: always know the characteristics of the device you are using.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="1">
+  <p>Where does <code>i</code>, declared in a kernel as <code>int i = blockIdx.x * blockDim.x + threadIdx.x;</code>, normally live?</p>
+  <ol>
+    <li data-why="Correct: per-thread scalar locals live in registers.">A register</li>
+    <li data-why="Shared needs the __shared__ qualifier.">Shared memory</li>
+    <li data-why="Global needs cudaMalloc or a __device__ variable.">Global memory</li>
+    <li data-why="Constant needs the __constant__ qualifier.">Constant memory</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>A G80 SM has 8192 registers and you want 768 threads resident. At most how many registers can each thread use?</p>
+  <ol>
+    <li data-why="8192/256 = 32 is a per-block calculation.">32</li>
+    <li data-why="16 would need 12,288 registers for 768 threads; it does not fit.">16</li>
+    <li data-why="Correct: 8192 / 768 ≈ 10.7 → 10 registers.">10</li>
+    <li data-why="The register limit is a total per SM, not a fixed per-thread amount.">Unlimited; registers are fixed per thread</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

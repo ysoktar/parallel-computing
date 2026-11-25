@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Data race ile race condition'ı ayırt etmek.</li>
-    <li>Lock, mutex, semafor, atomik ve monitörü ne zaman kullanacağını söylemek.</li>
-    <li>Deadlock, livelock ve starvation'ı tanımlayıp örneklemek.</li>
+    <li>Process ile thread farkını ve thread'lerin neyi paylaştığını söylemek.</li>
+    <li>Data race ile race condition'ı ayırt etmek; <code>counter++</code>'ın neden bozulduğunu adım adım göstermek.</li>
+    <li>Lock, mutex ve semaforun ne zaman kullanılacağını seçmek.</li>
   </ul>
 </div>
 
@@ -112,6 +112,26 @@ acquire() {                       release() {
     <tr><td>Herkes bir noktaya gelmeden kimse devam etmesin</td><td>bariyer</td><td>iteratif simülasyonun her adımı; GPU'da <code>__syncthreads()</code></td></tr>
   </tbody>
 </table>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p>Aynı process içindeki iki thread neyi paylaşır?</p>
+  <ol>
+    <li data-why="Her thread&#x27;in kendi stack&#x27;i vardır.">Stack</li>
+    <li data-why="Program sayacı thread&#x27;e özeldir; her thread ayrı yerde olabilir.">Program sayacı</li>
+    <li data-why="Doğru: adres uzayı (global değişkenler, heap) ortaktır; bu yüzden yarış çıkabilir.">Adres uzayı (heap, global değişkenler)</li>
+    <li data-why="Register&#x27;lar thread&#x27;e özeldir; bağlam değişiminde saklanır.">Register'lar</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Aynı anda en fazla 3 thread'in bir kaynağı kullanmasına izin vermek istiyorsunuz. Hangi araç uygun?</p>
+  <ol>
+    <li data-why="Mutex aynı anda tek thread&#x27;e izin verir.">Mutex</li>
+    <li data-why="Doğru: 3 ile başlatılan sayan semafor; her giren azaltır, çıkan artırır.">3 ile başlatılmış semafor</li>
+    <li data-why="Atomik tek bir değişkeni bölünmez günceller; kapı kontrolü yapmaz.">std::atomic&lt;int&gt;</li>
+    <li data-why="Spin lock da tek thread&#x27;lik bir kilittir.">Spin lock</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

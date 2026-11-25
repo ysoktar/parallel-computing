@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>CGMA, bellek türleri, shared memory ile tiling</h1>
+<p class="lead">5.2'deki kernel doğru çalışır ama yavaştır: her çarpma-toplama için iki global okuma yapar. Bu sayfa bunu bir sayıyla (CGMA) ölçüyor ve shared memory karolarıyla düzeltiyor.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>CGMA oranını hesaplayıp basit matmul kernel'inin neden bellekle sınırlı olduğunu göstermek.</li>
+    <li>CUDA bellek türlerinin kapsamını ve ömrünü söylemek.</li>
+    <li>Tiled matmul'de bir fazda hangi elemanların yüklendiğini izlemek; global trafiğin neden T kat azaldığını açıklamak.</li>
+  </ul>
+</div>
 
 <h2>Bellek erişim verimi: CGMA</h2>
 <ul>
@@ -105,6 +114,26 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <h3>Uygula: kodla birlikte M, N ve P karo yükleri</h3>
 <div data-learning="tile"></div>
 <p>Kare olmayan blokla (ör. <code>dim3(8,32)</code>) aynı fikir: <a href="exam-midterm2.html#ayni-konfigurasyonla-tiled-shared-memory-versiyon">2. vize rehberindeki çözüm</a>.</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>Basit matmul kernel'inin iç döngüsü her adımda Md'den bir, Nd'den bir eleman okuyup bir çarpma ve bir toplama yapıyor. CGMA nedir?</p>
+  <ol>
+    <li data-why="İki işleme iki okuma düşer.">0,5</li>
+    <li data-why="Doğru: 2 kayan nokta işlemi / 2 global okuma = 1.">1</li>
+    <li data-why="Okuma sayısı 1 değil 2.">2</li>
+    <li data-why="T, tiling&#x27;den sonraki iyileşmedir.">16</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Tiled matmul'de karoyu yükledikten sonra, kullanmadan önce neden <code>__syncthreads()</code> gerekir?</p>
+  <ol>
+    <li data-why="Doğru: her thread karonun başka thread&#x27;lerin yüklediği elemanlarını okuyacak; hepsi yüklenmeden okursa eski veri görür.">Diğer thread'lerin yüklediği elemanlar hazır olmadan okunmasın diye</li>
+    <li data-why="Global yazmalar kernel sonunda görünür olur; bariyer bunun için değil.">Global belleğe yazmaları sıralamak için</li>
+    <li data-why="Bariyer blok içidir; blokları senkronlamaz.">Bütün blokları senkronlamak için</li>
+    <li data-why="Register&#x27;lar thread&#x27;e özeldir, paylaşılmaz.">Register'ları paylaşmak için</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

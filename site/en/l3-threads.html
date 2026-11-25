@@ -19,9 +19,9 @@
 
 <div class="callout goals">
   <ul>
-    <li>Tell a data race from a race condition.</li>
-    <li>Say when to use a lock, mutex, semaphore, atomic or monitor.</li>
-    <li>Define and illustrate deadlock, livelock and starvation.</li>
+    <li>State the difference between a process and a thread, and what threads share.</li>
+    <li>Tell a data race from a race condition; show step by step why <code>counter++</code> breaks.</li>
+    <li>Choose when to use a lock, a mutex or a semaphore.</li>
   </ul>
 </div>
 
@@ -112,6 +112,26 @@ acquire() {                       release() {
     <tr><td>Nobody continues until everyone reaches a point</td><td>barrier</td><td>each step of an iterative simulation; <code>__syncthreads()</code> on a GPU</td></tr>
   </tbody>
 </table>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>What do two threads of the same process share?</p>
+  <ol>
+    <li data-why="Each thread has its own stack.">The stack</li>
+    <li data-why="The program counter is per thread; each thread can be at a different place.">The program counter</li>
+    <li data-why="Correct: the address space (globals, heap) is shared; that is why races can occur.">The address space (heap, globals)</li>
+    <li data-why="Registers are per thread; they are saved on a context switch.">Registers</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>You want at most 3 threads to use a resource at the same time. Which tool fits?</p>
+  <ol>
+    <li data-why="A mutex lets in one thread at a time.">A mutex</li>
+    <li data-why="Correct: a counting semaphore initialised to 3; each thread entering decrements it, each leaving increments it.">A semaphore initialised to 3</li>
+    <li data-why="An atomic updates one variable indivisibly; it does not guard a door.">std::atomic&lt;int&gt;</li>
+    <li data-why="A spin lock is also a one-thread lock.">A spin lock</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

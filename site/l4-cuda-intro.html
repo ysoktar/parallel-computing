@@ -20,9 +20,8 @@
 <div class="callout goals">
   <ul>
     <li>CPU ile GPU'nun silikonu neden farklı harcadığını açıklamak.</li>
-    <li>SIMD ile SIMT'yi ayırt etmek.</li>
-    <li>1D/2D/3D blokta lineer thread indeksini ve warp'ı hesaplamak.</li>
-    <li>Blokların neden bağımsız olması gerektiğini ve bunun ölçeklenebilirlikle ilişkisini söylemek.</li>
+    <li>SIMD ile SIMT'yi ayırt etmek; warp divergence'ın maliyetini söylemek.</li>
+    <li>Genel CUDA yaklaşımını (host hazırlar, device hesaplar) ve temel terimleri kullanmak.</li>
   </ul>
 </div>
 
@@ -111,6 +110,26 @@ __global__ void uniform(float* a) {
     <tr><td>Kernel</td><td><code>__global__</code> GPU fonksiyonu; <code>&lt;&lt;&lt;numberOfBlocks, threadsPerBlock&gt;&gt;&gt;</code> ile çağrılır.</td></tr>
   </tbody>
 </table>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="3">
+  <p>Bir warp'ın yarısı <code>if</code>, yarısı <code>else</code> koluna giriyor. Süre ne olur?</p>
+  <ol>
+    <li data-why="Kollar aynı anda çalışmaz; warp tek komut sayacı paylaşır.">Uzun kolun süresi kadar</li>
+    <li data-why="Kısa kolun süresi kadar olması için kolların paralel çalışması gerekirdi.">Kısa kolun süresi kadar</li>
+    <li data-why="Doğru: kollar sırayla çalışır (diğer yarı maskelenir), süre iki kolun toplamıdır.">İki kolun süresinin toplamı</li>
+    <li data-why="Divergence derleme hatası değildir.">Kernel derlenmez</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>GPU, bir thread bellekten veri beklerken bu bekleme süresini nasıl gizler?</p>
+  <ol>
+    <li data-why="GPU&#x27;nun önbellekleri CPU&#x27;ya göre küçüktür; ana yöntem bu değildir.">Büyük önbelleklerle</li>
+    <li data-why="Doğru: SM hazır olan başka bir warp&#x27;ı hemen çalıştırır (latency hiding); bunun için çok sayıda warp gerekir.">Hazır başka bir warp'a geçerek</li>
+    <li data-why="GPU dallanma tahminine dayanmaz.">Dallanma tahminiyle</li>
+    <li data-why="Frekans artırmak beklemeyi gizlemez.">Saat frekansını artırarak</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

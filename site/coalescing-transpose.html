@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Matris transpose: naive ve shared memory</h1>
+<p class="lead">6.6'daki kural basit: komşu thread'ler komşu adreslere erişsin. Transpose bu kuralı zorlar, çünkü okuma bir yönde, yazma diğer yönde ardışıktır. Bu sayfa çözümü dört adımda kuruyor.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Önce copy kernel'i yazıp indeksleri doğrulamanın neden işe yaradığını söylemek.</li>
+    <li>Naive transpose'da hangi erişimin coalesce olmadığını göstermek.</li>
+    <li>Shared memory karosuyla iki erişimin de neden coalesced olduğunu ve <code>[32][33]</code> padding'in bank conflict'i nasıl çözdüğünü açıklamak.</li>
+  </ul>
+</div>
 
 <h2 id="matris-transpose" data-toc="Transpose dört adımda">Transpose dört adımda <span class="badge-class">derste</span></h2>
 <p>Hocanın derste verdiği örnek; NVIDIA'nın <a href="https://developer.nvidia.com/blog/efficient-matrix-transpose-cuda-cc/" target="_blank" rel="noopener">"An Efficient Matrix Transpose in CUDA C/C++"</a> yazısındaki kernel serisi. Transpose hiç hesap yapmaz, sadece veri taşır: performansı tamamen bellek erişim desenine bağlıdır. Bu yüzden coalescing'i göstermek için en iyi örnek.</p>
@@ -120,6 +129,26 @@ __shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c
   </tbody>
 </table>
 <p>Etkin bant genişliği = 2 × matris boyu (bir okuma + bir yazma) / süre. Sonuç: <strong>global bellek coalescing'i en kritik etken</strong>; shared memory'nin ve senkronizasyonun maliyeti ondan çok küçük.</p>
+
+<h2>Kendini sına</h2>
+<div class="quiz" data-answer="2">
+  <p>Naive transpose <code>out[x * N + y] = in[y * N + x]</code> içinde hangi erişim coalesce olmaz?</p>
+  <ol>
+    <li data-why="Okumada threadIdx.x&#x27;ten gelen x en sağda; okuma coalesced.">in'den okuma</li>
+    <li data-why="Doğru: yazmada x, N ile çarpılır; komşu thread&#x27;ler N eleman aralıklı yazar.">out'a yazma</li>
+    <li data-why="Okuma coalesced olduğu için ikisi birden değildir.">İkisi de</li>
+    <li data-why="Yazma coalesce olmaz.">Hiçbiri</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>__shared__ float tile[32][33];</code> içindeki fazladan sütun ne işe yarar?</p>
+  <ol>
+    <li data-why="Fazladan sütun kullanılmaz; taşma için değildir.">Sınır dışı yazmaları yakalamak için</li>
+    <li data-why="Global coalescing shared dizinin boyutuna bağlı değildir.">Global yazmayı coalesced yapmak için</li>
+    <li data-why="Doğru: satırlar 33 kelime olunca bir sütunun elemanları farklı bank&#x27;lara düşer; sütun okumadaki 32-way conflict kalkar.">Sütun okurken bank conflict'i kaldırmak için</li>
+    <li data-why="Ek bir eleman __syncthreads() ihtiyacını kaldırmaz.">__syncthreads()'e gerek kalmasın diye</li>
+  </ol>
+</div>
 
 </div></main>
 </body>

@@ -16,6 +16,15 @@
 <main><div class="content">
 
 <h1>Thread indexing, synchronisation, warps</h1>
+<p class="lead">The kernel of 5.1 was limited to one block. This page moves to many blocks, shows how each thread finds its own row and column, and how the threads of a block wait for each other.</p>
+
+<div class="callout goals">
+  <ul>
+    <li>Compute the row and column from <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code>.</li>
+    <li>State the rules of <code>__syncthreads()</code> and what happens if it is put inside a condition.</li>
+    <li>Explain how blocks are assigned to SMs, warps and latency hiding.</li>
+  </ul>
+</div>
 
 <h2>Thread blocks and indexing</h2>
 <ul>
@@ -83,6 +92,26 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
     <li><strong>32×32</strong> = 1024 threads → exceeds the limit of 512 per block ✗.</li>
   </ul>
   <p>Result: 16×16. (No shared memory yet; with it the calculation gets more complicated.)</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz" data-answer="3">
+  <p>In the launch <code>&lt;&lt;&lt;(3,3),(8,32)&gt;&gt;&gt;</code>, what are the column (x) and row (y) of thread <code>threadIdx = (5,10)</code> in block (2,1)?</p>
+  <ol>
+    <li data-why="The column uses blockDim.x = 8, not 32.">col = 69, row = 42</li>
+    <li data-why="x and y are mixed up.">col = 42, row = 21</li>
+    <li data-why="Correct: col = 2·8 + 5 = 21, row = 1·32 + 10 = 42.">col = 21, row = 42</li>
+    <li data-why="The block offset is missing.">col = 5, row = 10</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Why is <code>if (threadIdx.x &lt; 16) __syncthreads();</code> wrong?</p>
+  <ol>
+    <li data-why="__syncthreads() compiles inside a condition; the problem is at run time.">It is a compile error</li>
+    <li data-why="Correct: every thread of the block must reach the barrier; if some do not, the kernel may hang or behave undefinedly.">Not every thread of the block reaches the barrier: a hang or undefined behaviour</li>
+    <li data-why="The barrier is per block; it never waits for other blocks.">It makes other blocks wait needlessly</li>
+    <li data-why="The number of warps does not decide whether the barrier is correct.">It works only for 16-thread warps</li>
+  </ol>
 </div>
 
 </div></main>
