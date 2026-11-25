@@ -29,7 +29,7 @@
   <p><strong>A GPU is a kitchen that takes the order and says "OK" at once.</strong> A kernel launch does not make the CPU wait (asynchronous); you learn about an error inside the kernel only later, when you ask "is it done?" (<code>cudaDeviceSynchronize()</code>). The first half of this lecture is catching errors in the right place. The second half is performance: a warp's 32 threads share one program counter, so branches need care; loops get faster with unrolling and the right counter type.</p>
 </div>
 
-<h2>Error checking</h2>
+<h2>Where and when errors are caught</h2>
 <ul>
   <li>All runtime functions return an error code (<code>cudaError_t</code>).</li>
   <li>But an <strong>asynchronous</strong> function returns before the device has finished, so its error code cannot report errors that happen on the device <em>later</em>. It only reports errors on the host before the task starts (typically parameter validation).</li>

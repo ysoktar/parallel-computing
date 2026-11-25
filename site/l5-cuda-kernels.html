@@ -32,7 +32,7 @@
   <p>Bu ders üç adımda ilerler: (1) bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım, (2) her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması, (3) basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
 </div>
 
-<h2>Veri paralelliği: döngüden kernel'e</h2>
+<h2>Veri paralelliği: her elemana bir thread</h2>
 <p>Veri paralelliği: bağımsız veri elemanları üzerinde aynı işlemin aynı anda yapılması (vektör toplama, konvolüsyon, matris-vektör ve matris-matris çarpımı). Pratik kural: <strong>düzenli indekslenen iç içe <code>for</code> döngüleri gördüğünüzde büyük ihtimalle paralelleştirilebilir.</strong></p>
 <div class="two-col">
 <pre class="code" data-run="vecadd_cpu.cpp" data-title="C">

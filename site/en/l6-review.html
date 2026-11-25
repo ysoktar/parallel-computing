@@ -17,7 +17,7 @@
 
 <h1>Summary and quiz</h1>
 
-<h2>Summary</h2>
+<h2>Key ideas of the lecture</h2>
 <ul>
   <li>nvcc: <code>.cu</code> → PTX (virtual ISA) → ptxas → SASS (cubin). A cubin for X.y runs only on X.z (z ≥ y); future GPUs need PTX + JIT. <code>-arch</code> selects the PTX, <code>-code</code> the binary.</li>
   <li>Kernel launches are asynchronous: call <code>cudaDeviceSynchronize()</code> when timing; the first call includes initialisation.</li>

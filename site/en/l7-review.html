@@ -15,7 +15,7 @@
 
 <h1>Summary and quiz</h1>
 
-<h2>Summary</h2>
+<h2>Key ideas of the lecture</h2>
 <ul>
   <li>Runtime calls return <code>cudaError_t</code>; a kernel launch does not. Asynchronous errors appear at a later call (or at <code>cudaDeviceSynchronize()</code>).</li>
   <li><code>cudaPeekAtLastError()</code> reads, <code>cudaGetLastError()</code> reads and resets. Pattern: clear first, launch, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>

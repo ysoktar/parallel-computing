@@ -52,7 +52,7 @@
   <p><strong>Derleme zinciri</strong> (tahtada): <code>.cu</code> (C/C++) → nvcc ön ucu → <strong>PTX</strong> (sanal ISA, metin) → <strong>ptxas</strong> → <strong>SASS</strong> (gerçek makine kodu, belirli bir <code>sm_XY</code> için; cubin içinde). PTX taşınabilir ara dildir, SASS mimariye özeldir. Ara dosyaları görmek: <code>nvcc -keep</code> veya <code>-ptx</code>; SASS'i görmek: <code>cuobjdump -sass</code>; register sayısı: <code>--ptxas-options=-v</code>.</p>
 </div>
 
-<h3>Uyumluluk</h3>
+<h3>PTX ve ikili kod uyumluluğu</h3>
 <ul>
   <li><strong>İkili (cubin) uyumluluk:</strong> cubin mimariye özeldir; <code>-code=sm_80</code> compute capability 8.0 için kod üretir. X.y için üretilen cubin sadece X.z (z ≥ y) cihazlarda çalışır: <strong>aynı major içinde ileriye</strong> uyumlu; geriye veya major'lar arası değil. (Sadece masaüstü; Tegra'da yok.)</li>
   <li><strong>PTX uyumluluğu:</strong> bazı PTX komutları sadece yüksek compute capability'lerde var (ör. warp shuffle 5.0+).<ul><li><code>-arch</code>: C++ → PTX derlemede varsayılan compute capability (performans için her zaman verin).</li><li>X için üretilen PTX, X'e <strong>eşit veya büyük</strong> her ikiliye derlenebilir; ama eski PTX'ten gelen ikili yeni donanım özelliklerini kullanamaz (Pascal 6.0 PTX'inden Volta 7.0 ikilisi Tensor Core kullanmaz).</li></ul></li>

@@ -17,7 +17,7 @@
 
 <h1>Loop unrolling; coalescing özeti ve sınama</h1>
 
-<h2 id="loop-unrolling" data-toc="Loop unrolling">Loop unrolling <span class="badge-class">derste</span></h2>
+<h2 id="loop-unrolling" data-toc="Loop unrolling: döngü yükünü azaltmak">Loop unrolling: döngü yükünü azaltmak <span class="badge-class">derste</span></h2>
 <p>Döngü gövdesini birkaç kez kopyalayıp döngü sayısını azaltmak. Her döngü turunda "asıl iş"in yanında <strong>sayaç artırma, karşılaştırma ve dallanma</strong> komutları da çalışır; GPU'da bunlar da komut slotu yer. Unrolling bu ek yükü azaltır ve bağımsız komutları yan yana getirerek komut düzeyi paralelliği (ILP) artırır.</p>
 <div class="two-col">
 <pre class="code" data-run="unroll.cu" data-title="Normal">
@@ -55,7 +55,7 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li>Bağlantı: L6'daki "local memory" slaytı. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
 </ul>
 
-<h2>Özet</h2>
+<h2>Coalescing'in ana fikirleri</h2>
 <ul>
   <li>Bir warp'ın erişimleri 32/64/128 baytlık, boyutuna hizalı segmentlere toplanır; ne kadar az segment, o kadar iyi.</li>
   <li>Kontrol: adreste <code>threadIdx.x</code> çarpansız ve en sağda mı? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
@@ -69,7 +69,7 @@ for (int i = 0; i < n; ++i) a[i] += 1;
 <p><strong>2.</strong> Shared memory'li transpose'ta neden hem global okuma hem global yazma coalesced olur? Hangi erişim dağınık kalır ve neden sorun değildir?</p>
 <div class="hint"><p>Okumada ve yazmada <code>threadIdx.x</code> global adresin en sağında (satır boyunca ardışık). Yer değiştirme shared memory içinde yapılır: <code>tile[threadIdx.x][…]</code> sütun okur, yani dağınık erişim <strong>shared</strong> bellektedir. Shared memory on-chip ve hızlı olduğu için bu ucuzdur; tek bedeli bank conflict'tir, o da <code>[32][33]</code> padding ile çözülür.</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">
   <p>Bir warp 128 B hizalı bir <code>float</code> dizisinden <code>a[3*threadIdx.x]</code> okuyor. Kaç tane 32 B segmente dokunulur?</p>
   <ol>

@@ -17,7 +17,7 @@
 
 <h1>Özet ve sınama</h1>
 
-<h2>Özet</h2>
+<h2>Dersin ana fikirleri</h2>
 <ul>
   <li>nvcc: <code>.cu</code> → PTX (sanal ISA) → ptxas → SASS (cubin). cubin X.y sadece X.z (z ≥ y) üzerinde çalışır; gelecekteki GPU'lar için PTX + JIT gerekir. <code>-arch</code> PTX'i, <code>-code</code> ikiliyi seçer.</li>
   <li>Kernel başlatma asenkrondur: süre ölçerken <code>cudaDeviceSynchronize()</code>; ilk çağrı başlatma maliyetini içerir.</li>
@@ -43,7 +43,7 @@
 <p><strong>4.</strong> Hangi durumda constant, hangi durumda texture bellek seçersiniz? Birer örnek.</p>
 <div class="hint"><p>Constant: tüm thread'lerin aynı anda aynı küçük veriyi okuduğu durumlar, ör. konvolüsyon filtresinin katsayıları (her thread aynı katsayıyı aynı anda okur → yayın). Texture: 2D'de yerel ama düzensiz okumalar ve kesirli koordinatlar, ör. görüntü döndürme (<code>texRotate.cu</code>): komşu pikseller önbellekten gelir, bilineer interpolasyon ve kenar işleme donanımda.</p></div>
 
-<h2>Sınama</h2>
+<h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">
   <p>Compute capability 8.6'lı bir GPU, sadece <code>-gencode arch=compute_70,code=sm_70</code> ile derlenmiş bir uygulamayı çalıştırabilir mi?</p>
   <ol>

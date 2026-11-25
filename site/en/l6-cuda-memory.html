@@ -52,7 +52,7 @@
   <p><strong>The compilation chain</strong> (on the board): <code>.cu</code> (C/C++) → nvcc front end → <strong>PTX</strong> (virtual ISA, text) → <strong>ptxas</strong> → <strong>SASS</strong> (real machine code for a specific <code>sm_XY</code>; inside the cubin). PTX is the portable intermediate language, SASS is architecture-specific. To see the intermediate files: <code>nvcc -keep</code> or <code>-ptx</code>; to see SASS: <code>cuobjdump -sass</code>; register count: <code>--ptxas-options=-v</code>.</p>
 </div>
 
-<h3>Compatibility</h3>
+<h3>PTX and binary compatibility</h3>
 <ul>
   <li><strong>Binary (cubin) compatibility:</strong> a cubin is architecture-specific; <code>-code=sm_80</code> produces code for compute capability 8.0. A cubin for X.y runs only on X.z devices with z ≥ y: <strong>forward within the same major</strong>; not backward or across majors. (Desktop only; not on Tegra.)</li>
   <li><strong>PTX compatibility:</strong> some PTX instructions exist only on higher compute capabilities (e.g. warp shuffle 5.0+).<ul><li><code>-arch</code>: the compute capability assumed when compiling C++ → PTX (always give it for performance).</li><li>PTX for X compiles to binary for any capability <strong>equal or greater</strong> than X; but a binary from older PTX cannot use newer hardware features (a Volta 7.0 binary from Pascal 6.0 PTX does not use Tensor Cores).</li></ul></li>

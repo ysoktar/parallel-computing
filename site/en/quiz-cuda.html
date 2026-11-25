@@ -29,7 +29,7 @@
 k&lt;&lt;&lt;g,b&gt;&gt;&gt;(...);
 cudaError_t launch = cudaGetLastError();     // != cudaSuccess: report and stop
 cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess: report and stop</pre>
-<p>A launch returns no error code. Get takes the last error and resets it to <code>cudaSuccess</code>; Peek does not reset. The launch check finds configuration/parameter errors, the sync check finds asynchronous errors during execution. The return values of all runtime calls should be checked too. Runnable example: <a href="l7-cuda-control.html#error-checking">L7</a>.</p>
+<p>A launch returns no error code. Get takes the last error and resets it to <code>cudaSuccess</code>; Peek does not reset. The launch check finds configuration/parameter errors, the sync check finds asynchronous errors during execution. The return values of all runtime calls should be checked too. Runnable example: <a href="l7-cuda-control.html">L7</a>.</p>
 </div>
 
 <h3>Question 29 · Predication, unrolling, block order</h3>

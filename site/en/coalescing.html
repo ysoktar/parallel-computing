@@ -31,7 +31,7 @@
   <p><strong>Think of a shuttle bus.</strong> 32 passengers (a warp) go to the warehouse (global memory) at once. If they all live in one neighbourhood (consecutive addresses), one bus (one 128 B transaction) is enough; if each lives elsewhere, 32 trips are needed and the buses run half empty. Coalescing means gathering the addresses into one "neighbourhood". The transpose is the best example: reads are consecutive in one direction, writes in the other; shared memory turns the direction.</p>
 </div>
 
-<h2>Global memory transactions</h2>
+<h2>How many transactions does a warp make?</h2>
 <p>Lecture 6, slides 43–48:</p>
 <ul>
   <li>For maximum performance global memory accesses must be <strong>coalesced</strong> (combined).</li>

@@ -38,7 +38,7 @@
   <li>CUDA öncesi: veriler OpenGL yapılarına sarılıp grafik işlemi taklit edilirdi; grafik işlemlerinin çoğu FP matris/vektör işlemi olduğu için.</li>
   <li>GPU çekirdeklerine <strong>Streaming Multiprocessor (SM)</strong> denir: skaler işlemciler (SP), yerel önbellek ve özel fonksiyon birimlerinin birleşimi. SM thread bloklarını, SP bloktaki bir thread'i çalıştırır.</li>
 </ul>
-<h3>Farkın nedeni</h3>
+<h3>CPU–GPU farkının nedeni</h3>
 <div class="two-col">
   <div><p><strong>CPU:</strong> çok karmaşık kontrol mantığı + büyük çok seviyeli önbellekler. Rastgele erişimli, bağımsız görevli paralel yürütme için ideal; gecikme odaklı.</p></div>
   <div><p><strong>GPU:</strong> veri düzeyi paralellik. Kontrol mantığı basit, önbellek küçük → daha çok transistör hesaba. Bellek türleri daha hızlı ve optimize. SIMD/SIMT yürütmeye uygun; throughput odaklı.</p></div>
@@ -99,7 +99,7 @@ __global__ void uniform(float* a) {
 </ol>
 <p>İyi kazanç beklenen yerler: tüm veri noktalarına aynı işlemi uygulayan kod; <code>float</code> ağırlıklı kod (double destekli ama özellikle eski mimarilerde yavaş); taşınacak veri, eleman başına hesaba göre küçük olan kod.</p>
 
-<h2>Terminoloji</h2>
+<h2>CUDA terminolojisi</h2>
 <table class="simple">
   <thead><tr><th>Terim</th><th>Anlamı</th></tr></thead>
   <tbody>

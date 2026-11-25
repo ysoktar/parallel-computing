@@ -17,7 +17,7 @@
 
 <h1>Summary and quiz</h1>
 
-<h2>Summary</h2>
+<h2>Key ideas of the lecture</h2>
 <ul>
   <li>Kernel = the body of the loop; the outer loops become threads. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
   <li>Global index = <code>blockIdx·blockDim + threadIdx</code> (on each axis); row-major address <code>row·width + col</code>; round the grid up, check the bounds.</li>

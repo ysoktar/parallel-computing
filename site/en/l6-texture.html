@@ -73,7 +73,7 @@ __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int w
 </pre>
 <p>Reading on the device: linear-memory textures <code>tex1Dfetch()</code>, array textures <code>tex1D()</code>, <code>tex2D()</code>, <code>tex3D()</code>. Management functions: <code>cudaMallocArray</code>, <code>cudaFreeArray</code>, <code>cudaMemcpyToArray</code>, <code>cudaMemcpyFromArray</code>. In the older <em>texture reference API</em>, type, dimensionality and read mode are fixed at compile time; normalisation, filter and address mode can change at run time (CUDA array textures only).</p>
 
-<h2>Memory overview</h2>
+<h2>All memory types: summary</h2>
 <table class="simple">
   <thead><tr><th>Memory</th><th>Scope</th><th>Latency of one read (clock cycles)</th><th>Note</th></tr></thead>
   <tbody>

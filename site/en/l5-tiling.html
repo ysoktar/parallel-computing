@@ -30,7 +30,7 @@
 CGMA must be raised for higher performance.</div>
 
 <h2>CUDA memory types</h2>
-<p>All memory types together in one diagram, one table and one example kernel: <a href="l6-memory-map.html#gpu-memory-one-picture">L6, GPU memory: one picture</a>.</p>
+<p>All memory types together in one diagram, one table and one example kernel: <a href="l6-memory-map.html">L6, GPU memory: one picture</a>.</p>
 <table class="simple">
   <thead><tr><th>Declaration</th><th>Memory</th><th>Scope</th><th>Lifetime</th><th>Speed / note</th></tr></thead>
   <tbody>
@@ -51,7 +51,7 @@ CGMA must be raised for higher performance.</div>
 <h2>Tiling with shared memory</h2>
 <p>The basic trade-off: global memory is large but slow, shared memory small but fast. Strategy: partition the data into <strong>tiles</strong> that each fit in shared memory; the computations on tiles must be doable independently. (Not every data structure can be tiled for every kernel.)</p>
 
-<h3>Overlapping accesses</h3>
+<h3>Overlapping global reads by threads</h3>
 <p>The small example in the slides: P computed by four 2×2 blocks. The four threads of block (0,0) compute Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>. Each thread reads 4 elements of Md and 4 of Nd, and thread(0,0) and thread(1,0) <strong>both</strong> read all of row 0 of Md. During block (0,0) every Md and Nd element is read exactly twice: if the threads cooperate to load each element once, global traffic halves.</p>
 <p>In general: with N×N blocks the possible reduction is <strong>N times</strong>. 16×16 → global traffic 1/16.</p>
 <div class="formula-box">16×16 block, NO shared memory:  16·16 threads × (width + width) reads = 16·16·2·width
@@ -71,7 +71,7 @@ Ratio: (16·16·2·width) / (16·width·2) = 16</div>
   </tbody>
 </table>
 <p>After the two phases each thread has summed all 4 terms (as in the CPU version). The difference: the two elements of row 0 of M are read from global memory <strong>once</strong> per phase, and both threads of that row use them from shared memory. In a T×T tile each element is used by T threads, so global traffic drops T times.</p>
-<h3>The tiled kernel</h3>
+<h3>The tiled matmul kernel</h3>
 <p>Threads <strong>cooperatively</strong> load Md and Nd elements into shared memory, then use them in their dot products. Since shared memory is small, Md and Nd are divided into tiles that fit, and the dot product is split into <strong>phases</strong>: in phase <code>m</code> each thread loads one element from the M tile and one from the N tile.</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
