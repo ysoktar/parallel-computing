@@ -27,7 +27,7 @@
 
 <div class="callout why" data-label="The big picture">
   <p><strong>Think of a shared notebook.</strong> Several people update the same number: read it, add one, write it back. If two read at once, both see the old number and one overwrites the other's update. Threads are fast because they see the same memory; for exactly that reason the result breaks if the <strong>order</strong> is not controlled.</p>
-  <p>This lecture first shows the problem (data races, race conditions), then the tools: a <strong>mutex</strong> (one person at the notebook at a time), a <strong>semaphore</strong> (at most N people), an <strong>atomic</strong> (a single indivisible hardware operation), a <strong>monitor / condition variable</strong> (sleep until a condition holds). Finally, what goes wrong when these tools are misused: deadlock, livelock, starvation.</p>
+  <p>This lecture first shows the problem (data races, race conditions), then the tools: a <strong>mutex</strong> (one person at the notebook at a time), a <strong>semaphore</strong> (at most N people), an <strong>atomic</strong> (a single indivisible hardware operation), a <strong>monitor / condition variable</strong> (sleep until a condition holds). Finally, what goes wrong when these tools are misused: deadlock, livelock, starvation. Mutexes and semaphores are on this page; atomics, monitors and deadlock on <a href="l3-coordination.html">3.2</a>.</p>
 </div>
 
 <h2>What is a thread?</h2>
@@ -54,7 +54,7 @@ int main() {
   <li><strong>Data race:</strong> multiple threads access the same variable concurrently and <strong>at least one writes</strong>. Undefined behaviour in C/C++; the compiler may assume it does not happen.</li>
   <li><strong>Race condition:</strong> an error where the ordering of events compromises correctness. Not every data race causes a race condition (you may get the right output by luck); not every race condition comes from a data race (remove the data race with atomics and the order of operations can still give varying output).</li>
   <li>Aligned 8-byte loads/stores are atomic on x86, but never code relying on it: larger types exist, compilers and hardware can reorder memory operations or split one read/write in two. And <strong>never assume</strong> 8-byte alignment.</li>
-  <li>GPU note: many threads writing the same variable concurrently is (much) slower on a GPU than on a CPU and a serious bottleneck; it depends on where the variable is stored (GPUs have many memory types).</li>
+  <li>GPU note: thousands of threads writing the same variable concurrently is a far worse bottleneck on a GPU than on a CPU. How slow it is depends on which GPU memory (global, shared…) holds the variable; the memory types are in Lecture 6.</li>
 </ul>
 
 <h3>Apply: the lost update</h3>
@@ -92,11 +92,11 @@ acquire() {                       release() {
 }
 </pre>
 <ul>
-  <li>Without atomic support in hardware, true parallel programming is impossible.</li>
+  <li>All these tools are built on the hardware's atomic instructions: without atomic support in hardware, true parallel programming is impossible.</li>
   <li>If waiters are kept in a FIFO queue the semaphore is <strong>strong</strong>, otherwise <strong>weak</strong> (starvation possible).</li>
   <li>A binary semaphore can be used for the "wait on an event" case (one thread releases, another acquires).</li>
-  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII wrappers <code>std::lock_guard</code> (releases at end of scope) and <code>std::unique_lock</code> (deferred locking, used with condition variables). Class examples: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
-  <li><strong>Lazy init / call once:</strong> initialise a resource exactly once on first use (<code>std::call_once</code>); e.g. a video decoder.</li>
+  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII wrappers <code>std::lock_guard</code> (releases at end of scope) and <code>std::unique_lock</code> (deferred locking, used with condition variables). Sample code shared in class: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
+  <li><strong>Lazy init / call once:</strong> initialise a resource exactly once on first use (<code>std::call_once</code>); e.g. setting up a video decoder once, only when the first frame arrives.</li>
   <li><strong>Recursive locks:</strong> a normal mutex acquired twice by the same thread deadlocks; a recursive mutex allows it.</li>
 </ul>
 

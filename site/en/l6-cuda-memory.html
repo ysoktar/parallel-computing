@@ -16,7 +16,7 @@
 <main><div class="content">
 
 <h1>Compiling with nvcc and CUDA initialisation</h1>
-<p class="lead">How does a <code>.cu</code> file become code that runs on the GPU, and on which GPUs does it run? And when and how is each memory type (register, local, shared, global, constant, texture) used? The coalescing part of Lecture 6 is on <a href="coalescing.html">its own page</a>.</p>
+<p class="lead">How does a <code>.cu</code> file become code that runs on the GPU, and on which GPUs does it run? And when and how is each memory type (register, local, shared, global, constant, texture) used? Compilation is on this page; the memory types on <a href="l6-memory-map.html">6.2–6.4</a>, coalescing on <a href="coalescing.html">6.6–6.8</a>.</p>
 
 <div class="callout goals">
   <ul>
@@ -28,7 +28,7 @@
 
 <div class="callout why" data-label="The big picture">
   <p><strong>The memory hierarchy is a workshop.</strong> The tool in your hand (a register) is instant but you hold few. The workbench (shared memory) is a few steps away, shared by the team, small. The shelf (L2) is further. The warehouse (global memory) holds everything but a round trip takes hundreds of clock cycles. Fast code keeps what it uses most in hand and on the bench, and makes bulk (coalesced) trips to the warehouse.</p>
-  <p>The lecture has two halves: first how code is compiled and which GPUs it runs on (nvcc, PTX, cubin, compute capability), then each memory type: limits (registers, shared), global (coalescing, pitch), local, shared (banks), constant and texture.</p>
+  <p>The lecture has two halves: first (on this page) how code is compiled and which GPUs it runs on (nvcc, PTX, cubin, compute capability), then each memory type: limits (registers, shared), global (coalescing, pitch), local, shared (banks), constant and texture (from 6.2 on).</p>
 </div>
 
 <h2>Programming interface: runtime and driver API</h2>
@@ -37,7 +37,7 @@
   <li><strong>Runtime API</strong> (starts with <code>cuda</code>, e.g. <code>cudaMalloc()</code>): host functions to allocate/free device memory, copy between host and device, manage multiple devices. Built on top of the lower-level <strong>driver API</strong> (starts with <code>cu</code>, e.g. <code>cuMemAlloc()</code>).</li>
   <li>The driver API gives extra control: <strong>CUDA contexts</strong> (the analogue of host processes for the device) and <strong>CUDA modules</strong> (the analogue of dynamically loaded libraries). Kernel launches are more laborious (configuration and parameters via explicit calls), but modules can be loaded and unloaded as needed; it is language-independent (deals only with cubin objects).</li>
   <li>The runtime API does initialisation, context and module management implicitly → shorter code, less control. Most applications use the runtime API; the two can be mixed when needed.</li>
-  <li><strong>Primary context:</strong> the runtime creates one per device per process (reference-counted), shared by all runtime users in the process. Synchronised with <code>cudaDeviceSynchronize()</code>, destroyed with <code>cudaDeviceReset()</code>. Trap: if one plug-in in a process calls <code>cudaDeviceReset()</code>, the others' context is destroyed without their knowledge.</li>
+  <li><strong>Primary context:</strong> the runtime creates one per device per process (reference-counted), shared by all runtime users in the process. Synchronised with <code>cudaDeviceSynchronize()</code>, destroyed with <code>cudaDeviceReset()</code>. Trap: if one of the libraries (plug-ins) using CUDA in the same process calls <code>cudaDeviceReset()</code>, the others' context is destroyed without their knowledge.</li>
   <li>A context has its own address space: the same pointer value in different contexts refers to different memory locations.</li>
 </ul>
 
@@ -53,7 +53,7 @@
 
 <h3>PTX and binary compatibility</h3>
 <ul>
-  <li><strong>Binary (cubin) compatibility:</strong> a cubin is architecture-specific; <code>-code=sm_80</code> produces code for compute capability 8.0. A cubin for X.y runs only on X.z devices with z ≥ y: <strong>forward within the same major</strong>; not backward or across majors. (Desktop only; not on Tegra.)</li>
+  <li><strong>Binary (cubin) compatibility:</strong> a cubin is architecture-specific; <code>-code=sm_80</code> produces code for compute capability 8.0. A cubin for X.y runs only on X.z devices with z ≥ y: <strong>forward within the same major</strong>; not backward or across majors. (This rule is for desktop and server GPUs; it does not hold on NVIDIA's embedded Tegra chips.)</li>
   <li><strong>PTX compatibility:</strong> some PTX instructions exist only on higher compute capabilities (e.g. warp shuffle 5.0+).<ul><li><code>-arch</code>: the compute capability assumed when compiling C++ → PTX (always give it for performance).</li><li>PTX for X compiles to binary for any capability <strong>equal or greater</strong> than X; but a binary from older PTX cannot use newer hardware features (a Volta 7.0 binary from Pascal 6.0 PTX does not use Tensor Cores).</li></ul></li>
   <li><strong>Application compatibility:</strong> to run on future architectures (for which no binary can be generated yet), an application must contain <strong>PTX</strong> to be JIT-compiled.</li>
 </ul>
@@ -78,7 +78,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li>Since CUDA 12.0, <code>cudaInitDevice()</code> and <code>cudaSetDevice()</code> initialise the runtime and the device's primary context. Without them the runtime uses device 0 and initialises itself on the first API call (that call is slow, and its error code comes from there). Before 12.0: <code>cudaFree(0)</code> to isolate initialisation.</li>
   <li>When the context is created, device code is JIT-compiled if necessary and loaded into device memory.</li>
   <li><strong>The GPU is a coprocessor;</strong> the CPU boots the OS, "the CPU runs the show".</li>
-  <li>When timing: (1) the GPU must already be initialised (no cold runs), (2) the code must have finished. <strong>Kernel launches are asynchronous</strong>: call <code>cudaDeviceSynchronize()</code> after the kernel and before taking the time. (Otherwise you measure "miraculously short" times.) Example: <code>texRotate.cu</code> times kernel + <code>cudaDeviceSynchronize()</code> in each of 100 repetitions and averages.</li>
+  <li>When timing: (1) the GPU must already be initialised (no cold runs), (2) the code must have finished. <strong>Kernel launches are asynchronous</strong>: call <code>cudaDeviceSynchronize()</code> after the kernel and before taking the time. (Otherwise you measure "miraculously short" times.) Example: <code>texRotate.cu</code>, the texture-based image rotation shared in class, times kernel + <code>cudaDeviceSynchronize()</code> in each of 100 repetitions and averages.</li>
 </ul>
 
 <h2>Check yourself</h2>

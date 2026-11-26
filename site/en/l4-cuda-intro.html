@@ -27,28 +27,28 @@
 
 <div class="callout why" data-label="The big picture">
   <p><strong>A CPU is a handful of masters, a GPU thousands of apprentices.</strong> A master (CPU core) finishes complex jobs fast; big caches and branch prediction mean it rarely waits. Apprentices (GPU threads) are slow one by one, but in groups of 32 (<strong>warps</strong>) they apply the same instruction to different data. The foreman (the SM) runs whichever group is ready: while one waits for memory another runs, hiding the wait.</p>
-  <p>This lecture builds CUDA's skeleton: the <strong>host</strong> (CPU) prepares the work and sends it to the <strong>device</strong> (GPU); the work is split over thousands of threads in a <strong>grid → block → thread</strong> hierarchy; each thread finds its own data with <code>blockIdx</code>/<code>threadIdx</code>. Blocks are independent, which is why the same program runs on a 2-SM GPU and on a 100-SM GPU.</p>
+  <p>This lecture builds CUDA's skeleton: the <strong>host</strong> (CPU) prepares the work and sends it to the <strong>device</strong> (GPU); the work is split over thousands of threads in a <strong>grid → block → thread</strong> hierarchy; each thread finds its own data with <code>blockIdx</code>/<code>threadIdx</code>. Blocks are independent, which is why the same program runs on a 2-SM GPU and on a 100-SM GPU. GPUs, SIMT and the general approach are on this page; the grid → block → thread hierarchy is on <a href="l4-hierarchy.html">4.2</a>.</p>
 </div>
 
 <h2>GPUs and CUDA</h2>
 <ul>
-  <li><strong>GPU</strong>: designed for visual tasks (2D/3D graphics, games, CAD, effects); pushed by the consumer market to very high FP throughput and memory bandwidth. Programmable since around 2001.</li>
-  <li><strong>CUDA</strong> (Compute Unified Device Architecture): the hardware + software that make GPUs programmable; C, C++ and Fortran flavours. CUDA C/C++ extends C with a small group of keywords. <strong>GPGPU</strong>: general-purpose computing on GPUs (CUDA / OpenCL).</li>
-  <li>Before CUDA: data was wrapped into OpenGL structures to fake graphics operations, since most graphics operations are FP matrix/vector operations.</li>
+  <li><strong>GPU</strong>: designed for visual tasks (2D/3D graphics, games, CAD, effects); thanks to the size of the games market it offers very high FP throughput and memory bandwidth cheaply. Its drawing stages (shaders) have been programmable since around 2001.</li>
+  <li><strong>CUDA</strong> (Compute Unified Device Architecture): the hardware + software that make GPUs programmable; there are versions for C, C++ and Fortran. CUDA C/C++ extends C with a small group of keywords. <strong>GPGPU</strong>: general-purpose computing on GPUs (CUDA / OpenCL).</li>
+  <li>Before CUDA: to run a general computation, the data was wrapped into the texture and vertex structures of OpenGL (a graphics API) and the computation was disguised as a drawing operation. It worked because most graphics operations are FP matrix/vector operations.</li>
   <li>GPU cores are called <strong>Streaming Multiprocessors (SMs)</strong>: a combination of scalar processors (SPs), local cache and special function units. An SM executes thread blocks, an SP one thread of a block.</li>
 </ul>
 <h3>Why CPUs and GPUs differ</h3>
 <div class="two-col">
   <div><p><strong>CPU:</strong> very complicated control logic + large multilevel caches. Ideal for random-access, independent-task parallel execution; latency-oriented.</p></div>
-  <div><p><strong>GPU:</strong> data-level parallelism. Simple control logic, small caches → more transistors for computation. Faster, more optimised memory types. Suited to SIMD/SIMT execution; throughput-oriented.</p></div>
+  <div><p><strong>GPU:</strong> data-level parallelism. Simple control logic, small caches → more transistors for computation. The memory path is wider and faster (high-bandwidth memory). Suited to SIMD/SIMT execution; throughput-oriented.</p></div>
 </div>
-<p>Architecture examples: discrete GPU (over PCIe), memory controller integrated in the CPU (AMD Athlon 64, Intel Nehalem), and CPU+GPU on one chip (AMD APU; with hUMA, a unified memory space and cache coherence).</p>
+<p>Ways the CPU and GPU are connected: a discrete GPU (a separate card, over the PCIe bus), systems with the memory controller moved onto the CPU chip (AMD Athlon 64, Intel Nehalem; the GPU still on PCIe), and CPU+GPU on one chip (AMD APU; with AMD's hUMA, a unified memory space and cache coherence).</p>
 
 <h2>SIMD and SIMT</h2>
 <ul>
   <li><strong>SIMD</strong> (Single Instruction Multiple Data): the same instruction is applied to many data elements in parallel (vector processors).</li>
   <li><strong>SIMT</strong> (Single Instruction Multiple Thread): the same instruction is executed by many threads in parallel. A more flexible version of SIMD. <strong>CUDA is SIMT</strong>: you can give threads different tasks, but as <strong>thread divergence</strong> increases, performance drops.</li>
-  <li>Since the same instruction is applied to everyone, flow control stays simple. With high arithmetic intensity (instructions / memory access), memory latency is hidden with computation instead of big caches.</li>
+  <li>Since the same instruction is applied to everyone, flow control stays simple. With high arithmetic intensity (compute instructions per memory access), memory waits are hidden behind other threads' computation instead of big caches.</li>
   <li>Data-parallel programming: data elements → parallel threads. 3D rendering, image/video processing, encoding, stereo vision, object recognition, physics simulation, finance, biology…</li>
 </ul>
 
@@ -77,20 +77,20 @@ __global__ void uniform(float* a) {
     <tr><td><code>uniform</code></td><td>all 32 threads take the same branch</td><td>one pass</td></tr>
   </tbody>
 </table>
-<p>Rule: try to write conditions that are <strong>the same across a warp</strong> (e.g. based on <code>threadIdx.x / 32</code>). Divergence does not give wrong results, it only slows down. For the same reason, putting <code>__syncthreads()</code> in an <code>if</code> that only some threads enter is undefined (L5).</p>
+<p>Rule: try to write conditions that are <strong>the same across a warp</strong> (e.g. based on <code>threadIdx.x / 32</code>). Divergence does not give wrong results, it only slows down. For the same reason, putting <code>__syncthreads()</code> in an <code>if</code> that only some threads enter is undefined (<a href="l5-indexing.html">5.2</a>).</p>
 <h2>Why multi-core?</h2>
 <ul>
-  <li><strong>Moore's law</strong>: the number of transistors on an integrated circuit doubles every ~2 years (the rate is slowing).</li>
+  <li><strong>Moore's law</strong>: the number of transistors on an integrated circuit doubles every ~2 years (in recent years this growth has slowed).</li>
   <li>Raising the frequency is no longer possible: power scales with the cube of frequency (P ∝ f³), high clocks are hard to generate and distribute; heat and waveform degradation.</li>
   <li><strong>Multi-core</strong>: more power-efficient at lower frequencies; performance by running several operations at once. The catch: performance needs <strong>parallelised software</strong>.</li>
-  <li>Some tasks are inherently serial; the CPU suits them better. No single processor is best for everything → <strong>heterogeneous</strong> multi-core platforms (where OpenCL comes in). Power limits in mobile/embedded systems also force multi-core.</li>
+  <li>Some tasks are inherently serial; the CPU suits them better. No single processor is best for everything → <strong>heterogeneous</strong> multi-core platforms (OpenCL programs different processors, such as CPUs, GPUs and FPGAs, with one API). Power limits in mobile/embedded systems also force multi-core.</li>
 </ul>
 
 <h2>The general CUDA approach</h2>
 <ol>
   <li>Analyse the code, find the bottlenecks (profiling): parts that take most of the time and are compute-heavy and/or bandwidth-hungry (not disk, user input, network waits).</li>
   <li>Find the data-parallel parts (some algorithms are serial: Newton's method, most compression algorithms).</li>
-  <li>Copy the required inputs from CPU memory to GPU memory (PCIe; exception: zero-copy, unified DRAM).</li>
+  <li>Copy the required inputs from CPU memory to GPU memory (over the PCIe bus; exceptions: zero-copy, where the GPU reads CPU memory directly, and systems where the CPU and GPU share the same DRAM).</li>
   <li>Compute on the GPU: find a good <strong>thread → data mapping</strong>, write the kernels.</li>
   <li>Copy the results back to the CPU.</li>
   <li>Check that GPU results match CPU results (within tolerance). Careful: FP operations are <strong>commutative but not associative</strong>: <code>(a + b) + c ≠ a + (b + c)</code> is possible.</li>

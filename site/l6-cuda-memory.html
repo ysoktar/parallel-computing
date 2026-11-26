@@ -16,7 +16,7 @@
 <main><div class="content">
 
 <h1>nvcc ile derleme ve CUDA başlatma</h1>
-<p class="lead">Bir <code>.cu</code> dosyası GPU'da çalışan koda nasıl dönüşür, hangi GPU'larda çalışır? Ve her bellek türü (register, local, shared, global, constant, texture) ne zaman, nasıl kullanılır? Lecture 6'nın coalescing kısmı <a href="coalescing.html">ayrı sayfada</a>.</p>
+<p class="lead">Bir <code>.cu</code> dosyası GPU'da çalışan koda nasıl dönüşür, hangi GPU'larda çalışır? Ve her bellek türü (register, local, shared, global, constant, texture) ne zaman, nasıl kullanılır? Derleme bu sayfada; bellek türleri <a href="l6-memory-map.html">6.2–6.4</a>'te, coalescing <a href="coalescing.html">6.6–6.8</a>'de.</p>
 
 <div class="callout goals">
   <ul>
@@ -28,7 +28,7 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>Bellek hiyerarşisi bir atölyedir.</strong> Elinizdeki alet (register) anında kullanılır ama azdır. Tezgâh (shared memory) birkaç adım ötede, ekipçe paylaşılır, küçüktür. Raf (L2) biraz daha uzakta. Depo (global bellek) her şeyi tutar ama gidip gelmek yüzlerce saat çevrimi. Hızlı kod sık kullanılanı elde ve tezgâhta tutar, depoya toplu (coalesced) sefer yapar.</p>
-  <p>Bu dersin iki yarısı var: önce kodun nasıl derlendiği ve hangi GPU'da çalışacağı (nvcc, PTX, cubin, compute capability), sonra bellek türlerinin her biri: sınırlar (register, shared), global (coalescing, pitch), local, shared (bank'lar), constant ve texture.</p>
+  <p>Bu dersin iki yarısı var: önce (bu sayfada) kodun nasıl derlendiği ve hangi GPU'da çalışacağı (nvcc, PTX, cubin, compute capability), sonra bellek türlerinin her biri: sınırlar (register, shared), global (coalescing, pitch), local, shared (bank'lar), constant ve texture (6.2'den itibaren).</p>
 </div>
 
 <h2>Programlama arayüzü: runtime ve driver API</h2>
@@ -37,7 +37,7 @@
   <li><strong>Runtime API</strong> (<code>cuda</code> ile başlar, ör. <code>cudaMalloc()</code>): host'ta çalışan, cihaz belleği ayırma/serbest bırakma, host-cihaz kopyalama, çoklu cihaz yönetimi gibi fonksiyonlar. Daha alt seviyedeki <strong>driver API</strong>'nin (<code>cu</code> ile başlar, ör. <code>cuMemAlloc()</code>) üzerine kuruludur.</li>
   <li>Driver API ek kontrol verir: <strong>CUDA context</strong> (cihaz için host process'in karşılığı) ve <strong>CUDA module</strong> (cihaz için dinamik yüklenen kütüphanenin karşılığı). Kernel başlatmak daha zahmetlidir (konfigürasyon ve parametreler açık fonksiyon çağrılarıyla), ama modüller gerektiğinde yüklenip boşaltılabilir; dilden bağımsızdır (sadece cubin nesneleriyle çalışır).</li>
   <li>Runtime API başlatma, context ve modül yönetimini örtük yapar → daha kısa kod, daha az kontrol. Çoğu uygulama runtime API kullanır; gerekirse ikisi birlikte kullanılabilir.</li>
-  <li><strong>Primary context:</strong> runtime, process başına cihaz başına bir tane oluşturur (referans sayımlı), process'teki tüm runtime kullanıcıları paylaşır. <code>cudaDeviceSynchronize()</code> ile senkronize, <code>cudaDeviceReset()</code> ile yok edilir. Tuzak: aynı process'teki eklentilerden biri <code>cudaDeviceReset()</code> çağırırsa diğerlerinin context'i habersizce yok olur.</li>
+  <li><strong>Primary context:</strong> runtime, process başına cihaz başına bir tane oluşturur (referans sayımlı), process'teki tüm runtime kullanıcıları paylaşır. <code>cudaDeviceSynchronize()</code> ile senkronize, <code>cudaDeviceReset()</code> ile yok edilir. Tuzak: aynı process'te CUDA kullanan kütüphanelerden (eklentilerden) biri <code>cudaDeviceReset()</code> çağırırsa diğerlerinin context'i habersizce yok olur.</li>
   <li>Bir context kendi adres uzayına sahiptir: farklı context'lerdeki aynı pointer değeri farklı bellek konumlarını gösterir.</li>
 </ul>
 
@@ -53,7 +53,7 @@
 
 <h3>PTX ve ikili kod uyumluluğu</h3>
 <ul>
-  <li><strong>İkili (cubin) uyumluluk:</strong> cubin mimariye özeldir; <code>-code=sm_80</code> compute capability 8.0 için kod üretir. X.y için üretilen cubin sadece X.z (z ≥ y) cihazlarda çalışır: <strong>aynı major içinde ileriye</strong> uyumlu; geriye veya major'lar arası değil. (Sadece masaüstü; Tegra'da yok.)</li>
+  <li><strong>İkili (cubin) uyumluluk:</strong> cubin mimariye özeldir; <code>-code=sm_80</code> compute capability 8.0 için kod üretir. X.y için üretilen cubin sadece X.z (z ≥ y) cihazlarda çalışır: <strong>aynı major içinde ileriye</strong> uyumlu; geriye veya major'lar arası değil. (Bu kural masaüstü ve sunucu GPU'ları içindir; NVIDIA'nın gömülü Tegra yongalarında geçerli değildir.)</li>
   <li><strong>PTX uyumluluğu:</strong> bazı PTX komutları sadece yüksek compute capability'lerde var (ör. warp shuffle 5.0+).<ul><li><code>-arch</code>: C++ → PTX derlemede varsayılan compute capability (performans için her zaman verin).</li><li>X için üretilen PTX, X'e <strong>eşit veya büyük</strong> her ikiliye derlenebilir; ama eski PTX'ten gelen ikili yeni donanım özelliklerini kullanamaz (Pascal 6.0 PTX'inden Volta 7.0 ikilisi Tensor Core kullanmaz).</li></ul></li>
   <li><strong>Uygulama uyumluluğu:</strong> gelecekteki (henüz ikili üretilemeyen) mimarilerde çalışmak için uygulama JIT ile derlenecek <strong>PTX</strong> içermeli.</li>
 </ul>
@@ -78,7 +78,7 @@ nvcc x.cu -gencode arch=compute_50,code=sm_50
   <li>CUDA 12.0'dan beri <code>cudaInitDevice()</code> ve <code>cudaSetDevice()</code> runtime'ı ve cihazın primary context'ini başlatır. Bunlar çağrılmazsa runtime cihaz 0'ı kullanır ve ilk API çağrısında kendini başlatır (o çağrı yavaş olur, hata kodu da o çağrıdan gelir). 12.0 öncesi: başlatmayı ayırmak için <code>cudaFree(0)</code>.</li>
   <li>Context oluşturulurken gerekirse device kodu JIT ile derlenip cihaz belleğine yüklenir.</li>
   <li><strong>GPU yardımcı işlemcidir;</strong> işletim sistemini CPU başlatır, "şovu CPU yönetir".</li>
-  <li>Süre ölçerken: (1) GPU önceden başlatılmış olmalı (soğuk çalıştırma olmasın), (2) kod bitmiş olmalı. <strong>Kernel başlatmaları asenkrondur</strong>: kernel'den sonra, süreyi almadan önce <code>cudaDeviceSynchronize()</code>. (Yoksa "mucizevi derecede kısa" süreler ölçersiniz.) Örnek: <code>texRotate.cu</code> 100 tekrarın her birinde kernel + <code>cudaDeviceSynchronize()</code> süresini ölçüp ortalamasını alır.</li>
+  <li>Süre ölçerken: (1) GPU önceden başlatılmış olmalı (soğuk çalıştırma olmasın), (2) kod bitmiş olmalı. <strong>Kernel başlatmaları asenkrondur</strong>: kernel'den sonra, süreyi almadan önce <code>cudaDeviceSynchronize()</code>. (Yoksa "mucizevi derecede kısa" süreler ölçersiniz.) Örnek: dersle paylaşılan, texture ile görüntü döndüren <code>texRotate.cu</code> 100 tekrarın her birinde kernel + <code>cudaDeviceSynchronize()</code> süresini ölçüp ortalamasını alır.</li>
 </ul>
 
 <h2>Kendini sına</h2>

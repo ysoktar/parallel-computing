@@ -70,7 +70,7 @@ __global__ void transposeNaive(float* odata, const float* idata)
 <ul>
   <li><strong>Okuma</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> en sağda, çarpansız → warp 128 B'lık tek satır okur ✓.</li>
   <li><strong>Yazma</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> <code>width</code> ile çarpılmış → ardışık thread'ler <code>width</code> eleman aralıklı. 1024×1024 matriste aralık 1024 float = <strong>4096 B</strong> → warp'ın 32 yazması 32 ayrı segment. Coalesced <strong>değil</strong>.</li>
-  <li>Laboratuvardaki <code>a[i*1024]</code> örneği tam olarak bu yazma.</li>
+  <li><a href="coalescing.html">6.6</a>'daki erişim desenleri tablosunda (ve lab sayfasında) <code>a[i*1024]</code> sütun deseni tam olarak bu yazmadır.</li>
 </ul>
 
 <h3>Uygula: A satır ve sütunundan B'ye</h3>
@@ -115,7 +115,7 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
 <pre class="code" data-run="transpose.cu">
 __shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: sütun boyunca hepsi farklı
 </pre>
-<p>Ayrıntılı bank hesabı ve görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">L6, bank'lar</a>.</p>
+<p>Ayrıntılı bank hesabı ve görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">6.3, bank'lar</a>.</p>
 
 <h3>Ölçümler (NVIDIA yazısı, GB/s)</h3>
 <table class="simple">

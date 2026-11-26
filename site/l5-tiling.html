@@ -28,7 +28,7 @@
 
 <h2>Bellek erişim verimi: CGMA</h2>
 <ul>
-  <li>Basit kernel donanımın potansiyelinin küçük bir kısmına ulaşır: thread'ler <strong>örtüşen girdi verisini</strong> tekrar tekrar global bellekten okur.</li>
+  <li>5.2'deki basit matmul kernel'i donanımın potansiyelinin küçük bir kısmına ulaşır: thread'ler <strong>örtüşen girdi verisini</strong> tekrar tekrar global bellekten okur.</li>
   <li>Global bellek = DRAM: yüzlerce saat çevrimi gecikme, sınırlı bant genişliği. Latency hiding iyidir ama herkes sürekli global belleğe gidiyorsa yetmez.</li>
   <li><strong>CGMA</strong> (compute to global memory access): bir bölgede global bellek erişimi başına yapılan FP işlem sayısı. Matmul iç döngüsünde her turda 2 global okuma, 1 çarpma + 1 toplama → <strong>CGMA = 1</strong>.</li>
 </ul>
@@ -39,7 +39,7 @@
 Daha yüksek performans için CGMA artırılmalı.</div>
 
 <h2>CUDA bellek türleri</h2>
-<p>Bütün bellek türlerinin tek bir şemada, tek bir tabloda ve tek bir örnek kernel üzerinde birlikte anlatımı: <a href="l6-memory-map.html">L6, GPU belleği: tek bir resim</a>.</p>
+<p>Bütün bellek türlerinin tek bir şemada, tek bir tabloda ve tek bir örnek kernel üzerinde birlikte anlatımı: <a href="l6-memory-map.html">6.2 (GPU belleği: tek resim ve sınırlar)</a>. Burada sadece temel tabloyu veriyoruz.</p>
 <table class="simple">
   <thead><tr><th>Bildirim</th><th>Bellek</th><th>Kapsam</th><th>Ömür</th><th>Hız / not</th></tr></thead>
   <tbody>
@@ -62,7 +62,7 @@ Daha yüksek performans için CGMA artırılmalı.</div>
 
 <h3>Thread'lerin örtüşen global okumaları</h3>
 <p>Slayttaki küçük örnek: dört 2×2 blokla P hesaplanıyor. Blok (0,0)'ın dört thread'i Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>'i hesaplar. Her thread Md'den 4, Nd'den 4 eleman okur ve thread(0,0) ile thread(1,0) Md'nin 0. satırının tamamını <strong>ikisi de</strong> okur. Blok (0,0) çalışırken her Md ve Nd elemanı tam iki kez okunur: thread'ler işbirliği yapıp her elemanı bir kez yüklerse global trafik yarıya iner.</p>
-<p>Genel: N×N bloklarla olası azalma <strong>N kat</strong>. 16×16 → global trafik 1/16.</p>
+<p>Genel olarak N×N bir blokta her eleman N thread tarafından okunur; thread'ler işbirliği yaparsa olası azalma <strong>N kat</strong>. 16×16 → global trafik 1/16.</p>
 <div class="formula-box">16×16 blok, shared memory YOK:  16·16 thread × (width + width) okuma = 16·16·2·width
 16×16 blok, shared memory VAR:  her eleman bir kez okunur      = 16·width·2
 Oran: (16·16·2·width) / (16·width·2) = 16</div>

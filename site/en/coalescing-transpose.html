@@ -70,7 +70,7 @@ __global__ void transposeNaive(float* odata, const float* idata)
 <ul>
   <li><strong>Read</strong> <code>idata[(y+j)*width + x]</code>: <code>x</code> on the right, no multiplier → the warp reads one 128 B line ✓.</li>
   <li><strong>Write</strong> <code>odata[x*width + (y+j)]</code>: <code>x</code> multiplied by <code>width</code> → consecutive threads are <code>width</code> elements apart. In a 1024×1024 matrix the stride is 1024 floats = <strong>4096 B</strong> → the warp's 32 writes hit 32 separate segments. <strong>Not</strong> coalesced.</li>
-  <li>The <code>a[i*1024]</code> example in the lab is exactly this write.</li>
+  <li>The <code>a[i*1024]</code> column pattern in the access-pattern table of <a href="coalescing.html">6.6</a> (and on the lab page) is exactly this write.</li>
 </ul>
 
 <h3>Apply: from rows and columns in A to B</h3>
@@ -115,7 +115,7 @@ __global__ void transposeCoalesced(float* odata, const float* idata)
 <pre class="code" data-run="transpose.cu">
 __shared__ float tile[TILE_DIM][TILE_DIM + 1];   // bank (33r + c) % 32 = (r + c) % 32: all different along a column
 </pre>
-<p>The detailed bank calculation and a visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">L6, banks</a>.</p>
+<p>The detailed bank calculation and a visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">6.3, banks</a>.</p>
 
 <h3>Measurements (NVIDIA article, GB/s)</h3>
 <table class="simple">

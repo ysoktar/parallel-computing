@@ -28,7 +28,7 @@
 
 <h2>Memory access efficiency: CGMA</h2>
 <ul>
-  <li>The simple kernel reaches only a small fraction of the hardware's potential: threads repeatedly load <strong>overlapping input data</strong> from global memory.</li>
+  <li>The simple matmul kernel of 5.2 reaches only a small fraction of the hardware's potential: threads repeatedly load <strong>overlapping input data</strong> from global memory.</li>
   <li>Global memory = DRAM: hundreds of clock cycles of latency, limited bandwidth. Latency hiding helps, but not if everyone accesses global memory all the time.</li>
   <li><strong>CGMA</strong> (compute to global memory access): the number of FP operations per global memory access in a region. The matmul inner loop does 2 global reads and 1 multiply + 1 add per iteration → <strong>CGMA = 1</strong>.</li>
 </ul>
@@ -39,7 +39,7 @@
 CGMA must be raised for higher performance.</div>
 
 <h2>CUDA memory types</h2>
-<p>All memory types together in one diagram, one table and one example kernel: <a href="l6-memory-map.html">L6, GPU memory: one picture</a>.</p>
+<p>All memory types together in one diagram, one table and one example kernel: <a href="l6-memory-map.html">6.2 (GPU memory: one picture and its limits)</a>. Here we give only the basic table.</p>
 <table class="simple">
   <thead><tr><th>Declaration</th><th>Memory</th><th>Scope</th><th>Lifetime</th><th>Speed / note</th></tr></thead>
   <tbody>
@@ -62,7 +62,7 @@ CGMA must be raised for higher performance.</div>
 
 <h3>Overlapping global reads by threads</h3>
 <p>The small example in the slides: P computed by four 2×2 blocks. The four threads of block (0,0) compute Pd<sub>0,0</sub>, Pd<sub>1,0</sub>, Pd<sub>0,1</sub>, Pd<sub>1,1</sub>. Each thread reads 4 elements of Md and 4 of Nd, and thread(0,0) and thread(1,0) <strong>both</strong> read all of row 0 of Md. During block (0,0) every Md and Nd element is read exactly twice: if the threads cooperate to load each element once, global traffic halves.</p>
-<p>In general: with N×N blocks the possible reduction is <strong>N times</strong>. 16×16 → global traffic 1/16.</p>
+<p>In general, in an N×N block each element is read by N threads; if the threads cooperate, the possible reduction is <strong>N times</strong>. 16×16 → global traffic 1/16.</p>
 <div class="formula-box">16×16 block, NO shared memory:  16·16 threads × (width + width) reads = 16·16·2·width
 16×16 block, WITH shared memory: each element read once          = 16·width·2
 Ratio: (16·16·2·width) / (16·width·2) = 16</div>

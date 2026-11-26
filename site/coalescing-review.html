@@ -53,7 +53,7 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li><strong>Kazanç:</strong> daha az döngü kontrol komutu; tam açılınca indeksler sabit olur (<code>Mds[ty][3]</code> gibi) ve adres hesapları derleme zamanında yapılır; bağımsız load'lar art arda verilip gecikme gizlenir.</li>
   <li><strong>Maliyet:</strong> kod büyür; aynı anda canlı değişken sayısı artar → <strong>register kullanımı artar</strong> → thread başına register sınırı aşılırsa register spill (local memory) ya da SM başına daha az thread (occupancy düşer).</li>
   <li>Döngü sayısı sabitse (transpose'daki <code>j</code> döngüsü: <code>TILE_DIM/BLOCK_ROWS = 4</code> tur; tiled matmul'deki <code>k</code> döngüsü: <code>TILE_WIDTH</code> tur) derleyici genelde zaten açar. Döngü sayısı çalışma zamanında belliyse (<code>width/TILE_WIDTH</code>) tam açılamaz.</li>
-  <li>Bağlantı: L6'daki "local memory" slaytı. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
+  <li>Bağlantı: <a href="l6-memory-types.html">6.3</a>'teki local memory. Sabit olmayan indekslerle erişilen diziler register yerine local memory'ye konur; unrolling indeksleri sabitlediği için diziyi register'da tutmayı mümkün kılabilir.</li>
 </ul>
 
 <h2>Coalescing'in ana fikirleri</h2>

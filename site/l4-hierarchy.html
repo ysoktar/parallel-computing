@@ -48,7 +48,7 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
     C[i] = A[i] + B[i];
 }
 </pre>
-<p class="small muted">Slaytlarda <code>blockDimx.x</code> diye geçen yazım hatası; doğrusu <code>blockDim.x</code>.</p>
+<p class="small muted">Slaytlardaki indeks formülünde geçen <code>blockDimx.x</code> bir yazım hatası; doğrusu <code>blockDim.x</code>.</p>
 
 <h3>Uygula: CUDA grid üzerinde indeks izleme</h3>
 <div data-learning="cuda-index"></div>
@@ -63,9 +63,9 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 </ul>
 <h3>Thread block cluster (compute 9.0)</h3>
 <ul>
-  <li>İsteğe bağlı yeni seviye: thread → blok → <strong>cluster</strong>. Bir bloğun thread'leri aynı SM'de birlikte zamanlanması garanti olduğu gibi, cluster'daki bloklar aynı <strong>GPC</strong>'de (GPU Processing Cluster) birlikte zamanlanır. (Ampere: 2 SM = 1 TPC, 8 TPC = 1 GPC, 8 GPC = tam GPU.)</li>
+  <li>İsteğe bağlı yeni seviye: thread → blok → <strong>cluster</strong>. Bir bloğun thread'leri aynı SM'de birlikte zamanlanması garanti olduğu gibi, cluster'daki bloklar aynı <strong>GPC</strong>'de (GPU Processing Cluster) birlikte zamanlanır. (Ampere'de: 2 SM = 1 TPC (Texture Processing Cluster), 8 TPC = 1 GPC, 8 GPC = tam GPU.)</li>
   <li>Taşınabilir en büyük cluster: 8 blok. Derleme zamanında <code>__cluster_dims__(X,Y,Z)</code> ya da çalışma zamanında <code>cudaLaunchKernelEx</code>. Grid boyutu cluster boyutunun katı olmalı.</li>
-  <li>Cluster'daki bloklar <code>cluster.sync()</code> ile donanım destekli senkronize olur ve <strong>distributed shared memory</strong>'ye erişir.</li>
+  <li>Cluster'daki bloklar <code>cluster.sync()</code> ile donanım destekli senkronize olur ve <strong>distributed shared memory</strong>'ye, yani cluster'daki diğer blokların shared belleğine erişir.</li>
 </ul>
 
 <h2>Bellek hiyerarşisi</h2>
@@ -75,10 +75,10 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
   <li>Tüm thread'ler aynı <strong>global</strong> belleğe erişir.</li>
   <li>Ek iki salt okunur bellek: <strong>constant</strong> ve <strong>texture</strong>. Global, constant ve texture kernel başlatmaları arasında kalıcıdır.</li>
 </ul>
-<p>Ayrıntılar: <a href="l5-tiling.html#cuda-bellek-turleri">L5 bellek türleri</a>, <a href="l6-cuda-memory.html">L6</a>.</p>
+<p>Ayrıntılar: <a href="l5-tiling.html#cuda-bellek-turleri">5.3'te CUDA bellek türleri</a>, <a href="l6-memory-map.html">6.2–6.4'te her belleğin ayrıntısı</a>.</p>
 
 <h2>Compute capability</h2>
-<p>Major.minor. Aynı major = aynı çekirdek mimarisi (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = artımlı iyileştirme, yeni özellikler. Yeni mimari, daha iyi CUDA yetenekleri.</p>
+<p>Compute capability, bir GPU'nun hangi CUDA özelliklerini desteklediğini gösteren <strong>major.minor</strong> biçiminde bir sürüm numarasıdır (ör. 8.6). Aynı major = aynı çekirdek mimarisi (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = artımlı iyileştirme, yeni özellikler. Yeni mimari, daha iyi CUDA yetenekleri.</p>
 
 <h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">

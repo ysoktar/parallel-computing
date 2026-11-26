@@ -41,7 +41,7 @@
     <tr><td>16×16 blokta <code>threadIdx.y % 2 == 0</code></td><td>8 (hepsi)</td><td>her warp iki satırdan oluşur: biri çift, biri tek</td></tr>
   </tbody>
 </table>
-<p>Farklı warp'ların farklı yollara gitmesi divergence <strong>değildir</strong>; divergence bir warp'ın <em>içinde</em> olur. Bir örnek ve süre karşılaştırması: <a href="l4-cuda-intro.html">L4, thread divergence</a>.</p>
+<p>Farklı warp'ların farklı yollara gitmesi divergence <strong>değildir</strong>; divergence bir warp'ın <em>içinde</em> olur. Bir örnek ve süre karşılaştırması: <a href="l4-cuda-intro.html">4.1, thread divergence</a>.</p>
 
 <h2>Branch predication ve branch prediction</h2>
 <p>İsimleri benzer ama farklı şeyler: <strong>predication ≠ prediction</strong>.</p>
@@ -88,7 +88,7 @@ float s = 0;
 for (int i = 0; i < n; ++i)
     s += in[i];
 </pre>
-<p>Ayrıntılı örnek ve maliyetler (register baskısı): <a href="coalescing-review.html#loop-unrolling">Coalescing sayfası, loop unrolling</a>.</p>
+<p>Ayrıntılı örnek ve maliyetler (register baskısı): <a href="coalescing-review.html#loop-unrolling">6.8, loop unrolling</a>.</p>
 
 <h2>Döngü sayaçları: signed ve unsigned</h2>
 <ul>

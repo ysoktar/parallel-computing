@@ -53,7 +53,7 @@ for (int i = 0; i < n; ++i) a[i] += 1;
   <li><strong>Gain:</strong> fewer loop-control instructions; when fully unrolled the indices become constants (<code>Mds[ty][3]</code>) and address arithmetic is done at compile time; independent loads can be issued back to back, hiding latency.</li>
   <li><strong>Cost:</strong> the code grows; more variables are live at the same time → <strong>register usage increases</strong> → if the per-thread register limit is exceeded, register spill (local memory) or fewer threads per SM (lower occupancy).</li>
   <li>If the trip count is constant (the transpose's <code>j</code> loop: <code>TILE_DIM/BLOCK_ROWS = 4</code> iterations; tiled matmul's <code>k</code> loop: <code>TILE_WIDTH</code> iterations) the compiler usually unrolls it anyway. If the trip count is only known at run time (<code>width/TILE_WIDTH</code>) it cannot be fully unrolled.</li>
-  <li>Connection: the "local memory" slide in L6. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
+  <li>Connection: local memory on <a href="l6-memory-types.html">6.3</a>. Arrays indexed with non-constant indices are placed in local memory instead of registers; since unrolling makes the indices constant, it can allow keeping the array in registers.</li>
 </ul>
 
 <h2>Key ideas of coalescing</h2>

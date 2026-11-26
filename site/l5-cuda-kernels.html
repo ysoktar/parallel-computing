@@ -16,7 +16,7 @@
 <main><div class="content">
 
 <h1>Döngüden kernel'e: veri paralelliği ve host kodu</h1>
-<p class="lead">İç içe <code>for</code> döngüleri GPU'da nereye gider? Her thread kendi verisini nasıl bulur? Ve aynı veriyi tekrar tekrar global bellekten okumak neden kernel'i %6 verime mahkûm eder?</p>
+<p class="lead">İç içe <code>for</code> döngüleri GPU'da nereye gider? Her thread kendi verisini nasıl bulur? Ve aynı veriyi tekrar tekrar global bellekten okumak neden kernel'i GPU'nun tepe hızının yaklaşık %6'sına mahkûm eder? (Hesabı <a href="l5-tiling.html">5.3</a>'te.)</p>
 
 <div class="callout goals">
   <ul>
@@ -28,7 +28,7 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>Kütüphane benzetmesi.</strong> 256 öğrenci (bir bloğun thread'leri) aynı kitapların farklı sayfalarına ihtiyaç duyuyor. Kitaplar uzaktaki büyük kütüphanede (global bellek: oradan bir değer okumak yüzlerce saat çevrimi). Herkes her sayfa için oraya giderse yollar tıkanır. Akıllıcası: işi bölüşüp sayfaları <strong>bir kez</strong> ortak masaya (shared memory: küçük ama yanı başında) kopyalamak. "Herkes kopyaladı mı?" diye beklemek <code>__syncthreads()</code>'tir.</p>
-  <p>Bu ders üç adımda ilerler: (1) bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım, (2) her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması, (3) basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
+  <p>Bu ders üç adımda ilerler: (1) bu sayfada, bir CPU döngüsünü kernel'e çevirmek ve host tarafındaki beş adım; (2) <a href="l5-indexing.html">5.2</a>'de, her thread'in kendi verisini <code>blockIdx</code>, <code>blockDim</code>, <code>threadIdx</code> ile bulması; (3) <a href="l5-tiling.html">5.3</a>'te, basit kernel'in neden yavaş olduğu (CGMA = 1) ve tiling ile shared memory'nin bunu nasıl düzelttiği.</p>
 </div>
 
 <h2>Veri paralelliği: her elemana bir thread</h2>
@@ -104,7 +104,7 @@ void cuMatrixMultiplication(float* M, float* N, float* P, int width)
   <li><code>cudaMalloc(void** devPtr, size_t size)</code>: ilk parametre <strong>pointer değişkeninin adresi</strong> (fonksiyon ayrılan adresi oraya yazar), <code>(void**)</code>'a çevrilir çünkü fonksiyon tipten bağımsızdır. İkinci parametre <strong>bayt</strong> cinsinden boyut (C'deki <code>malloc</code> gibi).</li>
   <li><code>cudaFree(void* devPtr)</code>: <code>cudaMalloc</code> ile ayrılanı serbest bırakır.</li>
   <li><code>cudaMemcpy(hedef, kaynak, bayt, tür)</code>: tür <code>cudaMemcpyHostToHost / HostToDevice / DeviceToDevice / DeviceToHost</code>. <strong>Senkrondur</strong> (bloklar, bitene kadar dönmez); asenkron versiyonları da var.</li>
-  <li>Kernel başlatma ise <strong>asenkrondur</strong>: süre ölçerken <code>cudaDeviceSynchronize()</code> ile bitmesini bekleyin (L6).</li>
+  <li>Kernel başlatma ise <strong>asenkrondur</strong>: süre ölçerken <code>cudaDeviceSynchronize()</code> ile bitmesini bekleyin (<a href="l6-cuda-memory.html">6.1</a>).</li>
 </ul>
 <div class="callout gotcha">
   <p>Slayttaki <code>float* Md, Nd, Pd;</code> satırı C'de sadece <code>Md</code>'yi pointer yapar (<code>Nd</code>, <code>Pd</code> düz <code>float</code> olur). Doğrusu <code>float *Md, *Nd, *Pd;</code>. Sınavda kod yazarken dikkat.</p>
@@ -136,7 +136,7 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
 </pre>
 <div>
   <p><strong>Döngüler nerede?</strong> Dıştaki <code>i</code> ve <code>j</code> döngüleri gitti: yerlerini <code>ty</code> (satır) ve <code>tx</code> (sütun) aldı. İç çarpım döngüsü kaldı.</p>
-  <p><strong>Sorunu:</strong> sadece bir blok kullanıyor, yani matris en fazla blok başına thread sınırı kadar elemanlı olabilir (eski GPU'larda 512 → 16×16; yenilerde 1024 → 32×32). Daha fazla blok kullansak bile aynı <code>threadIdx</code>'e sahip farklı bloklardaki thread'ler <strong>aynı</strong> <code>Pd</code> elemanını hesaplardı, çünkü <code>blockIdx</code> kullanılmıyor.</p>
+  <p><strong>Bu basit kernel'in sorunu:</strong> sadece bir blok kullanıyor, yani matris en fazla blok başına thread sınırı kadar elemanlı olabilir (eski GPU'larda 512 → 16×16; yenilerde 1024 → 32×32). Daha fazla blok kullansak bile aynı <code>threadIdx</code>'e sahip farklı bloklardaki thread'ler <strong>aynı</strong> <code>Pd</code> elemanını hesaplardı, çünkü <code>blockIdx</code> kullanılmıyor.</p>
 </div>
 </div>
 
