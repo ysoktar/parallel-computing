@@ -27,7 +27,7 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>Ortak bir defter düşünün.</strong> Birkaç kişi aynı sayıyı güncelliyor: okuyor, bir ekliyor, yazıyor. İkisi aynı anda okursa ikisi de eski sayıyı görür ve biri diğerinin güncellemesini ezer. Thread'ler aynı belleği gördükleri için hızlıdır; tam da bu yüzden <strong>sıra</strong> kontrol edilmezse sonuç bozulur.</p>
-  <p>Bu derste önce sorunu (data race, race condition) sonra araçları görüyoruz: <strong>mutex</strong> (deftere bir anda tek kişi), <strong>semafor</strong> (en fazla N kişi), <strong>atomik</strong> (donanımın bölünmez tek işlem), <strong>monitör / condition variable</strong> (bir koşul gerçekleşene kadar uyu). Son olarak bu araçlar yanlış kullanılınca çıkanlar: deadlock, livelock, starvation.</p>
+  <p>Bu derste önce sorunu (data race, race condition) sonra araçları görüyoruz: <strong>mutex</strong> (deftere bir anda tek kişi), <strong>semafor</strong> (en fazla N kişi), <strong>atomik</strong> (donanımın bölünmez tek işlem), <strong>monitör / condition variable</strong> (bir koşul gerçekleşene kadar uyu). Son olarak bu araçlar yanlış kullanılınca çıkanlar: deadlock, livelock, starvation. Mutex ve semafor bu sayfada; atomikler, monitörler ve deadlock <a href="l3-coordination.html">3.2</a>'de.</p>
 </div>
 
 <h2>Thread nedir?</h2>
@@ -54,7 +54,7 @@ int main() {
   <li><strong>Data race:</strong> birden çok thread aynı değişkene eş zamanlı erişir ve <strong>en az biri yazar</strong>. C/C++'ta tanımsız davranıştır; derleyici olmadığını varsayabilir.</li>
   <li><strong>Race condition:</strong> olayların sırası yüzünden programın doğruluğunun bozulması. Her data race race condition'a yol açmaz (şans eseri doğru çıkabilir); her race condition data race'ten kaynaklanmaz (atomiklerle data race'i kaldırsanız da işlem sırası farklı sonuçlar verebilir).</li>
   <li>x86'da hizalı 8 baytlık load/store atomiktir ama buna güvenerek kod yazmayın: daha büyük tipler var, derleyici ve donanım bellek işlemlerini yeniden sıralayabilir ya da tek okuma/yazmayı ikiye bölebilir. 8 bayt hizalamasını da <strong>asla varsaymayın</strong>.</li>
-  <li>GPU notu: birçok thread'in aynı değişkene eş zamanlı yazması GPU'da (CPU'dan çok daha) yavaş ve ciddi darboğaz; nerede saklandığına bağlı (GPU'da birçok bellek türü var).</li>
+  <li>GPU notu: binlerce thread'in aynı değişkene eş zamanlı yazması GPU'da CPU'dakinden çok daha ciddi bir darboğazdır. Ne kadar yavaş olduğu, değişkenin hangi GPU belleğinde (global, shared…) durduğuna bağlıdır; bellek türleri Lecture 6'da.</li>
 </ul>
 
 <h3>Uygula: kaybolan güncelleme</h3>
@@ -92,11 +92,11 @@ acquire() {                       release() {
 }
 </pre>
 <ul>
-  <li>Donanımda atomik destek olmadan gerçek paralel programlama imkânsızdır.</li>
+  <li>Bu araçların hepsi donanımın atomik komutları üzerine kurulur: donanımda atomik destek olmadan gerçek paralel programlama imkânsızdır.</li>
   <li>Bekleyenler FIFO kuyrukta tutulursa <strong>strong</strong> semafor, değilse <strong>weak</strong> (starvation olabilir).</li>
   <li>Binary semafor "bir olayı bekle" durumu için kullanılabilir (bir thread release, diğeri acquire).</li>
-  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII sarmalayıcılar <code>std::lock_guard</code> (kapsam bitince bırakır) ve <code>std::unique_lock</code> (ertelenmiş kilitleme, condition variable ile). Ders örnekleri: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
-  <li><strong>Lazy init / call once:</strong> bir kaynağı ilk kullanımda tek bir kez başlatmak (<code>std::call_once</code>); ör. video çözücü.</li>
+  <li>C++: <code>std::mutex</code>, <code>std::timed_mutex</code>, <code>std::recursive_mutex</code>; RAII sarmalayıcılar <code>std::lock_guard</code> (kapsam bitince bırakır) ve <code>std::unique_lock</code> (ertelenmiş kilitleme, condition variable ile). Dersle paylaşılan örnek kodlar: <code>semaphore_single_sync.cpp</code>, <code>semaphore_double_sync.cpp</code>.</li>
+  <li><strong>Lazy init / call once:</strong> bir kaynağı ilk kullanımda tek bir kez başlatmak (<code>std::call_once</code>); ör. bir video çözücüyü ancak ilk kare geldiğinde, bir kez kurmak.</li>
   <li><strong>Recursive lock:</strong> normal mutex'i aynı thread iki kez alırsa deadlock; recursive mutex buna izin verir.</li>
 </ul>
 

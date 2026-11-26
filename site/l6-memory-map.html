@@ -87,11 +87,11 @@
     <tr><td><strong>Global</strong></td><td>DRAM (L2 üzerinden)</td><td>tüm grid + host / uygulama</td><td>herkes, host</td><td><code>cudaMalloc</code>, <code>__device__</code></td><td><strong>ardışık ve hizalı</strong> (coalescing)</td></tr>
     <tr><td><strong>Local</strong></td><td>DRAM (L2 üzerinden)</td><td>tek thread / thread</td><td>thread</td><td>derleyici: büyük/değişken indeksli dizi, spill</td><td>herkes aynı göreli indeks (otomatik ardışık dizilir)</td></tr>
     <tr><td><strong>Constant</strong></td><td>DRAM + constant cache</td><td>tüm grid / uygulama</td><td>sadece host (<code>cudaMemcpyToSymbol</code>)</td><td><code>__constant__</code> (fonksiyon dışında)</td><td><strong>hepsi aynı adres</strong> (yayın)</td></tr>
-    <tr><td><strong>Texture</strong></td><td>DRAM + texture cache</td><td>tüm grid / uygulama</td><td>host (surface ile kernel)</td><td>CUDA array + texture object</td><td><strong>2D'de birbirine yakın</strong> adresler</td></tr>
+    <tr><td><strong>Texture</strong></td><td>DRAM + texture cache</td><td>tüm grid / uygulama</td><td>host; kernel ancak bir surface nesnesiyle yazabilir</td><td>CUDA array + texture object</td><td><strong>2D'de birbirine yakın</strong> adresler</td></tr>
   </tbody>
 </table>
 <div class="callout key">
-  <p><strong>Son sütun her şeyin özeti.</strong> Aynı <code>s[2*tid]</code> deseni global bellekte "%50 verim" (iki kat segment), shared bellekte "2-yollu bank conflict", constant bellekte "32 ayrı istek" demektir. Coalescing, bank conflict ve broadcast ayrı konular değil; hepsi aynı sorunun farklı belleklerdeki cevabı: <em>bir warp'ın 32 adresi bu belleğe nasıl dağılıyor?</em></p>
+  <p><strong>Son sütun her şeyin özeti.</strong> Aynı <code>s[2*threadIdx.x]</code> deseni (her thread iki eleman ötesini okur) global bellekte "%50 verim" (iki kat segment), shared bellekte "2-yollu bank conflict", constant bellekte "32 ayrı istek" demektir. Coalescing, bank conflict ve broadcast ayrı konular değil; hepsi aynı sorunun farklı belleklerdeki cevabı: <em>bir warp'ın 32 adresi bu belleğe nasıl dağılıyor?</em></p>
 </div>
 
 <h3>Bir kernel, bütün bellekler</h3>
@@ -127,7 +127,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <li><strong>Hiçbiri değilse</strong> (büyük girdi/çıktı dizileri) → <strong>global</strong>; erişimleri coalesced yap, 2D'de pitch kullan.</li>
 </ol>
 <div class="callout example">
-  <p><strong>Tiled matmul'ü bu gözle okuyun:</strong> <code>M</code>, <code>N</code>, <code>P</code> global'de (büyük, herkes görür; yüklemeler coalesced). Karolar <code>Mds</code>, <code>Nds</code> shared'da (bloktaki 16 thread aynı elemanı kullanır). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> register'da (thread'e özel). Bariyer, shared'ı paylaşmanın bedeli. Bu resmin parçaları <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) ve <a href="l6-texture.html">6.4</a> (texture) sayfalarında ayrıntılanıyor.</p>
+  <p><strong>5.3'teki tiled matmul'ü bu gözle okuyun:</strong> <code>M</code>, <code>N</code>, <code>P</code> global'de (büyük, herkes görür; yüklemeler coalesced). Karolar <code>Mds</code>, <code>Nds</code> shared'da (bloktaki 16 thread aynı elemanı kullanır). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> register'da (thread'e özel). Bariyer, shared'ı paylaşmanın bedeli. Bu resmin parçaları <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) ve <a href="l6-texture.html">6.4</a> (texture) sayfalarında ayrıntılanıyor.</p>
 </div>
 <h2>Bellek sınırları ve etkileri</h2>
 <ul>
@@ -141,7 +141,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <p><strong>Shared:</strong> G80'de SM başına 16 KB, en fazla 8 blok → maksimuma ulaşmak için blok başına ≤ 2 KB. 2 KB'tan fazla kullanılırsa SM'deki blok sayısı toplam 16 KB'ı aşmayacak kadar olur.</p>
   <p><strong>Matmul:</strong> 16×16 tile → Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/blok → 8 blok sığar (zaten G80 sınırı). Ama asıl sınır SM başına 768 thread: 768 / 256 = <strong>3 blok</strong> → shared'ın sadece 3·2 = 6 KB'ı kullanılır. Bu sınırların hepsi cihaza bağlıdır.</p>
 </div>
-<p>Mimari listesi (2023 itibarıyla ~20 tür): Tesla (1.0, 1.1), Fermi (2.0, 3.0), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Bellek davranışları cihaza bağlı: her zaman kullandığınız cihazın özelliklerini bilin.</p>
+<p>Mimari listesi (2023 itibarıyla ~20 tür): Tesla (1.0, 1.1), Fermi (2.0, 2.1), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Bellek davranışları cihaza bağlı: her zaman kullandığınız cihazın özelliklerini bilin.</p>
 
 <h2>Kendini sına</h2>
 <div class="quiz" data-answer="1">

@@ -27,16 +27,16 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>Bir mutfak düşünün.</strong> Yıllarca yemekler, aşçı her yıl daha hızlı çalıştığı için hızlandı (saat frekansı). Sonra aşçı hızlanamaz oldu: mutfak fazla ısınıyor (güç duvarı). Çözüm <strong>daha çok aşçı</strong> (çok çekirdek); bedeli de şu: tarifin bazı adımları sıralıdır ve aşçılar birbirini bekleyip malzeme paylaşır.</p>
-  <p>Bu ders bu hikâyenin üç sorusunu cevaplar: <strong>neden</strong> çok çekirdeğe geçtik (Moore, güç duvarı), paralel makineler <strong>nasıl sınıflanır</strong> (Flynn, paylaşımlı/dağıtık bellek, CPU/GPU) ve aşçı sayısını artırınca <strong>ne kadar hızlanırız</strong> (speedup, verim, Amdahl, Gustafson).</p>
+  <p>Bu ders bu hikâyenin üç sorusunu cevaplar: <strong>neden</strong> çok çekirdeğe geçtik (Moore, güç duvarı), paralel makineler <strong>nasıl sınıflanır</strong> (Flynn, paylaşımlı/dağıtık bellek, CPU/GPU) ve aşçı sayısını artırınca <strong>ne kadar hızlanırız</strong> (speedup, verim, Amdahl, Gustafson). İlk ikisi bu sayfada, üçüncüsü <a href="l1-performance.html">1.2</a>'de.</p>
 </div>
 
 <h2>Moore yasası ve güç duvarı</h2>
 <ul>
   <li><strong>Moore yasası</strong> (Gordon Moore, 1970'ler): entegre devredeki transistör sayısı yaklaşık <strong>iki yılda bir iki katına</strong> çıkar. Frekans değil, transistör sayısı.</li>
   <li>Frekans tek başına karşılaştırma ölçütü değil: işlemler farklı sayıda saat çevrimi sürer (x86-64'te 32-bit tamsayı toplama 1, 32-bit FP çarpma 4 saat çevrimi).</li>
-  <li>Uzun süre transistör artışına frekans artışı eşlik etti; ama yüksek frekans = daha çok ısı. Voltaj düşürüldü (~1,29 V) ama yetmedi. <strong>2004–2005 civarında frekans 2–4 GHz'de tavan yaptı</strong> (Gelsinger'in güç duvarı).</li>
-  <li>Geriye kalan yol: yongaya daha çok mantık ve <strong>çekirdek</strong> koymak. İlk çift çekirdekli tek yonga: IBM Power 4 (2001); çoklu soketli platformların doğal devamı.</li>
-  <li><strong>GPGPU</strong>: tek GPU çekirdeği CPU çekirdeğinden zayıf ama yüzlerce/binlerce çekirdek + yüksek bant genişlikli bellek → kat kat hız. Ayrıca daha iyi <strong>GFLOP/Watt</strong>: sunucu ve bulutta bir CPU'nun ömrü boyunca harcadığı enerji fiyatını aşabilir.</li>
+  <li>Uzun süre transistör artışına frekans artışı eşlik etti; ama yüksek frekans = daha çok ısı. Isıyı azaltmak için işlemcinin çalışma voltajı düşürüldü (~1,29 V'a kadar) ama yetmedi. <strong>2004–2005 civarında frekans 2–4 GHz'de tavan yaptı</strong>: Intel'den Pat Gelsinger'in önceden uyardığı <strong>güç duvarı</strong>.</li>
+  <li>Geriye kalan yol: yongaya daha çok mantık ve <strong>çekirdek</strong> koymak. İlk çift çekirdekli tek yonga: IBM Power 4 (2001). Bu, anakarta birden çok işlemci takılan (çok soketli) sistemlerin tek yongaya taşınmış hâlidir.</li>
+  <li><strong>GPGPU</strong>: tek GPU çekirdeği CPU çekirdeğinden zayıf ama yüzlerce/binlerce çekirdek + yüksek bant genişlikli bellek → kat kat hız. Ayrıca watt başına daha çok iş (<strong>GFLOP/Watt</strong>). Bu önemlidir, çünkü sunucu ve bulutta bir işlemcinin ömrü boyunca harcadığı elektriğin parası, işlemcinin kendi fiyatını aşabilir.</li>
   <li>Bedava değil: çok çekirdek <strong>çok thread'li, paralel kod</strong> ister; algoritmaların yeniden tasarlanması ve yeni API'ler (CUDA, OpenCL) gerekir.</li>
 </ul>
 
@@ -75,11 +75,11 @@
 </div>
 <h3>NVIDIA Blackwell</h3>
 <ul>
-  <li>Hopper ve Ada Lovelace'ın ardılı; yapay zekâ, HPC ve hızlandırılmış hesaba yönelik. Çekirdekler <strong>SM</strong>'lerde gruplanır; her SM <strong>128 CUDA çekirdeği</strong> (SIMT) ve kendi programını çalıştırabilir (bloklar farklı SM'lerde bağımsız zamanlanır).</li>
-  <li>Hiyerarşi: GPU → <strong>GPC</strong> → <strong>TPC</strong> (her biri 2 SM) → SM. SM başına: 128 CUDA çekirdeği, 1 RT çekirdeği, 4 Tensor çekirdeği, 4 SFU, 4 texture birimi, <strong>256 KB register dosyası</strong>, <strong>128 KB L1/shared</strong>, zamanlayıcılar. 64-bit FP throughput 32-bit'in yaklaşık yarısı.</li>
-  <li>B200: çift yonga (10 TB/s NV-HBI), 208 milyar transistör, 148 aktif SM = 18.944 CUDA çekirdeği, 592 Tensor çekirdeği.</li>
+  <li>NVIDIA'nın Hopper ve Ada Lovelace mimarilerinin ardılı; yapay zekâ ve yüksek başarımlı hesap (HPC) için. Çekirdekler <strong>SM</strong>'lerde gruplanır; her SM'de <strong>128 CUDA çekirdeği</strong> (SIMT) vardır ve her SM kendi programını çalıştırabilir (bloklar farklı SM'lerde bağımsız zamanlanır).</li>
+  <li>Hiyerarşi: GPU → <strong>GPC</strong> → <strong>TPC</strong> (her biri 2 SM) → SM. SM başına: 128 CUDA çekirdeği, 1 RT çekirdeği (ışın izleme), 4 Tensor çekirdeği (küçük matris çarpımları), 4 SFU (sin, exp gibi özel fonksiyonlar), 4 texture birimi, <strong>256 KB register dosyası</strong>, <strong>128 KB L1/shared</strong>, zamanlayıcılar. 64-bit FP throughput 32-bit'in yaklaşık yarısı.</li>
+  <li>B200 (Blackwell'in veri merkezi GPU'su): iki yonga, aralarında 10 TB/s'lik bağlantı (NV-HBI), 208 milyar transistör, 148 aktif SM = 18.944 CUDA çekirdeği, 592 Tensor çekirdeği.</li>
 </ul>
-<p>Diğer örnekler: <strong>AMD APU</strong> (CPU ve GPU aynı yongada, <strong>ortak bellek uzayı</strong> → veri aktarımı yok; HSA: gecikme odaklı LCU ve throughput odaklı TCU), Cell BE, çok çekirdekli CPU'lar (TILE-Gx8072, Intel Xeon Phi).</p>
+<p>Diğer örnekler: <strong>AMD APU</strong> (CPU ve GPU aynı yongada, <strong>ortak bellek uzayı</strong> → veri aktarımı yok; AMD'nin HSA mimarisi gecikme odaklı birimleri (LCU, CPU çekirdekleri) ve throughput odaklı birimleri (TCU, GPU çekirdekleri) birlikte kullanır), Cell BE (PlayStation 3'ün işlemcisi), çok çekirdekli CPU'lar (72 çekirdekli TILE-Gx8072, Intel Xeon Phi).</p>
 
 <h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">

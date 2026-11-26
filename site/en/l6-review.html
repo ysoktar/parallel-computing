@@ -24,12 +24,12 @@
   <li>Kernel launches are asynchronous: call <code>cudaDeviceSynchronize()</code> when timing; the first call includes initialisation.</li>
   <li>Register and shared memory limits decide the threads/blocks per SM; too many registers → spill → local memory (as slow as global).</li>
   <li>Global: coalescing (aligned 32/64/128 B segments), pitch in 2D. Local: variable-indexed arrays and spills.</li>
-  <li>Shared: 32 banks, bank = word index % 32; different words in the same bank = conflict; for <code>s[stride·tid]</code> the degree is gcd(stride, 32); <code>[32][33]</code> padding for column reads.</li>
+  <li>Shared: 32 banks, bank = word index % 32; different words in the same bank = conflict; for <code>s[stride·threadIdx.x]</code> the degree is gcd(stride, 32); <code>[32][33]</code> padding for column reads.</li>
   <li>Constant: best when everyone reads the <strong>same</strong> address (broadcast). Texture: 2D locality, interpolation, boundary handling; read-only, needs a CUDA array.</li>
 </ul>
 <h3>Common mistakes</h3>
 <ul>
-  <li>Mixing up coalescing and bank conflicts: coalescing is about consecutive addresses in <strong>global</strong> memory; bank conflicts are about different words falling into the same bank of <strong>shared</strong> memory. <code>s[2*tid]</code> means half efficiency in global memory and a 2-way conflict in shared memory.</li>
+  <li>Mixing up coalescing and bank conflicts: coalescing is about consecutive addresses in <strong>global</strong> memory; bank conflicts are about different words falling into the same bank of <strong>shared</strong> memory. <code>s[2*threadIdx.x]</code> means half efficiency in global memory and a 2-way conflict in shared memory.</li>
   <li>Taking the pitch for a number of elements: the pitch is in <strong>bytes</strong>, the row start is <code>(char*)p + r*pitch</code>.</li>
   <li>Having consecutive threads read consecutive addresses of constant memory: that is the bad pattern for constant memory (32 separate requests).</li>
   <li>Thinking a binary built with <code>-code=sm_70</code> runs on an 8.x GPU (not across a major change, and with no PTX there is no JIT).</li>

@@ -28,7 +28,7 @@
 <h2>Bellek tutarlılık modelleri</h2>
 <ul>
   <li>Tasarım kaygıları: önbellek <strong>tutarlılığı</strong> (coherence, aynı adres) ve bellek <strong>tutarlılık modeli</strong> (consistency, farklı adreslere işlemlerin görünme sırası).</li>
-  <li><strong>Sequential consistency:</strong> paylaşılan nesnelere olaylar tek tek bir sırada oluyormuş gibi görünmeli ve her thread için program sırasında etki etmeli. Farklı thread'lerin olayları kaydırılarak genel geçmiş nesnenin seri belirtimini sağlayabilir.</li>
+  <li><strong>Sequential consistency:</strong> paylaşılan nesnelere olaylar tek tek bir sırada oluyormuş gibi görünmeli ve her thread için program sırasında etki etmeli. Yani farklı thread'lerin işlemleri iç içe geçebilir, ama ortaya çıkan genel sıra, aynı işlemler tek bir thread'de sırayla yapılsaydı da oluşabilecek bir sıra olmalıdır.</li>
   <li>Yüksek seviyeli dillerde derleyici optimizasyonları üretilen kodu seri çeviriden çok farklı yapabilir (komut yeniden sıralama), ama sonuç sequential consistency'yi korur (tek thread açısından).</li>
 </ul>
 
@@ -46,7 +46,7 @@
   <p><strong>Deadlock nasıl önlenir?</strong> <span class="badge-class">ek bilgi</span> Dört koşul birlikte gerekir: karşılıklı dışlama, tut ve bekle, elden alınamama, <strong>döngüsel bekleme</strong>. En pratik önlem döngüyü kırmak: herkes kilitleri <strong>aynı sırada</strong> alsın (önce R1, sonra R2). C++17: <code>std::scoped_lock lk(m1, m2);</code> birden çok mutex'i deadlock'suz alır.</p>
 </div>
 <h2>Producer-consumer problemi</h2>
-<p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. Üç semafor: <code>slotsAvail</code> (başta BUFFSIZE), <code>resAvail</code> (başta 0) ve tampon indekslerini koruyan bir mutex (<code>l</code>).</p>
+<p>Üreticiler ortak bir tampona (ör. <code>BUFFSIZE = 100</code>) öğe koyar, tüketiciler alır. İki semafor ve bir mutex: <code>slotsAvail</code> boş yerleri sayar (başta BUFFSIZE), <code>resAvail</code> dolu yerleri sayar (başta 0), mutex (<code>l</code>) tampon indekslerini korur.</p>
 <pre class="code" data-run="prodcons.cpp" data-run-note="Sözde kod; çalışan hâli 2 üretici, 3 tüketici, BUFFSIZE = 100." data-title="Senkronizasyonlu sözde kod">
 // producer                          // consumer
 slotsAvail.acquire();                resAvail.acquire();
@@ -56,13 +56,13 @@ in = (in + 1) % BUFFSIZE;            out = (out + 1) % BUFFSIZE;
 l.release();                         l.release();
 resAvail.release();                  slotsAvail.release();
 </pre>
-<p>Senkronizasyon olmazsa: dolu tampona yazma (eski veri kaybolur), boş tampondan okuma, aynı <code>in/out</code> indeksini iki thread'in kullanması. Sonlandırma: paylaşılan bir değişkenle (ör. üretilecek toplam sayı) ya da tüketicilere özel "bitti" mesajı (poison pill) göndererek.</p>
+<p>Senkronizasyon olmazsa: dolu tampona yazma (eski veri kaybolur), boş tampondan okuma, iki thread'in aynı <code>in</code>/<code>out</code> indeksini (sıradaki yazma/okuma yeri) kullanması. Sonlandırma: paylaşılan bir değişkenle (ör. üretilecek toplam sayı) ya da tüketicilere özel "bitti" mesajı (poison pill) göndererek.</p>
 
 <h2>Atomik işlemler</h2>
 <ul>
-  <li><code>std::atomic&lt;T&gt;</code>: işlemler bölünmez; derleyiciye bildirimdir. Atomik okuma <strong>acquire</strong>, atomik yazma <strong>release</strong> semantiğindedir (varsayılan seq_cst).</li>
+  <li><code>std::atomic&lt;T&gt;</code>: işlemler bölünmez; ayrıca derleyiciye bu değişkenin thread'ler arasında paylaşıldığını, erişimlerini yeniden sıralamaması gerektiğini bildirir. Atomik okuma <strong>acquire</strong>, atomik yazma <strong>release</strong> semantiğindedir (varsayılan <code>seq_cst</code>; anlamları aşağıda, "Atomiklerde bellek sıralaması"nda).</li>
   <li>Donanım desteği: <strong>CAS</strong> (compare-and-swap/exchange): bir bellek konumunu bir değerle karşılaştırır, eşitse yeni değeri yazar, her durumda okunan değeri döndürür (x86: <code>CMPXCHG</code>). <strong>LL/SC</strong> (load-link / store-conditional): LL değeri okur; SC, o arada konuma kimse yazmadıysa yazar (ARM, PowerPC).</li>
-  <li>Atomik işlemlerle kilit oluşturmak, kilitlerin yerini almak ya da tamamlamak mümkün (lock-free veri yapıları: <code>is_lock_free()</code>, donanım destekliyor mu?). Örnek: <code>atomic&lt;bool&gt;</code> kilit olarak (spin lock). Floating-point atomikler C++20'de.</li>
+  <li>Atomik işlemlerle kilit oluşturmak, kilitlerin yerini almak ya da tamamlamak mümkün (lock-free veri yapıları; bir tipin donanımca kilitsiz desteklenip desteklenmediği <code>is_lock_free()</code> ile sorulur). Örnek: <code>atomic&lt;bool&gt;</code> kilit olarak (spin lock). Floating-point atomikler C++20'de.</li>
   <li>GPU'da atomik işlemler çok yavaş olabilir (histogram örneği: aynı kutuya çok yazma).</li>
 </ul>
 <pre class="code" data-run="spinlock.cpp" data-title="atomic&lt;bool&gt; ile spin lock">
@@ -73,7 +73,7 @@ void unlock() { locked.store(false); }
 <h3>Atomiklerde bellek sıralaması</h3>
 <ul>
   <li><code>memory_order_relaxed</code>: değişiklikler diğer çekirdeklere zorla yayılmaz; thread'ler farklı değer dizileri görebilir. Çok emin değilseniz kullanmayın.</li>
-  <li><code>memory_order_acquire</code> / <code>release</code> (+ <code>acq_rel</code>, <code>consume</code>): değişiklikler thread çiftleri arasında yayılır; yazan release, okuyan acquire kullanır. Eski ARM/PowerPC için.</li>
+  <li><code>memory_order_acquire</code> / <code>release</code> (+ <code>acq_rel</code>, <code>consume</code>): değişiklikler thread çiftleri arasında yayılır; yazan release, okuyan acquire kullanır. Bellek sıralamasını zayıf tutan işlemcilerde (ARM, PowerPC) fark yaratır.</li>
   <li><code>memory_order_seq_cst</code> (varsayılan): tüm thread'ler bir değişkenin değerlerini aynı sırada görür.</li>
 </ul>
 

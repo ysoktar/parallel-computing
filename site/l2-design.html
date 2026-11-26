@@ -15,7 +15,7 @@
 <main><div class="content">
 
 <h1>PCAM: tasarımın dört adımı</h1>
-<p class="lead">Paralel programda deyimlerin sırası tek değildir; dikkatli tasarlanmazsa yanlış güncellemeler ve kilitlenen iletişimler çıkar. Hedefler: <strong>doğruluk</strong> ve <strong>performans</strong>.</p>
+<p class="lead">Paralel programda komutların hangi sırayla çalışacağı her çalıştırmada değişebilir; dikkatli tasarlanmazsa güncellemeler kaybolur ya da görevler birbirini beklerken kilitlenir. Hedefler: <strong>doğruluk</strong> ve <strong>performans</strong>.</p>
 
 <div class="callout goals">
   <ul>
@@ -27,7 +27,7 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>Bir ev inşaatı düşünün.</strong> İşi parçalara ayırırsınız (temel, duvar, boya), hangisinin hangisini beklediğini belirlersiniz (boya duvardan sonra), sıkı bağlı işleri aynı ekibe verirsiniz ve ekiplere eşit yük dağıtırsınız. Paralel program tasarımı da bu dört adımdır: <strong>PCAM</strong>.</p>
-  <p>Ardından iki "hazır kalıp" ailesi gelir: işi <strong>nasıl böleceğinizi</strong> anlatan ayrıştırma desenleri (geometrik, pipeline, böl ve yönet…) ve programı <strong>nasıl yapılandıracağınızı</strong> anlatan program yapısı desenleri (SPMD, master-worker, fork/join…). CUDA'da yazdığınız her kernel aslında bir geometrik ayrıştırma + SPMD örneğidir.</p>
+  <p>PCAM'dan sonra (<a href="l2-patterns.html">2.2</a>) iki "hazır kalıp" ailesi gelir: işi <strong>nasıl böleceğinizi</strong> anlatan ayrıştırma desenleri (geometrik, pipeline, böl ve yönet…) ve programı <strong>nasıl yapılandıracağınızı</strong> anlatan program yapısı desenleri (SPMD, master-worker, fork/join…). CUDA'da yazdığınız her kernel aslında bir geometrik ayrıştırma + SPMD örneğidir.</p>
 </div>
 
 <h2>Önce sor: paralel gerekli ve mümkün mü?</h2>
@@ -44,13 +44,13 @@
     <tr><td><strong>Partitioning</strong></td><td>Hesabı olabildiğince çok parçaya böl; paralelliği ortaya çıkar. <em>Functional decomposition</em> (adımlara göre) ya da <em>domain/data decomposition</em> (veriye göre).</td><td>Parça sayısı işlemci sayısının 10–100 katı.</td></tr>
     <tr><td><strong>Communication</strong></td><td>Görevler arası bağımlılıklar ve aktarılacak veri hacmi belirlenir → <strong>görev bağımlılık grafı</strong> (düğüm = görev, kenar = iletişim hacmi).</td><td>İdeal: tamamen bağımsız görevler.</td></tr>
     <tr><td><strong>Agglomeration</strong></td><td>İletişimi azaltmak için görevleri grupla; grup içi iletişim yok olur.</td><td>Grup sayısı işlemci sayısının ~10 katı.</td></tr>
-    <tr><td><strong>Mapping</strong></td><td>Grupları düğümlere ata: <strong>yük dengesi</strong> + yoğun iletişimli grupları aynı düğüme koyarak iletişimi azalt (paylaşımlı bellekte iletişim neredeyse bedava).</td><td>Genel hâli NP-complete → sezgisel yöntemler.</td></tr>
+    <tr><td><strong>Mapping</strong></td><td>Grupları düğümlere ata: <strong>yük dengesi</strong> + yoğun iletişimli grupları aynı düğüme koyarak iletişimi azalt (paylaşımlı bellekte iletişim neredeyse bedava).</td><td>En iyi eşlemeyi bulmak genel hâlde NP-complete (verimli bir kesin yöntem bilinmiyor) → sezgisel yöntemler.</td></tr>
   </tbody>
 </table>
-<p>Hesapları çoğaltmak (duplicate) sonuçlarını iletme ihtiyacını ortadan kaldırarak performansı artırabilir. Örnekler: matris toplama (tamamen bağımsız), 2D konvolüsyon (komşu verisi gerekir).</p>
+<p>Bir hesabı birkaç görevde tekrar yapmak (duplicate) bazen daha hızlıdır: sonucu görevler arasında taşımak gerekmez. PCAM'ın iki tipik örneği: matris toplama (görevler tamamen bağımsız) ve 2D konvolüsyon (her görev komşusunun verisine ihtiyaç duyar; aşağıda çözülüyor).</p>
 
 <h3>Çözümlü örnek: 2D konvolüsyonu PCAM ile tasarlamak</h3>
-<p>Problem: N×N bir görüntüye 3×3 bir filtre uygulamak (Exercise 2 ve 4). Her çıktı pikseli, girdide kendisi ve 8 komşusundan hesaplanır.</p>
+<p>Problem: N×N bir görüntüye 3×3 bir filtre uygulamak (dersin Exercise 2 ve 4 ödevleri: C++ thread'leri ve CUDA ile). Her çıktı pikseli, girdide kendisi ve 8 komşusundan hesaplanır.</p>
 <ol>
   <li><strong>Partitioning:</strong> en ince parça <strong>bir çıktı pikseli</strong> → N² görev. Görevler bağımsız hesaplanabilir (çıktılar birbirini beklemez): veri ayrıştırması.</li>
   <li><strong>Communication:</strong> her görev komşularının girdi değerlerini okur. Paylaşımlı bellekte bu "okuma"dır; dağıtık bellekte komşu görevlere mesaj gerekir. Bağımlılık grafında her düğümün 8 komşusuyla kenarı var.</li>

@@ -16,7 +16,7 @@
 <main><div class="content">
 
 <h1>Coalescing: global bellek transaction'ları</h1>
-<p class="lead">Bir warp'ın 32 thread'i global belleğe aynı anda gider. Adresleri yan yana ise donanım hepsini tek bir büyük okumada karşılar; dağınıksa aynı veri için defalarca okuma yapar. 2. vizenin en önemli performans konusu bu.</p>
+<p class="lead">Bir warp'ın 32 thread'i global belleğe aynı anda gider. Adresleri yan yana ise donanım hepsini tek bir büyük okumada karşılar; dağınıksa aynı veri için defalarca okuma yapar. Dersin en önemli performans konusu bu: 2. vizede de, finalde de.</p>
 
 <div class="callout goals">
   <ul>
@@ -27,7 +27,7 @@
 </div>
 
 <div class="callout why" data-label="Büyük resim">
-  <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalledense (ardışık adresler) tek otobüs (tek 128 B transaction) yeter; her biri farklı semttense 32 sefer gerekir ve otobüsler boş koltukla gider. Coalescing, adresleri aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği: okuma bir yönde, yazma öbür yönde ardışık; shared memory yönü çevirir.</p>
+  <p><strong>Bir otobüs servisi düşünün.</strong> 32 yolcu (bir warp) aynı anda depoya (global bellek) gidiyor. Hepsi aynı mahalledense (ardışık adresler) tek otobüs (tek 128 B transaction) yeter; her biri farklı semttense 32 sefer gerekir ve otobüsler boş koltukla gider. Coalescing, adresleri aynı "mahallede" toplamaktır. Transpose bunun en iyi örneği (<a href="coalescing-transpose.html">6.7</a>): okuma bir yönde, yazma öbür yönde ardışık; shared memory yönü çevirir.</p>
 </div>
 
 <h2>Bir warp kaç transaction yapar?</h2>

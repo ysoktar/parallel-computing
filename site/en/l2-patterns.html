@@ -26,9 +26,9 @@
 </div>
 
 <h2>Decomposition patterns</h2>
-<p>The six patterns of Mattson et al.; functional and data decomposition are joined by <strong>data flow</strong> decomposition. There is no strict separation; a problem can be decomposed in several ways.</p>
+<p>The six decomposition patterns of Mattson, Sanders and Massingill's book <em>Patterns for Parallel Programming</em>. The functional and data decomposition of PCAM are joined by a third kind: <strong>data flow</strong> decomposition (pipeline, event-based). There is no strict separation; a problem can be decomposed in several ways.</p>
 <h3>Task parallelism</h3>
-<p>Modules on different nodes: e.g. a game loop's <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> as separate tasks, with a <code>barrier()</code> at the end of each iteration. Works without complex dependencies but <strong>does not scale</strong>: the number of nodes cannot exceed the number of tasks.</p>
+<p>Different modules (functions) of the program go to different nodes (processors or cores): e.g. a game loop's <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> as separate tasks, with a <code>barrier()</code> at the end of each iteration. Works without complex dependencies but <strong>does not scale</strong>: the number of nodes cannot exceed the number of tasks.</p>
 <h3>Divide-and-conquer</h3>
 <pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Pseudocode; the runnable version: a merge sort whose two halves are sorted as separate tasks (std::async).">
 DnC(A) {
@@ -40,14 +40,14 @@ DnC(A) {
 </pre>
 <ul>
   <li>Example: merge sort. <strong>The dependency graph is not the call graph.</strong> For an 8-element merge sort the maximum concurrency is 4 tasks (size-1 calls do no work).</li>
-  <li>Tasks are generated dynamically at run time (long impossible on GPUs). Generation stops at a given size or at the number of processors; the parent can solve one subproblem itself instead of idling (N − 1 new tasks).</li>
+  <li>Tasks are generated dynamically at run time (for a long time a GPU kernel could not start new work by itself). Splitting stops when subproblems reach a given size or the number of tasks reaches the number of processors. Instead of idling, the parent can solve one subproblem itself: splitting into N parts needs only N − 1 new tasks.</li>
 </ul>
 <h3>Geometric decomposition</h3>
 <p>Arrays/matrices are split along one or more dimensions and assigned to tasks. With no dependencies between data: <strong>embarrassingly parallel</strong>. Example: the 5-point Laplace filter <code>[0 1 0; 1 −4 1; 0 1 0]</code>: each output needs 5 values → neighbour (halo) rows are needed at region borders. This is the block/tile approach on GPUs.</p>
 <h3>Apply: partitions and halo cells</h3>
 <div data-learning="halo"></div>
 <h3>Recursive data decomposition</h3>
-<p>Trees, lists, graphs are decomposed into elements assigned to nodes; the algorithm may be modified (similar to dynamic programming). Example: partial sums (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: sums of groups of 2, then 4, then 8.</p>
+<p>Trees, lists, graphs are decomposed into elements assigned to nodes. The serial algorithm usually does not parallelise as it is; it is rewritten into a form that combines results step by step. Example: partial sums (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: sums of groups of 2, then 4, then 8.</p>
 <h3>Pipeline</h3>
 <ul>
   <li>An assembly line: each stage applies an operation to an item. CPU instruction pipelines, signal processing (FFT → coefficient manipulation → inverse FFT), graphics pipelines, Unix shell pipes.</li>
@@ -90,7 +90,7 @@ DnC(A) {
     <tr><td><strong>Loop parallelism</strong></td><td>Parallelise the loops that dominate an existing sequential code (OpenMP directives). Little effort, usually small gains.</td></tr>
   </tbody>
 </table>
-<p>Platforms impose patterns: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
+<p>Platforms impose patterns: MPI (a message-passing library for distributed memory) → SPMD/MPMD, OpenMP (directives that parallelise loops on shared memory) → loop parallelism, CUDA → SPMD (every thread the same kernel, different IDs).</p>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

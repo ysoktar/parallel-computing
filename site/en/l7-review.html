@@ -32,7 +32,7 @@
   <li>Mixing up predication and prediction, or counting different warps taking different branches as divergence.</li>
   <li>Writing <code>#pragma unroll</code> a few lines before the loop: it must be immediately before it.</li>
 </ul>
-<h3>Open-ended questions for the quiz</h3>
+<h3>Open-ended questions for the final</h3>
 <p><strong>1.</strong> Complete the unchecked call <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code>. What is the difference between Peek and Get?</p>
 <div class="hint"><p>First clear/check earlier errors (<code>cudaGetLastError()</code>), launch, <code>cudaError_t launch = cudaGetLastError();</code> (configuration/parameter errors), then <code>cudaError_t run = cudaDeviceSynchronize();</code> (execution errors); if either is not <code>cudaSuccess</code>, report and stop. Get reads and resets, Peek does not reset.</p></div>
 <p><strong>2.</strong> In a 128-thread 1D block, how many warps diverge for <code>if (threadIdx.x &lt; 40)</code> and for <code>if (threadIdx.x % 4 == 0)</code>?</p>

@@ -32,7 +32,7 @@
   <li>Predication ile prediction'ı karıştırmak, ya da farklı warp'ların farklı dallarını divergence saymak.</li>
   <li><code>#pragma unroll</code>'u döngüden birkaç satır önce yazmak: hemen önünde olmalı.</li>
 </ul>
-<h3>Quiz için açık uçlu sorular</h3>
+<h3>Final için açık uçlu sorular</h3>
 <p><strong>1.</strong> Hata kontrolü olmayan <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code> çağrısını tamamlayın. Peek ve Get farkı nedir?</p>
 <div class="hint"><p>Önce önceki hataları temizle/kontrol et (<code>cudaGetLastError()</code>), başlat, <code>cudaError_t launch = cudaGetLastError();</code> (konfigürasyon/parametre hatası), sonra <code>cudaError_t run = cudaDeviceSynchronize();</code> (yürütme hatası); ikisi de <code>cudaSuccess</code> değilse raporla ve dur. Get okur ve sıfırlar, Peek sıfırlamaz.</p></div>
 <p><strong>2.</strong> 128 thread'lik 1D blokta <code>if (threadIdx.x &lt; 40)</code> ve <code>if (threadIdx.x % 4 == 0)</code> için kaç warp diverge olur?</p>

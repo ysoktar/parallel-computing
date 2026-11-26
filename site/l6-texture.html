@@ -32,7 +32,7 @@
 <ul>
   <li>GPU'nun grafik için kullandığı texture donanımının bir alt kümesi. Texture <strong>salt okunur</strong>; surface yazılabilen texture gibidir.</li>
   <li>Cihaz belleğinde durur, <strong>texture cache</strong>'te önbelleklenir: fetch sadece cache miss'te bir cihaz belleği okumasına mal olur. Cache <strong>2D uzamsal yerellik</strong> için optimize: 2D'de birbirine yakın adresleri okuyan warp en iyi performansı alır. Sabit gecikmeli akış için tasarlanmıştır: hit DRAM trafiğini azaltır, gecikmeyi değil.</li>
-  <li>Faydalar: global/constant'ın erişim desenine uymayan ama yerelliği olan okumalarda daha yüksek bant genişliği; adres hesapları kernel dışında özel birimlerde (daha az register); paketlenmiş verinin tek işlemde ayrı değişkenlere dağıtılması; 8/16-bit tamsayıların isteğe bağlı olarak [0, 1] / [-1, 1] aralığında float'a çevrilmesi; ücretsiz doğrusal filtreleme ve sınır dışı işleme.</li>
+  <li>Faydalar: global/constant'ın erişim desenine uymayan ama yerelliği olan okumalarda daha yüksek bant genişliği; adres hesapları kernel dışında özel birimlerde (daha az register); paketlenmiş verinin (ör. bir pikselin RGBA bileşenleri) tek okumada ayrı değişkenlere dağıtılması; 8/16-bit tamsayıların isteğe bağlı olarak [0, 1] / [-1, 1] aralığında float'a çevrilmesi; ücretsiz doğrusal filtreleme ve sınır dışı işleme.</li>
   <li>Dezavantajlar: yazılamaz; doğrusal belleği texturing için bir <strong>CUDA array</strong>'e kopyalamak gerekir ve bu zaman alır: sonraki hesap buna değmeli.</li>
 </ul>
 <h3>Texture object</h3>

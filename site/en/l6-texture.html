@@ -32,7 +32,7 @@
 <ul>
   <li>A subset of the texturing hardware the GPU uses for graphics. Textures are <strong>read-only</strong>; a surface is like a texture that can be written.</li>
   <li>Resides in device memory, cached in the <strong>texture cache</strong>: a fetch costs a device memory read only on a cache miss. The cache is optimised for <strong>2D spatial locality</strong>: a warp reading addresses close together in 2D gets the best performance. Designed for streaming with constant latency: a hit reduces DRAM traffic, not latency.</li>
-  <li>Benefits: higher bandwidth for reads that do not follow global/constant access patterns but have locality; addressing done outside the kernel by dedicated units (fewer registers); packed data broadcast to separate variables in one operation; optional conversion of 8/16-bit integers to floats in [0, 1] / [-1, 1]; free linear filtering and out-of-bounds handling.</li>
+  <li>Benefits: higher bandwidth for reads that do not follow global/constant access patterns but have locality; addressing done outside the kernel by dedicated units (fewer registers); packed data (e.g. a pixel's RGBA components) delivered to separate variables in one read; optional conversion of 8/16-bit integers to floats in [0, 1] / [-1, 1]; free linear filtering and out-of-bounds handling.</li>
   <li>Drawbacks: cannot be written; linear memory must be copied to a <strong>CUDA array</strong> for texturing, which takes time: the following computation should be worth it.</li>
 </ul>
 <h3>Texture object</h3>

@@ -26,9 +26,9 @@
 </div>
 
 <h2>Ayrıştırma desenleri</h2>
-<p>Mattson ve diğerlerinin altı deseni; fonksiyonel ve veri ayrıştırmasına <strong>veri akışı</strong> (data flow) ayrıştırması eklenir. Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
+<p>Mattson, Sanders ve Massingill'in <em>Patterns for Parallel Programming</em> kitabındaki altı ayrıştırma deseni. PCAM'daki fonksiyonel ve veri ayrıştırmasına üçüncü bir tür eklenir: <strong>veri akışı</strong> (data flow) ayrıştırması (pipeline, olay tabanlı). Desenler arasında kesin sınır yok; bir problem birkaç şekilde ayrıştırılabilir.</p>
 <h3>Task parallelism</h3>
-<p>Modüller farklı düğümlere: ör. oyun döngüsündeki <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> ayrı görevler, her turun sonunda <code>barrier()</code>. Karmaşık bağımlılık yoksa çalışır ama <strong>ölçeklenmez</strong>: düğüm sayısı görev sayısını aşamaz.</p>
+<p>Programın farklı modülleri (fonksiyonları) farklı düğümlere (işlemci ya da çekirdek) verilir: ör. oyun döngüsündeki <code>readUserInput</code>, <code>drawScreen</code>, <code>playSounds</code>, <code>strategize</code> ayrı görevler, her turun sonunda <code>barrier()</code>. Karmaşık bağımlılık yoksa çalışır ama <strong>ölçeklenmez</strong>: düğüm sayısı görev sayısını aşamaz.</p>
 <h3>Divide-and-conquer</h3>
 <pre class="code" data-run="mergesort_dnc.cpp" data-run-note="Sözde kod; çalışan hâli: iki yarısı ayrı görevlerde (std::async) sıralanan merge sort.">
 DnC(A) {
@@ -40,14 +40,14 @@ DnC(A) {
 </pre>
 <ul>
   <li>Örnek: merge sort. <strong>Bağımlılık grafı, çağrı grafıyla aynı değildir.</strong> 8 elemanlı merge sort'ta en fazla eşzamanlılık 4 görev (boyutu 1 olan çağrılar iş yapmaz).</li>
-  <li>Görevler çalışma zamanında dinamik üretilir (GPU'larda uzun süre imkânsızdı). Belli bir boyuta ya da işlemci sayısına ulaşınca durulur; ebeveyn görev boş beklemek yerine alt problemlerden birini kendisi çözebilir (N − 1 yeni görev).</li>
+  <li>Görevler çalışma zamanında dinamik üretilir (GPU'da kernel içinden yeni iş başlatmak uzun süre mümkün değildi). Alt problemler belli bir boyuta inince ya da görev sayısı işlemci sayısına ulaşınca bölme durur. Ebeveyn görev boş beklemek yerine alt problemlerden birini kendisi çözebilir: N parçaya bölerken N − 1 yeni görev yeter.</li>
 </ul>
 <h3>Geometrik ayrıştırma</h3>
 <p>Diziler/matrisler bir veya daha fazla boyut boyunca bölünüp görevlere atanır. Veriler arası bağımlılık yoksa <strong>embarrassingly parallel</strong>. Örnek: 5 noktalı Laplace filtresi <code>[0 1 0; 1 −4 1; 0 1 0]</code>: her çıktı için 5 değer gerekir → bölge sınırlarında komşu (halo) satırları gerekir. GPU'daki blok/karo yaklaşımı budur.</p>
 <h3>Uygula: veri bölüşümü ve halo</h3>
 <div data-learning="halo"></div>
 <h3>Özyinelemeli veri ayrıştırması</h3>
-<p>Ağaç, liste, graf gibi yapılar elemanlarına ayrıştırılıp düğümlere atanır; algoritma değiştirilebilir (dinamik programlamaya benzer). Örnek: kısmi toplamlar (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: önce 2'li, sonra 4'lü, 8'li grupların toplamları.</p>
+<p>Ağaç, liste, graf gibi yapılar elemanlarına ayrıştırılıp düğümlere atanır. Seri algoritma çoğu zaman olduğu gibi paralelleşmez; adım adım birleşen bir biçime dönüştürülür. Örnek: kısmi toplamlar (prefix sum) <code>S[i] = S[i−1] + A[i]</code>: önce 2'li, sonra 4'lü, 8'li grupların toplamları.</p>
 <h3>Pipeline</h3>
 <ul>
   <li>Montaj hattı: her aşama veriye bir işlem uygular. CPU komut pipeline'ı, sinyal işleme (FFT → katsayı işleme → ters FFT), grafik pipeline'ı, Unix kabuk boruları.</li>
@@ -90,7 +90,7 @@ DnC(A) {
     <tr><td><strong>Loop parallelism</strong></td><td>Mevcut seri kodun zamanı dolduran döngülerini paralelleştir (OpenMP direktifleri). Az emek, genelde az kazanç.</td></tr>
   </tbody>
 </table>
-<p>Platformlar desen dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
+<p>Platformlar desen dayatır: MPI (dağıtık bellekte mesajlaşma kütüphanesi) → SPMD/MPMD, OpenMP (paylaşımlı bellekte döngüleri paralelleştiren direktifler) → loop parallelism, CUDA → SPMD (her thread aynı kernel, farklı ID).</p>
 
 <h2>Kendini sına</h2>
 <div class="quiz" data-answer="2">

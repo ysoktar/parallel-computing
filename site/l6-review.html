@@ -24,12 +24,12 @@
   <li>Kernel başlatma asenkrondur: süre ölçerken <code>cudaDeviceSynchronize()</code>; ilk çağrı başlatma maliyetini içerir.</li>
   <li>Register ve shared sınırları SM başına thread/blok sayısını belirler; aşırı register → spill → local memory (global kadar yavaş).</li>
   <li>Global: coalescing (32/64/128 B hizalı segmentler), 2D'de pitch. Local: değişken indeksli diziler ve spill.</li>
-  <li>Shared: 32 bank, bank = kelime indeksi % 32; aynı bank'a farklı kelimeler = conflict; <code>s[stride·tid]</code> için derece EBOB(stride, 32); sütun okumada <code>[32][33]</code> padding.</li>
+  <li>Shared: 32 bank, bank = kelime indeksi % 32; aynı bank'a farklı kelimeler = conflict; <code>s[stride·threadIdx.x]</code> için derece EBOB(stride, 32); sütun okumada <code>[32][33]</code> padding.</li>
   <li>Constant: herkes <strong>aynı</strong> adresi okursa en iyi (yayın). Texture: 2D yerellik, interpolasyon, sınır işleme; salt okunur, CUDA array gerekir.</li>
 </ul>
 <h3>Sık yapılan hatalar</h3>
 <ul>
-  <li>Coalescing ile bank conflict'i karıştırmak: coalescing <strong>global</strong> bellekte ardışık adreslerle ilgilidir; bank conflict <strong>shared</strong> bellekte aynı bank'a düşen farklı kelimelerle. <code>s[2*tid]</code> global'de yarı verim, shared'da 2-yollu conflict demektir.</li>
+  <li>Coalescing ile bank conflict'i karıştırmak: coalescing <strong>global</strong> bellekte ardışık adreslerle ilgilidir; bank conflict <strong>shared</strong> bellekte aynı bank'a düşen farklı kelimelerle. <code>s[2*threadIdx.x]</code> global'de yarı verim, shared'da 2-yollu conflict demektir.</li>
   <li>Pitch'i eleman sayısı sanmak: pitch <strong>bayttır</strong>, satır başı <code>(char*)p + r*pitch</code>.</li>
   <li>Constant belleğe ardışık thread'lerle ardışık adres okutmak: constant için bu kötü desen (32 ayrı istek).</li>
   <li><code>-code=sm_70</code> ile derlenen ikilinin 8.x GPU'da çalışacağını sanmak (major değişince çalışmaz, PTX yoksa JIT de yok).</li>

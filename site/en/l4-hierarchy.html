@@ -48,7 +48,7 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
     C[i] = A[i] + B[i];
 }
 </pre>
-<p class="small muted">The slides' <code>blockDimx.x</code> is a typo for <code>blockDim.x</code>.</p>
+<p class="small muted">The <code>blockDimx.x</code> in the slides' index formula is a typo for <code>blockDim.x</code>.</p>
 
 <h3>Apply: trace indices across a CUDA grid</h3>
 <div data-learning="cuda-index"></div>
@@ -63,9 +63,9 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
 </ul>
 <h3>Thread block clusters (compute 9.0)</h3>
 <ul>
-  <li>An optional new level: thread → block → <strong>cluster</strong>. Just as a block's threads are guaranteed to be co-scheduled on one SM, a cluster's blocks are co-scheduled on one <strong>GPC</strong> (GPU Processing Cluster). (Ampere: 2 SMs = 1 TPC, 8 TPCs = 1 GPC, 8 GPCs = the full GPU.)</li>
+  <li>An optional new level: thread → block → <strong>cluster</strong>. Just as a block's threads are guaranteed to be co-scheduled on one SM, a cluster's blocks are co-scheduled on one <strong>GPC</strong> (GPU Processing Cluster). (On Ampere: 2 SMs = 1 TPC (Texture Processing Cluster), 8 TPCs = 1 GPC, 8 GPCs = the full GPU.)</li>
   <li>Largest portable cluster: 8 blocks. At compile time with <code>__cluster_dims__(X,Y,Z)</code> or at run time with <code>cudaLaunchKernelEx</code>. The grid dimension must be a multiple of the cluster size.</li>
-  <li>Blocks in a cluster can synchronise in hardware with <code>cluster.sync()</code> and access <strong>distributed shared memory</strong>.</li>
+  <li>Blocks in a cluster can synchronise in hardware with <code>cluster.sync()</code> and access <strong>distributed shared memory</strong>, i.e. the shared memory of the other blocks in the cluster.</li>
 </ul>
 
 <h2>Memory hierarchy</h2>
@@ -75,10 +75,10 @@ __global__ void MatAdd(float* A, float* B, float* C) {   // <<<1, dim3(N, N)>>>
   <li>All threads access the same <strong>global</strong> memory.</li>
   <li>Two additional read-only memories: <strong>constant</strong> and <strong>texture</strong>. Global, constant and texture persist across kernel launches.</li>
 </ul>
-<p>Details: <a href="l5-tiling.html#cuda-memory-types">L5 memory types</a>, <a href="l6-cuda-memory.html">L6</a>.</p>
+<p>Details: <a href="l5-tiling.html#cuda-memory-types">CUDA memory types on 5.3</a>, <a href="l6-memory-map.html">each memory in detail on 6.2–6.4</a>.</p>
 
 <h2>Compute capability</h2>
-<p>Major.minor. The same major = the same core architecture (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = incremental improvement, new features. Newer architecture, better CUDA capabilities.</p>
+<p>Compute capability is a version number of the form <strong>major.minor</strong> (e.g. 8.6) that tells which CUDA features a GPU supports. The same major = the same core architecture (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Lovelace, 9 Hopper…); minor = incremental improvement, new features. Newer architecture, better CUDA capabilities.</p>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

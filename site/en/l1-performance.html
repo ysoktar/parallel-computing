@@ -33,7 +33,7 @@ speedup = N  →  linear speedup, 100% efficiency</div>
   <li>Times depend on the programmer's skill, the compiler and its switches, the OS, the filesystem, the time of day.</li>
   <li><strong>Golden rules:</strong> (1) test the sequential and parallel programs on identical hardware/software under similar conditions; (2) the sequential program should be the <strong>fastest</strong> known solution.</li>
   <li>Speedup may vary with the input: report averages (or avg./max./min.) over many inputs of the same size.</li>
-  <li>Speedup answers "can it be accelerated?", efficiency "with a modest amount of resources?". Linear speedup is ideal; coordination (messages, shared resources) eats CPU time.</li>
+  <li>Speedup answers "can it be accelerated?", efficiency "with a modest amount of resources?". Linear speedup is ideal but rarely reached: coordinating the threads (sending messages, waiting for a shared resource) costs extra CPU time.</li>
 </ul>
 
 <h2>Amdahl's law</h2>
@@ -42,8 +42,8 @@ speedup = N  →  linear speedup, 100% efficiency</div>
 N → ∞:  speedup → 1 / (1 − α)
 α = 0.9  →  speedup &lt; 10, however many processors</div>
 <ul>
-  <li>"An army of ants versus a herd of elephants": if CPU A is r = T<sub>B</sub>/T<sub>A</sub> times faster than B, the best speedup with N<sub>B</sub> cheap CPUs is <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. If <code>r ≥ 1/(1−α)</code> the speedup never exceeds 1 (α = 90%, r = 10: one expensive CPU is better).</li>
-  <li>But reality disagrees: every Top500 supercomputer is built from thousands to millions of off-the-shelf cores. Where is the flaw?</li>
+  <li>"An army of ants versus a herd of elephants" (many cheap processors or a few expensive ones?): if the expensive CPU A is r = T<sub>B</sub>/T<sub>A</sub> times faster than B, the best speedup with N<sub>B</sub> cheap CPUs is <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. If <code>r ≥ 1/(1−α)</code> the speedup never exceeds 1 (α = 90%, r = 10: one expensive CPU is better).</li>
+  <li>But reality disagrees: every machine on the Top500 list of the world's fastest computers is built from thousands to millions of off-the-shelf cores. Where is the flaw? The answer is below, in Gustafson-Barsis's law: real problems do not stay a fixed size.</li>
 </ul>
 
 <h3>Intuition: Amdahl with numbers</h3>
@@ -67,9 +67,9 @@ N → ∞:  speedup → 1 / (1 − α)
 <div class="formula-box">t_seq   = (1 − α)T + N·α·T
 speedup = t_seq / T = (1 − α) + N·α
 efficiency = speedup / N = (1 − α)/N + α</div>
-<p>It has its flaw too: it assumes zero communication cost. Even for "embarrassingly parallel" problems communication becomes decisive as N grows. In practice <strong>efficiency above 90%</strong> is a worthwhile achievement.</p>
+<p>Gustafson's law has its flaw too: it assumes zero communication cost. Even for "embarrassingly parallel" problems communication becomes decisive as N grows. In practice <strong>efficiency above 90%</strong> is a worthwhile achievement.</p>
 <div class="callout example">
-  <p>α = 0.9, N = 10. <strong>Amdahl:</strong> 1 / (0.1 + 0.09) = 1/0.19 ≈ 5.26. <strong>Gustafson:</strong> 0.1 + 9 = 9.1. The difference is whether the problem is fixed (Amdahl, strong scaling) or grows with N (Gustafson, weak scaling).</p>
+  <p>The same program under both laws: α = 0.9, N = 10. <strong>Amdahl:</strong> 1 / (0.1 + 0.09) = 1/0.19 ≈ 5.26. <strong>Gustafson:</strong> 0.1 + 9 = 9.1. The difference is whether the problem is fixed (Amdahl, strong scaling) or grows with N (Gustafson, weak scaling).</p>
 </div>
 
 <div class="callout key">

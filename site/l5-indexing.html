@@ -45,7 +45,7 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
     Pd[row * width + col] = sum;
 }
 </pre>
-<p>Burada <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Kendi konfigürasyonunuzla deneyin: <a href="lab.html">laboratuvar</a>.</p>
+<p>Bu kernel'de <code>TILE_WIDTH = blockDim.x = blockDim.y</code> (kare bloklar). Kendi konfigürasyonunuzla deneyin: <a href="lab.html">laboratuvar</a>.</p>
 <div class="callout discuss">
   <p><strong>Slayt 40'ın soruları.</strong> (1) Blokların çalışma sırasını zorlayabilir miyiz? <strong>Hayır.</strong> (2) Küçük ID'li bloğun büyük ID'liden önce başlayacağını varsayabilir miyiz? <strong>Hayır.</strong> (3) Bunun ölçeklenebilirlikle ilgisi? Bloklar bağımsız olduğu için çalışma zamanı onları istediği SM'ye, istediği sırada (round-robin) dağıtabilir; aynı program 2 SM'li GPU'da da 80 SM'li GPU'da da çalışır.</p>
 </div>
@@ -72,7 +72,7 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
   <li><strong>Bloktaki tüm thread'ler tarafından çalıştırılmalı.</strong> <code>if/else</code> içinde kullanmak tanımsız davranış; tek istisna koşulun bloktaki tüm thread'ler için aynı sonucu vermesi.</li>
   <li>Gerçekte thread'leri değil, <strong>warp'ları</strong> senkronize eder.</li>
   <li>Bekleme süreleri uzamasın diye çalışma zamanı bir bloğun <strong>tüm</strong> thread'lerini aynı SM'ye birlikte atar.</li>
-  <li>Bloklar arası senkronizasyon CUDA 9 öncesi neredeyse imkânsızdı (<code>__threadfence()</code> ile hileler: thread'i önceki shared/global yazmaları diğerlerine görünür olana kadar durdurur). CUDA 9 (Pascal) ile <strong>cooperative groups</strong>.</li>
+  <li>Bloklar arası senkronizasyon CUDA 9 öncesi neredeyse imkânsızdı (<code>__threadfence()</code> ile hileler: thread'i önceki shared/global yazmaları diğerlerine görünür olana kadar durdurur). CUDA 9 (Pascal) ile gelen <strong>cooperative groups</strong> bloklar arası, hatta bütün grid düzeyinde senkronizasyonu mümkün kılar.</li>
 </ul>
 
 <h2>Blok atama, warp'lar, latency hiding</h2>
@@ -81,7 +81,7 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
   <li>SM başına izlenebilen thread sayısı da sınırlı: GT200'de SM başına 1024 thread (ör. 4 × 256 veya 8 × 128) → 30 · 1024 = 30.720 yerleşik thread.</li>
   <li><strong>Warp:</strong> ardışık <code>threadIdx</code>'li 32 thread; SM'de zamanlama birimi. Thread 0–31 ilk warp, 32–63 ikinci… Eşleme deterministik. 256 thread'lik blok = 8 warp; SM'de 3 blok = 24 warp.</li>
   <li>"CUDA kodu yazmak için warp'ı bilmeniz gerekmez; <strong>yüksek performanslı</strong> CUDA kodu yazmak için gerekir."</li>
-  <li><strong>Latency hiding:</strong> bir warp uzun gecikmeli bir işlemin (global bellek erişimi, pipeline'lı FP aritmetiği, dallanma) sonucunu beklerken seçilmez; hazır olan başka bir warp çalıştırılır. Seçim boş zaman eklemez: <strong>sıfır maliyetli thread zamanlaması</strong>. Yeterince warp varsa donanım her an çalıştıracak bir warp bulur.</li>
+  <li><strong>Latency hiding:</strong> bir warp uzun gecikmeli bir işlemin (global bellek erişimi, pipeline'lı FP aritmetiği, dallanma) sonucunu beklerken seçilmez; hazır olan başka bir warp çalıştırılır. Warp değiştirmek ek süre almaz: <strong>sıfır maliyetli thread zamanlaması</strong>. Yeterince warp varsa donanım her an çalıştıracak bir warp bulur.</li>
   <li>Bu yüzden GPU'lar büyük önbelleklere ve dallanma tahminine CPU'lar kadar alan ayırmaz; o alanı FP birimlerine verir.</li>
 </ul>
 <div class="callout example">

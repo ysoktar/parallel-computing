@@ -45,7 +45,7 @@ __global__ void MatMulKernel(float* Md, float* Nd, float* Pd, int width)
     Pd[row * width + col] = sum;
 }
 </pre>
-<p>Here <code>TILE_WIDTH = blockDim.x = blockDim.y</code>. Try your own configuration: <a href="lab.html">lab</a>.</p>
+<p>In this kernel <code>TILE_WIDTH = blockDim.x = blockDim.y</code> (square blocks). Try your own configuration: <a href="lab.html">lab</a>.</p>
 <div class="callout discuss">
   <p><strong>The questions of slide 40.</strong> (1) Can we enforce an execution order on blocks? <strong>No.</strong> (2) Can we assume a block with a smaller ID starts before one with a larger ID? <strong>No.</strong> (3) How does this relate to scalability? Because blocks are independent, the runtime can distribute them to any SM in any order (round-robin); the same program runs on a 2-SM GPU and on an 80-SM GPU.</p>
 </div>
@@ -72,7 +72,7 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
   <li><strong>It must be executed by all threads of the block.</strong> Using it in <code>if/else</code> is undefined behaviour; the only exception is when the condition evaluates the same for all threads of the block.</li>
   <li>It actually synchronises <strong>warps</strong>, not threads.</li>
   <li>To keep waiting times short, the runtime assigns <strong>all</strong> threads of a block to the same SM together.</li>
-  <li>Synchronising across blocks was almost impossible before CUDA 9 (hacks with <code>__threadfence()</code>, which halts a thread until its previous shared/global writes are visible to others). With CUDA 9 (Pascal): <strong>cooperative groups</strong>.</li>
+  <li>Synchronising across blocks was almost impossible before CUDA 9 (hacks with <code>__threadfence()</code>, which halts a thread until its previous shared/global writes are visible to others). <strong>Cooperative groups</strong>, introduced with CUDA 9 (Pascal), make synchronisation across blocks, even across the whole grid, possible.</li>
 </ul>
 
 <h2>Block assignment, warps, latency hiding</h2>
@@ -81,7 +81,7 @@ if (row &lt; height &amp;&amp; col &lt; width)  A[row·width + col] = …</div>
   <li>The number of threads an SM can track is limited too: 1024 per SM on the GT200 (e.g. 4 × 256 or 8 × 128) → 30 · 1024 = 30,720 resident threads.</li>
   <li><strong>Warp:</strong> 32 threads with consecutive <code>threadIdx</code>; the unit of scheduling on an SM. Threads 0–31 are the first warp, 32–63 the second… The mapping is deterministic. A 256-thread block = 8 warps; 3 blocks on an SM = 24 warps.</li>
   <li>"You don't need to know about warps to write CUDA code; you DO need to know about them to write <strong>high-performance</strong> CUDA code."</li>
-  <li><strong>Latency hiding:</strong> a warp waiting for the result of a long-latency operation (global memory access, pipelined FP arithmetic, branches) is not selected; another ready warp runs instead. The selection adds no idle time: <strong>zero-overhead thread scheduling</strong>. With enough warps the hardware always finds one to run.</li>
+  <li><strong>Latency hiding:</strong> a warp waiting for the result of a long-latency operation (global memory access, pipelined FP arithmetic, branches) is not selected; another ready warp runs instead. Switching warps costs no extra time: <strong>zero-overhead thread scheduling</strong>. With enough warps the hardware always finds one to run.</li>
   <li>That is why GPUs do not devote as much area to large caches and branch prediction as CPUs; they give that area to FP units.</li>
 </ul>
 <div class="callout example">

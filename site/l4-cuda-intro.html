@@ -27,28 +27,28 @@
 
 <div class="callout why" data-label="Büyük resim">
   <p><strong>CPU bir avuç usta, GPU binlerce çıraktır.</strong> Usta (CPU çekirdeği) karmaşık işleri hızlı bitirir; büyük önbellek ve dallanma tahmini sayesinde pek beklemez. Çıraklar (GPU thread'leri) tek tek yavaştır, ama 32'lik gruplar (<strong>warp</strong>) hâlinde aynı komutu farklı veriye uygular. Ustabaşı (SM) hazır olan grubu çalıştırır: biri bellek beklerken diğeri çalışır, bekleme gizlenir.</p>
-  <p>Bu derste CUDA'nın iskeleti kuruluyor: <strong>host</strong> (CPU) işi hazırlar ve <strong>device</strong>'a (GPU) gönderir; iş, <strong>grid → blok → thread</strong> hiyerarşisinde binlerce thread'e bölünür; her thread kendi verisini <code>blockIdx</code>/<code>threadIdx</code> ile bulur. Bloklar bağımsızdır, bu yüzden aynı program 2 SM'li GPU'da da 100 SM'li GPU'da da çalışır.</p>
+  <p>Bu derste CUDA'nın iskeleti kuruluyor: <strong>host</strong> (CPU) işi hazırlar ve <strong>device</strong>'a (GPU) gönderir; iş, <strong>grid → blok → thread</strong> hiyerarşisinde binlerce thread'e bölünür; her thread kendi verisini <code>blockIdx</code>/<code>threadIdx</code> ile bulur. Bloklar bağımsızdır, bu yüzden aynı program 2 SM'li GPU'da da 100 SM'li GPU'da da çalışır. GPU, SIMT ve genel yaklaşım bu sayfada; grid → blok → thread hiyerarşisi <a href="l4-hierarchy.html">4.2</a>'de.</p>
 </div>
 
 <h2>GPU ve CUDA</h2>
 <ul>
-  <li><strong>GPU</strong>: görsel işler (2D/3D grafik, oyun, CAD, efektler) için tasarlanmış; tüketici pazarının baskısıyla çok yüksek FP throughput ve bellek bant genişliği. 2001 civarından beri programlanabilir.</li>
-  <li><strong>CUDA</strong> (Compute Unified Device Architecture): GPU'yu programlanabilir yapan donanım + yazılım; C, C++, Fortran türleri. CUDA C/C++ C'yi küçük bir anahtar kelime grubuyla genişletir. <strong>GPGPU</strong>: GPU'da genel amaçlı hesap (CUDA / OpenCL).</li>
-  <li>CUDA öncesi: veriler OpenGL yapılarına sarılıp grafik işlemi taklit edilirdi; grafik işlemlerinin çoğu FP matris/vektör işlemi olduğu için.</li>
+  <li><strong>GPU</strong>: görsel işler (2D/3D grafik, oyun, CAD, efektler) için tasarlanmış; oyun pazarının büyüklüğü sayesinde ucuz ama çok yüksek FP throughput'u ve bellek bant genişliği var. Çizim aşamaları (shader'lar) 2001 civarından beri programlanabilir.</li>
+  <li><strong>CUDA</strong> (Compute Unified Device Architecture): GPU'yu programlanabilir yapan donanım + yazılım; C, C++ ve Fortran için sürümleri var. CUDA C/C++ C'yi küçük bir anahtar kelime grubuyla genişletir. <strong>GPGPU</strong>: GPU'da genel amaçlı hesap (CUDA / OpenCL).</li>
+  <li>CUDA öncesi: genel bir hesap yapmak için veri, OpenGL'in (bir grafik API'si) doku ve köşe yapılarına sarılır, hesap bir çizim işlemiymiş gibi yaptırılırdı. Bu işe yarıyordu, çünkü grafik işlemlerinin çoğu FP matris/vektör işlemidir.</li>
   <li>GPU çekirdeklerine <strong>Streaming Multiprocessor (SM)</strong> denir: skaler işlemciler (SP), yerel önbellek ve özel fonksiyon birimlerinin birleşimi. SM thread bloklarını, SP bloktaki bir thread'i çalıştırır.</li>
 </ul>
 <h3>CPU–GPU farkının nedeni</h3>
 <div class="two-col">
   <div><p><strong>CPU:</strong> çok karmaşık kontrol mantığı + büyük çok seviyeli önbellekler. Rastgele erişimli, bağımsız görevli paralel yürütme için ideal; gecikme odaklı.</p></div>
-  <div><p><strong>GPU:</strong> veri düzeyi paralellik. Kontrol mantığı basit, önbellek küçük → daha çok transistör hesaba. Bellek türleri daha hızlı ve optimize. SIMD/SIMT yürütmeye uygun; throughput odaklı.</p></div>
+  <div><p><strong>GPU:</strong> veri düzeyi paralellik. Kontrol mantığı basit, önbellek küçük → daha çok transistör hesaba. Bellek yolu daha geniş ve hızlıdır (yüksek bant genişlikli bellek). SIMD/SIMT yürütmeye uygun; throughput odaklı.</p></div>
 </div>
-<p>Mimari örnekleri: ayrık GPU (PCIe üzerinden), bellek denetleyicisi CPU'ya entegre (AMD Athlon 64, Intel Nehalem), ve CPU+GPU tek yongada (AMD APU; hUMA ile ortak bellek uzayı ve önbellek tutarlılığı).</p>
+<p>CPU ile GPU'nun bağlanış biçimleri: ayrık GPU (ayrı kart, PCIe veri yolu üzerinden), bellek denetleyicisi CPU yongasına taşınmış sistemler (AMD Athlon 64, Intel Nehalem; GPU yine PCIe'de) ve CPU+GPU tek yongada (AMD APU; AMD'nin hUMA'sı ile ortak bellek uzayı ve önbellek tutarlılığı).</p>
 
 <h2>SIMD ve SIMT</h2>
 <ul>
   <li><strong>SIMD</strong> (Single Instruction Multiple Data): aynı komut birçok veri elemanına paralel uygulanır (vektör işlemciler).</li>
   <li><strong>SIMT</strong> (Single Instruction Multiple Thread): aynı komut birçok thread tarafından paralel çalıştırılır. SIMD'nin daha esnek hâli. <strong>CUDA SIMT'dir</strong>: thread'lere farklı işler verebilirsiniz, ama <strong>thread divergence</strong> arttıkça performans düşer.</li>
-  <li>Aynı komut herkese uygulandığı için akış kontrolü basit kalır. Aritmetik yoğunluk yüksekse (komut / bellek erişimi), bellek gecikmesi büyük önbellekler yerine hesapla gizlenir.</li>
+  <li>Aynı komut herkese uygulandığı için akış kontrolü basit kalır. Aritmetik yoğunluk (bellek erişimi başına düşen hesap komutu) yüksekse, bellek beklemeleri büyük önbellekler yerine başka thread'lerin hesaplarıyla gizlenir.</li>
   <li>Veri paralel programlama: veri elemanları → paralel thread'ler. 3D render, görüntü/video işleme, kodlama, stereo görme, nesne tanıma, fizik simülasyonu, finans, biyoloji…</li>
 </ul>
 
@@ -77,20 +77,20 @@ __global__ void uniform(float* a) {
     <tr><td><code>uniform</code></td><td>32 thread'in hepsi aynı kola gider</td><td>tek tur</td></tr>
   </tbody>
 </table>
-<p>Kural: koşulu <strong>warp boyunca aynı</strong> olacak şekilde yazmaya çalışın (ör. <code>threadIdx.x / 32</code>'ye göre). Divergence yanlış sonuç vermez, sadece yavaşlatır. Aynı nedenle <code>__syncthreads()</code>'i bazı thread'lerin girdiği bir <code>if</code>'e koymak tanımsızdır (L5).</p>
+<p>Kural: koşulu <strong>warp boyunca aynı</strong> olacak şekilde yazmaya çalışın (ör. <code>threadIdx.x / 32</code>'ye göre). Divergence yanlış sonuç vermez, sadece yavaşlatır. Aynı nedenle <code>__syncthreads()</code>'i bazı thread'lerin girdiği bir <code>if</code>'e koymak tanımsızdır (<a href="l5-indexing.html">5.2</a>).</p>
 <h2>Neden çok çekirdek?</h2>
 <ul>
-  <li><strong>Moore yasası</strong>: entegre devredeki transistör sayısı ~2 yılda iki katına çıkar (hız azalıyor).</li>
+  <li><strong>Moore yasası</strong>: entegre devredeki transistör sayısı ~2 yılda iki katına çıkar (son yıllarda bu artış yavaşlıyor).</li>
   <li>Frekansı artırmak artık mümkün değil: güç frekansın küpüyle ölçeklenir (P ∝ f³), yüksek saat sinyalini üretmek ve dağıtmak zor; ısı ve dalga şekli bozulmaları.</li>
   <li><strong>Çok çekirdek</strong>: düşük frekansta daha güç verimli; birden çok işlemi aynı anda çalıştırarak performans. Bedeli: performans için <strong>paralelleştirilmiş yazılım</strong> gerekir.</li>
-  <li>Bazı işler doğası gereği seridir; CPU onlara daha uygun. Her işte en iyi tek bir işlemci yok → <strong>heterojen</strong> çok çekirdekli platformlar (OpenCL burada devreye girer). Mobil/gömülü sistemlerde güç sınırları da çok çekirdeği zorunlu kılar.</li>
+  <li>Bazı işler doğası gereği seridir; CPU onlara daha uygun. Her işte en iyi tek bir işlemci yok → <strong>heterojen</strong> çok çekirdekli platformlar (OpenCL, CPU, GPU ve FPGA gibi farklı işlemcileri tek bir API ile programlamak için). Mobil/gömülü sistemlerde güç sınırları da çok çekirdeği zorunlu kılar.</li>
 </ul>
 
 <h2>Genel CUDA yaklaşımı</h2>
 <ol>
   <li>Kodu analiz et, darboğazları bul (profiling): toplam sürenin büyük kısmını alan, hesap yoğun ve/veya bant genişliği isteyen kısımlar (disk, kullanıcı girişi, ağ bekleme değil).</li>
   <li>Veri paralel kısımları bul (bazı algoritmalar seri: Newton yöntemi, çoğu sıkıştırma algoritması).</li>
-  <li>Gerekli girdileri CPU belleğinden GPU belleğine kopyala (PCIe; istisna: zero-copy, birleşik DRAM).</li>
+  <li>Gerekli girdileri CPU belleğinden GPU belleğine kopyala (PCIe veri yolu üzerinden; istisnalar: GPU'nun CPU belleğini doğrudan okuduğu zero-copy ve CPU ile GPU'nun aynı DRAM'i paylaştığı sistemler).</li>
   <li>GPU'da hesapla: iyi bir <strong>thread → veri eşlemesi</strong> bul, kernel'leri yaz.</li>
   <li>Sonuçları CPU'ya geri kopyala.</li>
   <li>GPU sonuçlarının CPU sonuçlarıyla (tolerans içinde) eşleştiğini kontrol et. Dikkat: FP işlemleri <strong>değişmeli ama birleşmeli değil</strong>: <code>(a + b) + c ≠ a + (b + c)</code> olabilir.</li>

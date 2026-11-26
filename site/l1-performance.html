@@ -33,7 +33,7 @@ speedup = N  →  doğrusal (linear) speedup, %100 verim</div>
   <li>Süreler programcının becerisine, derleyiciye ve bayraklarına, işletim sistemine, dosya sistemine, günün saatine bağlıdır.</li>
   <li><strong>Altın kurallar:</strong> (1) seri ve paralel program aynı donanım/yazılımda, benzer koşullarda test edilmeli; (2) seri program, problemin bilinen <strong>en hızlı</strong> çözümü olmalı.</li>
   <li>Speedup girdiye göre değişebilir: aynı boyutta birçok girdiyle ortalama (veya ort./maks./min.) raporlanır.</li>
-  <li>Speedup "hızlandırılabilir mi?" sorusunu, verim "kaynakları verimli kullanarak mı?" sorusunu cevaplar. Doğrusal speedup idealdir; koordinasyon (mesaj, paylaşılan kaynak) CPU zamanı yer.</li>
+  <li>Speedup "hızlandırılabilir mi?" sorusunu, verim "kaynakları verimli kullanarak mı?" sorusunu cevaplar. Doğrusal speedup idealdir ama nadiren tutar: thread'lerin koordinasyonu (mesaj göndermek, paylaşılan bir kaynağı beklemek) ek CPU zamanı harcar.</li>
 </ul>
 
 <h2>Amdahl yasası</h2>
@@ -42,8 +42,8 @@ speedup = N  →  doğrusal (linear) speedup, %100 verim</div>
 N → ∞:  speedup → 1 / (1 − α)
 α = 0,9  →  speedup &lt; 10, kaç işlemci olursa olsun</div>
 <ul>
-  <li>"Karınca ordusu mu, fil sürüsü mü?" A işlemcisi B'den r = T<sub>B</sub>/T<sub>A</sub> kat hızlıysa, N<sub>B</sub> tane ucuz işlemciyle en iyi speedup <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. <code>r ≥ 1/(1−α)</code> ise speedup asla 1'i geçmez (α = %90, r = 10: tek pahalı CPU daha iyi).</li>
-  <li>Ama gerçek bunu doğrulamaz: Top500 süper bilgisayarlarının hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede?</li>
+  <li>"Karınca ordusu mu, fil sürüsü mü?" (çok sayıda ucuz işlemci mi, az sayıda pahalı işlemci mi?) Pahalı A işlemcisi ucuz B'den r = T<sub>B</sub>/T<sub>A</sub> kat hızlıysa, N<sub>B</sub> tane ucuz işlemciyle en iyi speedup <code>1 / ((1−α)r + αr/N<sub>B</sub>)</code>; N<sub>B</sub> → ∞: <code>1/((1−α)r)</code>. <code>r ≥ 1/(1−α)</code> ise speedup asla 1'i geçmez (α = %90, r = 10: tek pahalı CPU daha iyi).</li>
+  <li>Ama gerçek bunu doğrulamaz: dünyanın en hızlı 500 bilgisayarının listesindeki (Top500) makinelerin hepsi binlerce-milyonlarca sıradan çekirdekten oluşur. Hata nerede? Cevap aşağıda, Gustafson-Barsis yasasında: gerçek problemler sabit boyutta kalmaz.</li>
 </ul>
 
 <h3>Sezgi: sayılarla Amdahl</h3>
@@ -67,9 +67,9 @@ N → ∞:  speedup → 1 / (1 − α)
 <div class="formula-box">t_seq   = (1 − α)T + N·α·T
 speedup = t_seq / T = (1 − α) + N·α
 efficiency = speedup / N = (1 − α)/N + α</div>
-<p>Onun da kusuru var: iletişim maliyetini sıfır sayar. "Utanç verici derecede paralel" problemlerde bile N büyüdükçe iletişim belirleyici olur. Pratikte <strong>%90'ın üzerinde verim</strong> kayda değer bir başarıdır.</p>
+<p>Gustafson yasasının da kusuru var: iletişim maliyetini sıfır sayar. "Utanç verici derecede paralel" problemlerde bile N büyüdükçe iletişim belirleyici olur. Pratikte <strong>%90'ın üzerinde verim</strong> kayda değer bir başarıdır.</p>
 <div class="callout example">
-  <p>α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
+  <p>Aynı program iki yasayla: α = 0,9, N = 10. <strong>Amdahl:</strong> 1 / (0,1 + 0,09) = 1/0,19 ≈ 5,26. <strong>Gustafson:</strong> 0,1 + 9 = 9,1. Fark, problemin sabit mi (Amdahl, strong scaling) yoksa N ile büyüyen mi (Gustafson, weak scaling) olduğunda.</p>
 </div>
 
 <div class="callout key">

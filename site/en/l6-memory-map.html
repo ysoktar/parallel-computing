@@ -87,11 +87,11 @@
     <tr><td><strong>Global</strong></td><td>DRAM (via L2)</td><td>whole grid + host / application</td><td>everyone, the host</td><td><code>cudaMalloc</code>, <code>__device__</code></td><td><strong>consecutive and aligned</strong> (coalescing)</td></tr>
     <tr><td><strong>Local</strong></td><td>DRAM (via L2)</td><td>one thread / thread</td><td>the thread</td><td>the compiler: large/variable-indexed arrays, spills</td><td>everyone the same relative index (laid out consecutively automatically)</td></tr>
     <tr><td><strong>Constant</strong></td><td>DRAM + constant cache</td><td>whole grid / application</td><td>only the host (<code>cudaMemcpyToSymbol</code>)</td><td><code>__constant__</code> (outside functions)</td><td><strong>all the same address</strong> (broadcast)</td></tr>
-    <tr><td><strong>Texture</strong></td><td>DRAM + texture cache</td><td>whole grid / application</td><td>the host (a kernel via surfaces)</td><td>CUDA array + texture object</td><td><strong>close together in 2D</strong></td></tr>
+    <tr><td><strong>Texture</strong></td><td>DRAM + texture cache</td><td>whole grid / application</td><td>the host; a kernel only through a surface object</td><td>CUDA array + texture object</td><td><strong>close together in 2D</strong></td></tr>
   </tbody>
 </table>
 <div class="callout key">
-  <p><strong>The last column summarises everything.</strong> The same <code>s[2*tid]</code> pattern means "50% efficiency" (twice the segments) in global memory, a "2-way bank conflict" in shared memory and "32 separate requests" in constant memory. Coalescing, bank conflicts and broadcast are not separate topics; they are the answers, in different memories, to the same question: <em>how do a warp's 32 addresses fall on this memory?</em></p>
+  <p><strong>The last column summarises everything.</strong> The same <code>s[2*threadIdx.x]</code> pattern (each thread reads two elements further on) means "50% efficiency" (twice the segments) in global memory, a "2-way bank conflict" in shared memory and "32 separate requests" in constant memory. Coalescing, bank conflicts and broadcast are not separate topics; they are the answers, in different memories, to the same question: <em>how do a warp's 32 addresses fall on this memory?</em></p>
 </div>
 
 <h3>One kernel, every memory</h3>
@@ -127,7 +127,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <li><strong>None of these</strong> (large input/output arrays) → <strong>global</strong>; make the accesses coalesced, use a pitch in 2D.</li>
 </ol>
 <div class="callout example">
-  <p><strong>Read tiled matmul through this lens:</strong> <code>M</code>, <code>N</code>, <code>P</code> are in global memory (large, everyone sees them; the loads are coalesced). The tiles <code>Mds</code>, <code>Nds</code> are in shared memory (16 threads of the block use the same element). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> are in registers (private to the thread). The barrier is the price of sharing shared memory. The pieces of this picture are detailed on <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) and <a href="l6-texture.html">6.4</a> (texture).</p>
+  <p><strong>Read the tiled matmul of 5.3 through this lens:</strong> <code>M</code>, <code>N</code>, <code>P</code> are in global memory (large, everyone sees them; the loads are coalesced). The tiles <code>Mds</code>, <code>Nds</code> are in shared memory (16 threads of the block use the same element). <code>Row</code>, <code>Col</code>, <code>Pvalue</code> are in registers (private to the thread). The barrier is the price of sharing shared memory. The pieces of this picture are detailed on <a href="l6-memory-types.html">6.3</a> (global, local, shared, constant) and <a href="l6-texture.html">6.4</a> (texture).</p>
 </div>
 <h2>Memory limits and their effects</h2>
 <ul>
@@ -141,7 +141,7 @@ __global__ void tour(const float* in, float* out, int n, int k)
   <p><strong>Shared:</strong> 16 KB per SM on the G80, at most 8 blocks → ≤ 2 KB per block to reach the maximum. Using more than 2 KB, the number of blocks on an SM is such that the total does not exceed 16 KB.</p>
   <p><strong>Matmul:</strong> 16×16 tiles → Mds 16·16·4 = 1 KB + Nds 1 KB = 2 KB/block → 8 blocks fit (the G80 limit anyway). But the real limit is 768 threads per SM: 768 / 256 = <strong>3 blocks</strong> → only 3·2 = 6 KB of shared memory used. All these limits are device-dependent.</p>
 </div>
-<p>Architecture list (~20 types as of 2023): Tesla (1.0, 1.1), Fermi (2.0, 3.0), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Memory behaviour is device-dependent: always know the characteristics of the device you are using.</p>
+<p>Architecture list (~20 types as of 2023): Tesla (1.0, 1.1), Fermi (2.0, 2.1), Kepler (3.0, 3.5, 3.7), Maxwell (5.0, 5.2, 5.3), Pascal (6.0, 6.1, 6.2), Volta (7.0, 7.2), Turing (7.5), Ampere (8.0, 8.6, 8.7), Lovelace (8.9). Memory behaviour is device-dependent: always know the characteristics of the device you are using.</p>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="1">

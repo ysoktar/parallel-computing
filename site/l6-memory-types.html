@@ -27,14 +27,14 @@
 </div>
 
 <h2>Global bellek</h2>
-<p>Verimli erişim için dört ana nokta (slayt 35):</p>
+<p>Global belleğe verimli erişim için dört ana nokta (slayt 35):</p>
 <ol>
   <li>Erişimleri <strong>coalesce</strong> edin.</li>
   <li>Bayt hizalamasına dikkat edin (<strong>pitch</strong>'li erişimler).</li>
   <li>Büyük gruplar hâlinde okuyup yazın.</li>
   <li><strong>Shared memory</strong> kullanın.</li>
 </ol>
-<p>Ayrıntılar, segment hesapları, pitch ve transpose: <a href="coalescing.html">Coalescing sayfası</a>. Kısaca: <code>cudaMalloc</code> adresleri en az 256 bayta hizalıdır; ama 2D bir dizide bir sonraki satırın başı genişliğe bağlıdır, bu yüzden <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code> satırları doldurup pitch döndürür. Adreslenebilir belleğe (global, local, shared, constant, texture) erişen bir komut, adreslerin warp'taki dağılımına göre birkaç kez yeniden verilmek (re-issue) zorunda kalabilir.</p>
+<p>Ayrıntılar, segment hesapları, pitch ve transpose: <a href="coalescing.html">6.6 (coalescing)</a> ve <a href="coalescing-transpose.html">6.7 (transpose)</a>. Kısaca: <code>cudaMalloc</code> adresleri en az 256 bayta hizalıdır; ama 2D bir dizide bir sonraki satırın başı genişliğe bağlıdır, bu yüzden <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code> satırları doldurup pitch döndürür. Adreslenebilir belleğe (global, local, shared, constant, texture) erişen bir komut, adreslerin warp'taki dağılımına göre birkaç kez yeniden verilmek (re-issue) zorunda kalabilir.</p>
 <pre class="code" data-run="pitch3d.cu" data-title="3D pitch'li erişim (slayt 41)">
 cudaExtent extent = make_cudaExtent(width * sizeof(float), height, depth);
 cudaPitchedPtr devPitchedPtr;
@@ -62,7 +62,7 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
 <ul>
   <li>Sadece bazı otomatik değişkenler local memory'ye gider: <strong>(1)</strong> sabit indekslendiği belirlenemeyen diziler, <strong>(2)</strong> çok register yiyecek büyük struct/diziler, <strong>(3)</strong> kernel mevcut register'dan fazlasını kullanıyorsa herhangi bir değişken (<strong>register spilling</strong>).</li>
   <li>PTX'te (<code>-ptx</code> veya <code>-keep</code>) <code>.local</code> ile bildirilip <code>ld.local</code>/<code>st.local</code> ile erişilir. Sonraki derleme aşamaları yine de karar değiştirebilir: <code>cuobjdump</code> ile cubin'e bakın; <code>--ptxas-options=-v</code> toplam local kullanımını (<code>lmem</code>) raporlar. Bazı matematik fonksiyonları da local memory kullanabilir.</li>
-  <li>Cihaz belleğinde durur: global kadar yüksek gecikme, düşük bant genişliği, aynı coalescing kuralları. Ama ardışık 32-bit kelimeler ardışık thread ID'lerine düşecek şekilde düzenlenmiştir: warp'taki tüm thread'ler <strong>aynı göreli adrese</strong> (aynı dizi indeksi, aynı struct üyesi) erişirse tam coalesced. 5.x ve sonrası: L2'de önbelleklenir.</li>
+  <li>Cihaz belleğinde durur: global kadar yüksek gecikme, düşük bant genişliği, aynı coalescing kuralları. Ama ardışık 32-bit kelimeler ardışık thread ID'lerine düşecek şekilde düzenlenmiştir: warp'taki tüm thread'ler <strong>aynı göreli adrese</strong> (aynı dizi indeksi, aynı struct üyesi) erişirse tam coalesced. Compute capability 5.x ve sonrası: L2'de önbelleklenir.</li>
 </ul>
 
 <h2>Shared memory</h2>
@@ -70,7 +70,7 @@ __global__ void MyKernel(cudaPitchedPtr devPitchedPtr, int width, int height, in
   <li>On-chip; local/global'den çok daha yüksek bant genişliği, çok daha düşük gecikme.</li>
   <li>Kullanımı senkronizasyonla birlikte gelir (<code>__syncthreads()</code>). Kullanılan miktar SM başına blok sayısını doğrudan etkiler.</li>
   <li>Global bellek erişiminin aksine, shared erişimi gecikmeyi gizlemek için başka bir hazır warp'ın çalışmasına yol açmaz.</li>
-  <li>Kullanımı ve tiled matmul: <a href="l5-tiling.html#tiling-ile-shared-memory">L5</a>.</li>
+  <li>Kullanımı ve tiled matmul: <a href="l5-tiling.html#tiling-ile-shared-memory">5.3</a>.</li>
 </ul>
 <h3>Bank'lar ve bank conflict'ler</h3>
 <p><strong>Benzetme:</strong> shared memory 32 kasası olan bir market gibidir. Her müşteri (thread) kendi ürününün bulunduğu kasaya gider. 32 müşteri 32 farklı kasaya dağılırsa herkes aynı anda ödeme yapar. Hepsi aynı kasaya yığılırsa sırayla beklerler. İstisna: aynı ürünü (aynı kelimeyi) isteyenler tek seferde servis edilir (yayın, broadcast).</p>
@@ -87,7 +87,7 @@ s[0] → bank 0, s[1] → bank 1, …, s[31] → bank 31, s[32] → bank 0 tekra
 </ul>
 <h4>Örnekler (32 thread, 4 baytlık eleman)</h4>
 <table class="simple">
-  <thead><tr><th>Erişim</th><th>Thread i'nin bank'ı</th><th>Sonuç</th></tr></thead>
+  <thead><tr><th>Erişim (<code>tid = threadIdx.x</code>)</th><th>Thread i'nin bank'ı</th><th>Sonuç</th></tr></thead>
   <tbody>
     <tr><td><code>s[tid]</code></td><td>i % 32: hepsi farklı</td><td>conflict yok</td></tr>
     <tr><td><code>s[2*tid]</code></td><td>0, 2, 4, …, 30, 0, 2, …: thread i ve i+16 aynı bank, farklı kelime</td><td>2-yollu</td></tr>
@@ -97,15 +97,15 @@ s[0] → bank 0, s[1] → bank 1, …, s[31] → bank 31, s[32] → bank 0 tekra
     <tr><td><code>s[0]</code></td><td>hepsi aynı kelime</td><td>conflict yok (yayın)</td></tr>
   </tbody>
 </table>
-<p>Genel kural: <code>s[stride*tid]</code> için conflict derecesi <strong>EBOB(stride, 32)</strong>. Tek sayılı stride her zaman çakışmasızdır.</p>
+<p>Genel kural: <code>s[stride*threadIdx.x]</code> için conflict derecesi <strong>EBOB(stride, 32)</strong>. Tek sayılı stride her zaman çakışmasızdır.</p>
 <div class="wgt-mount" data-widget="banks" data-preset="s2"></div>
 <h4>2D dizide sütun okumak ve padding</h4>
-<p><code>__shared__ float tile[32][32];</code> dizisinde <code>tile[r][c]</code> elemanının indeksi <code>r·32 + c</code>, bank'ı <code>(r·32 + c) % 32 = c</code>. Yani <strong>bir sütunun tüm elemanları aynı bank'ta</strong>. Transpose'ta yazma aşaması <code>tile[threadIdx.x][j]</code> ile sütun okur: warp'taki 32 thread aynı bank'tan 32 farklı kelime ister → <strong>32-yollu conflict</strong>.</p>
+<p><code>__shared__ float tile[32][32];</code> dizisinde <code>tile[r][c]</code> elemanının indeksi <code>r·32 + c</code>, bank'ı <code>(r·32 + c) % 32 = c</code>. Yani <strong>bir sütunun tüm elemanları aynı bank'ta</strong>. <a href="coalescing-transpose.html">6.7</a>'deki transpose'ta yazma aşaması <code>tile[threadIdx.x][j]</code> ile sütun okur: warp'taki 32 thread aynı bank'tan 32 farklı kelime ister → <strong>32-yollu conflict</strong>.</p>
 <p>Çözüm: satırları bir eleman uzatmak (padding):</p>
 <div class="formula-box">__shared__ float tile[32][33];           // her satır 33 eleman
 tile[r][c] → indeks r·33 + c → bank (r·33 + c) % 32 = (r + c) % 32
 sütun c'de r = 0..31 → bank'lar c, c+1, …, c+31 (mod 32): hepsi farklı → conflict yok</div>
-<p>Bedel: 32 float'lık (128 B) fazladan shared bellek. NVIDIA'nın transpose ölçümlerinde bu tek satır, coalesced transpose'u 51 GB/s'den 99,5 GB/s'ye çıkarır (copy'nin %95'i): <a href="coalescing-transpose.html#matris-transpose">Coalescing sayfası</a>.</p>
+<p>Bedel: 32 float'lık (128 B) fazladan shared bellek. NVIDIA'nın transpose ölçümlerinde bu tek satır, coalesced transpose'u 51 GB/s'den 99,5 GB/s'ye çıkarır (copy'nin %95'i): <a href="coalescing-transpose.html#matris-transpose">6.7'deki ölçümler</a>.</p>
 <div class="wgt-mount" data-widget="banks" data-preset="col32"></div>
 
 <h2>L2 önbellek kontrolü</h2>
@@ -114,7 +114,7 @@ sütun c'de r = 0..31 → bank'lar c, c+1, …, c+31 (mod 32): hepsi farklı →
 <h2>Constant memory</h2>
 <ul>
   <li>Cihaz belleğinde (global) durur, salt okunur <strong>constant cache</strong>'te önbelleklenir.</li>
-  <li>Bir istek, içindeki <strong>farklı adres sayısı kadar</strong> ayrı isteğe bölünür (throughput o oranda düşer); cache hit'te constant cache hızında, değilse cihaz belleği hızında servis edilir.</li>
+  <li>Bir warp'ın constant okuma isteği, içindeki <strong>farklı adres sayısı kadar</strong> ayrı isteğe bölünür (throughput o oranda düşer); cache hit'te constant cache hızında, değilse cihaz belleği hızında servis edilir.</li>
   <li><strong>En iyi senaryo: tüm thread'ler aynı adresi okur</strong> (global belleğin tersi: orada ardışık adresler iyi).</li>
 </ul>
 <pre class="code" data-run="constant.cu" data-title="Kullanımı">

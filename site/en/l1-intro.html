@@ -27,16 +27,16 @@
 
 <div class="callout why" data-label="The big picture">
   <p><strong>Think of a kitchen.</strong> For years meals got faster because the cook worked faster every year (clock frequency). Then the cook could not speed up: the kitchen overheats (the power wall). The fix is <strong>more cooks</strong> (multi-core); the price: some steps of the recipe are sequential, and the cooks wait for each other and share ingredients.</p>
-  <p>This lecture answers the three questions of that story: <strong>why</strong> we moved to multi-core (Moore, the power wall), how parallel machines <strong>are classified</strong> (Flynn, shared/distributed memory, CPU/GPU), and <strong>how much faster</strong> we get with more cooks (speedup, efficiency, Amdahl, Gustafson).</p>
+  <p>This lecture answers the three questions of that story: <strong>why</strong> we moved to multi-core (Moore, the power wall), how parallel machines <strong>are classified</strong> (Flynn, shared/distributed memory, CPU/GPU), and <strong>how much faster</strong> we get with more cooks (speedup, efficiency, Amdahl, Gustafson). The first two are on this page, the third on <a href="l1-performance.html">1.2</a>.</p>
 </div>
 
 <h2>Moore's law and the power wall</h2>
 <ul>
   <li><strong>Moore's law</strong> (Gordon Moore, 1970s): the number of transistors in an integrated circuit <strong>doubles about every two years</strong>. Transistor count, not frequency.</li>
   <li>Frequency alone is not a comparison criterion: operations take different numbers of cycles (on x86-64, 32-bit integer add 1 cycle, 32-bit FP multiply 4).</li>
-  <li>For a long time more transistors came with higher frequencies; but higher frequency = more heat. Voltages were lowered (~1.29 V) but not enough. <strong>Around 2004–2005 frequencies maxed out at 2–4 GHz</strong> (Gelsinger's power wall).</li>
-  <li>The route left: put more logic and more <strong>cores</strong> on a chip. The first dual-core single-die chip: IBM Power 4 (2001); a natural evolution of multi-socket platforms.</li>
-  <li><strong>GPGPU</strong>: a single GPU core is weaker than a CPU core, but hundreds/thousands of cores + high-bandwidth memory → orders of magnitude faster. Also better <strong>GFLOP/Watt</strong>: in servers and the cloud the energy a CPU uses over its lifetime can exceed its price.</li>
+  <li>For a long time more transistors came with higher frequencies; but higher frequency = more heat. To cut the heat the processor's operating voltage was lowered (down to ~1.29 V), but that was not enough. <strong>Around 2004–2005 frequencies maxed out at 2–4 GHz</strong>: the <strong>power wall</strong> Intel's Pat Gelsinger had warned about.</li>
+  <li>The route left: put more logic and more <strong>cores</strong> on a chip. The first dual-core single-die chip: IBM Power 4 (2001). It moves the multi-socket systems (several processors on one board) onto a single chip.</li>
+  <li><strong>GPGPU</strong>: a single GPU core is weaker than a CPU core, but hundreds/thousands of cores + high-bandwidth memory → orders of magnitude faster. Also more work per watt (<strong>GFLOP/Watt</strong>). That matters because in servers and the cloud the electricity a processor uses over its lifetime can cost more than the processor itself.</li>
   <li>Not free: multi-core needs <strong>multi-threaded, parallel code</strong>; algorithms must be redesigned and new APIs (CUDA, OpenCL) learnt.</li>
 </ul>
 
@@ -75,11 +75,11 @@
 </div>
 <h3>NVIDIA Blackwell</h3>
 <ul>
-  <li>Successor of Hopper and Ada Lovelace; aimed at AI, HPC and accelerated computing. Cores are grouped into <strong>SMs</strong>; each SM has <strong>128 CUDA cores</strong> (SIMT) and can run its own program (blocks are scheduled independently on different SMs).</li>
-  <li>Hierarchy: GPU → <strong>GPC</strong> → <strong>TPC</strong> (2 SMs each) → SM. Per SM: 128 CUDA cores, 1 RT core, 4 Tensor cores, 4 SFUs, 4 texture units, a <strong>256 KB register file</strong>, <strong>128 KB L1/shared</strong>, schedulers. 64-bit FP throughput is about half of 32-bit.</li>
-  <li>B200: dual die (10 TB/s NV-HBI), 208 billion transistors, 148 active SMs = 18,944 CUDA cores, 592 Tensor cores.</li>
+  <li>Successor of NVIDIA's Hopper and Ada Lovelace architectures; aimed at AI and high-performance computing (HPC). Cores are grouped into <strong>SMs</strong>; each SM has <strong>128 CUDA cores</strong> (SIMT) and can run its own program (blocks are scheduled independently on different SMs).</li>
+  <li>Hierarchy: GPU → <strong>GPC</strong> → <strong>TPC</strong> (2 SMs each) → SM. Per SM: 128 CUDA cores, 1 RT core (ray tracing), 4 Tensor cores (small matrix multiplies), 4 SFUs (special functions such as sin, exp), 4 texture units, a <strong>256 KB register file</strong>, <strong>128 KB L1/shared</strong>, schedulers. 64-bit FP throughput is about half of 32-bit.</li>
+  <li>B200 (Blackwell's data-centre GPU): two dies with a 10 TB/s link between them (NV-HBI), 208 billion transistors, 148 active SMs = 18,944 CUDA cores, 592 Tensor cores.</li>
 </ul>
-<p>Other examples: <strong>AMD APU</strong> (CPU and GPU on the same die, <strong>unified memory space</strong> → no data transfers; HSA: latency-oriented LCUs and throughput-oriented TCUs), the Cell BE, multi-core CPUs (TILE-Gx8072, Intel Xeon Phi).</p>
+<p>Other examples: <strong>AMD APU</strong> (CPU and GPU on the same die, <strong>unified memory space</strong> → no data transfers; AMD's HSA architecture combines latency-oriented units (LCUs, the CPU cores) and throughput-oriented units (TCUs, the GPU cores)), the Cell BE (the PlayStation 3 processor), multi-core CPUs (the 72-core TILE-Gx8072, Intel Xeon Phi).</p>
 
 <h2>Check yourself</h2>
 <div class="quiz" data-answer="2">

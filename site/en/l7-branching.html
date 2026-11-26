@@ -41,7 +41,7 @@
     <tr><td><code>threadIdx.y % 2 == 0</code> in a 16×16 block</td><td>8 (all)</td><td>each warp is two rows: one even, one odd</td></tr>
   </tbody>
 </table>
-<p>Different warps taking different paths is <strong>not</strong> divergence; divergence happens <em>within</em> a warp. An example with a timing comparison: <a href="l4-cuda-intro.html">L4, thread divergence</a>.</p>
+<p>Different warps taking different paths is <strong>not</strong> divergence; divergence happens <em>within</em> a warp. An example with a timing comparison: <a href="l4-cuda-intro.html">4.1, thread divergence</a>.</p>
 
 <h2>Branch predication and branch prediction</h2>
 <p>Similar names, different things: <strong>predication ≠ prediction</strong>.</p>
@@ -88,7 +88,7 @@ float s = 0;
 for (int i = 0; i < n; ++i)
     s += in[i];
 </pre>
-<p>A detailed example and the costs (register pressure): <a href="coalescing-review.html#loop-unrolling">Coalescing page, loop unrolling</a>.</p>
+<p>A detailed example and the costs (register pressure): <a href="coalescing-review.html#loop-unrolling">6.8, loop unrolling</a>.</p>
 
 <h2>Loop counters: signed vs unsigned</h2>
 <ul>

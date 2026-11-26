@@ -15,7 +15,7 @@
 <main><div class="content">
 
 <h1>PCAM: the four design steps</h1>
-<p class="lead">In a parallel program the order of statements is not unique; without careful design, erroneous updates and blocked communications creep in. The goals: <strong>correctness</strong> and <strong>performance</strong>.</p>
+<p class="lead">In a parallel program the order in which statements run can change from run to run; without careful design, updates get lost or tasks lock up waiting for each other. The goals: <strong>correctness</strong> and <strong>performance</strong>.</p>
 
 <div class="callout goals">
   <ul>
@@ -27,7 +27,7 @@
 
 <div class="callout why" data-label="The big picture">
   <p><strong>Think of building a house.</strong> You split the job (foundation, walls, paint), work out which job waits for which (paint after walls), give tightly linked jobs to the same crew, and give each crew a fair share. Parallel program design is the same four steps: <strong>PCAM</strong>.</p>
-  <p>Then come two families of "ready-made patterns": decomposition patterns that say <strong>how to split</strong> the work (geometric, pipeline, divide and conquer…) and program structure patterns that say <strong>how to structure</strong> the program (SPMD, master-worker, fork/join…). Every CUDA kernel you write is in fact an example of geometric decomposition + SPMD.</p>
+  <p>After PCAM (<a href="l2-patterns.html">2.2</a>) come two families of "ready-made patterns": decomposition patterns that say <strong>how to split</strong> the work (geometric, pipeline, divide and conquer…) and program structure patterns that say <strong>how to structure</strong> the program (SPMD, master-worker, fork/join…). Every CUDA kernel you write is in fact an example of geometric decomposition + SPMD.</p>
 </div>
 
 <h2>Ask first: is parallel necessary and achievable?</h2>
@@ -44,13 +44,13 @@
     <tr><td><strong>Partitioning</strong></td><td>Break the computation into as many pieces as possible; bring out the parallelism. <em>Functional decomposition</em> (by steps) or <em>domain/data decomposition</em> (by data).</td><td>Number of pieces 10–100 times the number of nodes.</td></tr>
     <tr><td><strong>Communication</strong></td><td>Dependencies between tasks and the volume of data to pass are determined → the <strong>task dependency graph</strong> (node = task, edge = communication volume).</td><td>Ideal: totally independent tasks.</td></tr>
     <tr><td><strong>Agglomeration</strong></td><td>Group tasks to reduce communication; communication within a group disappears.</td><td>Number of groups ~10 times the number of nodes.</td></tr>
-    <tr><td><strong>Mapping</strong></td><td>Assign the groups to nodes: <strong>load balance</strong> + reduce communication by putting heavily communicating groups on the same node (communication over shared memory is virtually free).</td><td>NP-complete in general → heuristics.</td></tr>
+    <tr><td><strong>Mapping</strong></td><td>Assign the groups to nodes: <strong>load balance</strong> + reduce communication by putting heavily communicating groups on the same node (communication over shared memory is virtually free).</td><td>Finding the best mapping is NP-complete in general (no efficient exact method is known) → heuristics.</td></tr>
   </tbody>
 </table>
-<p>Duplicating computations can improve performance by removing the need to communicate their results. Examples: matrix addition (fully independent), 2D convolution (needs neighbour data).</p>
+<p>Repeating a computation in several tasks (duplication) is sometimes faster: its result does not have to be moved between tasks. Two typical PCAM examples: matrix addition (fully independent tasks) and 2D convolution (each task needs its neighbour's data; solved below).</p>
 
 <h3>Worked example: designing a 2D convolution with PCAM</h3>
-<p>Problem: apply a 3×3 filter to an N×N image (Exercises 2 and 4). Each output pixel is computed from itself and its 8 neighbours in the input.</p>
+<p>Problem: apply a 3×3 filter to an N×N image (the course's Exercises 2 and 4: with C++ threads and with CUDA). Each output pixel is computed from itself and its 8 neighbours in the input.</p>
 <ol>
   <li><strong>Partitioning:</strong> the finest piece is <strong>one output pixel</strong> → N² tasks. The tasks can be computed independently (outputs do not wait for each other): data decomposition.</li>
   <li><strong>Communication:</strong> each task reads its neighbours' input values. In shared memory that is a "read"; in distributed memory it needs messages to neighbouring tasks. In the dependency graph each node has edges to its 8 neighbours.</li>
