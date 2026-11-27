@@ -37,14 +37,20 @@
   <li>Before C++11, pThreads (POSIX); since C++11, the standard <code>std::thread</code>.</li>
 </ul>
 <pre class="code" data-run="threads_basic.cpp" data-title="C++11 threads">
-#include <thread>
-#include <vector>
-void work(int id, int* out) { out[id] = id * id; }
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+void work(int id, int* out) {
+    out[id] = id * id;   // every thread writes a different element: no sharing, no race
+}
+
 int main() {
     int out[8];
-    std::vector<std::thread> ts;
-    for (int i = 0; i < 8; i++) ts.emplace_back(work, i, out);   // fork
-    for (auto& t : ts) t.join();                                  // join
+    std::vector&lt;std::thread&gt; threads;
+    for (int i = 0; i &lt; 8; i++)
+        threads.emplace_back(work, i, out);   // fork: start a thread running work(i, out)
+    for (auto&amp; t : threads)
+        t.join();                             // join: wait until it has finished
 }
 </pre>
 

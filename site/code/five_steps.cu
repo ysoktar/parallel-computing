@@ -1,5 +1,5 @@
-// L5: the five host steps around a kernel: allocate device memory, copy the inputs, launch, copy the result back,
-// free. Uses the blocked matmul kernel of slide 39 and checks the result on the CPU.
+// Page 5.1: the five host steps around a kernel: allocate device memory, copy the inputs, launch, copy the result back,
+// free. Uses the blocked matmul kernel of slide 39 (one thread per element of P) and checks the result on the CPU.
 #include <cstdio>
 #include <cstdlib>
 #define TILE_WIDTH 16
@@ -35,19 +35,31 @@ void cuMatrixMultiplication(float* M, float* N, float* P, int width)
     cudaFree(Md); cudaFree(Nd); cudaFree(Pd);
 }
 
-// usage: prog [width]   (a multiple of 16; default 256)
+// usage: prog [width]   (rounded down to a multiple of 16; default 256)
 int main(int argc, char** argv) {
     int width = argc > 1 ? atoi(argv[1]) / TILE_WIDTH * TILE_WIDTH : 256;
     if (width < TILE_WIDTH) width = TILE_WIDTH;
-    float* M = new float[width * width]; float* N = new float[width * width]; float* P = new float[width * width];
-    for (int i = 0; i < width * width; i++) { M[i] = rand() % 4; N[i] = rand() % 4; }
-    cuMatrixMultiplication(M, N, P, width);
-    int bad = 0;
-    for (int i = 0; i < width; i++) for (int j = 0; j < width; j++) {
-        float s = 0; for (int k = 0; k < width; k++) s += M[i * width + k] * N[k * width + j];
-        if (s != P[i * width + j]) bad++;
+    float* M = new float[width * width];
+    float* N = new float[width * width];
+    float* P = new float[width * width];
+    for (int i = 0; i < width * width; i++) {
+        M[i] = rand() % 4;
+        N[i] = rand() % 4;
     }
+
+    cuMatrixMultiplication(M, N, P, width);
+
+    int bad = 0;                                        // compare with the CPU
+    for (int i = 0; i < width; i++)
+        for (int j = 0; j < width; j++) {
+            float s = 0;
+            for (int k = 0; k < width; k++)
+                s += M[i * width + k] * N[k * width + j];
+            if (s != P[i * width + j]) bad++;
+        }
     printf("%dx%d matmul on the GPU: %s (P[0] = %g); last error: %s\n", width, width,
            bad ? "MISMATCH" : "matches the CPU", P[0], cudaGetErrorString(cudaGetLastError()));
-    delete[] M; delete[] N; delete[] P;
+    delete[] M;
+    delete[] N;
+    delete[] P;
 }

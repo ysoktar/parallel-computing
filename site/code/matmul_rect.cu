@@ -1,8 +1,17 @@
-// Midterm 2 worked example: <<<dim3(3,3), dim3(8,32)>>>. P is 96×24, M is 96×K, N is K×24.
-// MatMul: each thread one element of P. MatMulTiled: the same launch with Mds[32][8] and Nds[8][8].
+// Midterm 2 guide, worked example: <<<dim3(3,3), dim3(8,32)>>>. P is 96×24, M is 96×K, N is K×24.
+// MatMul: every thread computes one element of P from global memory.
+// MatMulTiled: the same launch with shared tiles Mds[32][8] and Nds[8][8] (the blocks are not square).
 #include <cstdio>
 #include <cstdlib>
-#define CHECK(x) do { cudaError_t e = (x); if (e != cudaSuccess) { printf("CUDA error %s at line %d\n", cudaGetErrorString(e), __LINE__); return 1; } } while (0)
+
+// stop with a message if a CUDA call fails
+#define CHECK(x) do {                                                                   \
+        cudaError_t e = (x);                                                            \
+        if (e != cudaSuccess) {                                                         \
+            printf("CUDA error %s at line %d\n", cudaGetErrorString(e), __LINE__);      \
+            return 1;                                                                   \
+        }                                                                               \
+    } while (0)
 
 __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcols)
 {
@@ -12,6 +21,8 @@ __global__ void MatMul(const float* M, const float* N, float* P, int K, int Pcol
     for (int k = 0; k < K; ++k)
         sum += M[row * K + k] * N[k * Pcols + col];
     P[row * Pcols + col] = sum;
+
+    // the thread asked about in the guide prints its own indices
     if (blockIdx.x == 2 && blockIdx.y == 1 && threadIdx.x == 5 && threadIdx.y == 10) {
         int id = threadIdx.y * blockDim.x + threadIdx.x;
         printf("thread blockIdx=(2,1) threadIdx=(5,10): row=%d col=%d linear id=%d warp=%d writes P[%d]\n",
@@ -48,20 +59,36 @@ int main() {
     static float hM[R * K], hN[K * C], hP[R * C], ref[R * C];
     for (int i = 0; i < R * K; i++) hM[i] = rand() % 5;
     for (int i = 0; i < K * C; i++) hN[i] = rand() % 5;
-    for (int i = 0; i < R; i++) for (int j = 0; j < C; j++) { float s = 0; for (int k = 0; k < K; k++) s += hM[i * K + k] * hN[k * C + j]; ref[i * C + j] = s; }
+    for (int i = 0; i < R; i++)                         // reference result on the CPU
+        for (int j = 0; j < C; j++) {
+            float s = 0;
+            for (int k = 0; k < K; k++)
+                s += hM[i * K + k] * hN[k * C + j];
+            ref[i * C + j] = s;
+        }
+
     float *M, *N, *P;
-    CHECK(cudaMalloc((void**)&M, sizeof hM)); CHECK(cudaMalloc((void**)&N, sizeof hN)); CHECK(cudaMalloc((void**)&P, sizeof hP));
+    CHECK(cudaMalloc((void**)&M, sizeof hM));
+    CHECK(cudaMalloc((void**)&N, sizeof hN));
+    CHECK(cudaMalloc((void**)&P, sizeof hP));
     CHECK(cudaMemcpy(M, hM, sizeof hM, cudaMemcpyHostToDevice));
     CHECK(cudaMemcpy(N, hN, sizeof hN, cudaMemcpyHostToDevice));
-    printf("grid 3x3 blocks of 8x32 threads = %d threads, %d warps; P covers %d rows x %d cols\n", 9 * 256, 9 * 8, 3 * 32, 3 * 8);
-    for (int v = 0; v < 2; v++) {
+    printf("grid 3x3 blocks of 8x32 threads = %d threads, %d warps; P covers %d rows x %d cols\n",
+           9 * 256, 9 * 8, 3 * 32, 3 * 8);
+
+    for (int v = 0; v < 2; v++) {                       // v = 0: MatMul, v = 1: MatMulTiled
         CHECK(cudaMemset(P, 0, sizeof hP));
         if (v == 0) MatMul<<<dim3(3, 3), dim3(8, 32)>>>(M, N, P, K, C);
         else        MatMulTiled<<<dim3(3, 3), dim3(8, 32)>>>(M, N, P, K, C);
-        CHECK(cudaGetLastError()); CHECK(cudaDeviceSynchronize());
+        CHECK(cudaGetLastError());
+        CHECK(cudaDeviceSynchronize());
         CHECK(cudaMemcpy(hP, P, sizeof hP, cudaMemcpyDeviceToHost));
-        int bad = 0; for (int i = 0; i < R * C; i++) if (hP[i] != ref[i]) bad++;
+        int bad = 0;
+        for (int i = 0; i < R * C; i++)
+            if (hP[i] != ref[i]) bad++;
         printf("%s: %s\n", v ? "MatMulTiled" : "MatMul     ", bad ? "MISMATCH" : "all 2304 elements match the CPU");
     }
-    cudaFree(M); cudaFree(N); cudaFree(P);
+    cudaFree(M);
+    cudaFree(N);
+    cudaFree(P);
 }

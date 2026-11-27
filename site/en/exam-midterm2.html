@@ -190,8 +190,8 @@ __global__ void reverseBlock(int* d)
     int base = blockIdx.x * B;
     s[t] = d[base + t];          // 1) load
     __syncthreads();             // 2) has everyone loaded?
-    d[base + t] = s[B - 1 - t];  // 3) read what ANOTHER
-}                                //    thread loaded
+    d[base + t] = s[B - 1 - t];  // 3) read what ANOTHER thread loaded
+}
 // reverseBlock<<<n / B, B>>>(d);
 </pre>
   </div>
@@ -240,7 +240,7 @@ __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 <pre class="code" data-run="sync_barrier.cu" data-run-note="The program compiles the wrong version but does not launch it (undefined behaviour)." data-title="✗ Wrong: barrier inside the condition">
 if (threadIdx.x < 16) {
     s[threadIdx.x] = in[threadIdx.x];
-    __syncthreads();   // tid ≥ 16 never gets here
+    __syncthreads();   // threads with threadIdx.x ≥ 16 never get here
 }
 out[threadIdx.x] = s[threadIdx.x % 16];
 </pre>

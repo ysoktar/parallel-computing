@@ -52,30 +52,34 @@
 <p><strong>CUDA array:</strong> texture fetch için optimize edilmiş, <strong>opak</strong> (değerlere doğrudan erişilemez) 1D/2D/3D bellek düzeni; 1, 2 veya 4 bileşenli elemanlar (8/16/32-bit tamsayı, 16/32-bit float). Kernel'ler sadece texture fetch (okuma) veya surface okuma/yazma ile erişir.</p>
 <pre class="code" data-run="texrotate.cu" data-title="texRotate.cu (ders örneği): texture ile görüntü döndürme, özet">
 // Host: 1) CUDA array ayır  2) veriyi kopyala  3) resDesc  4) texDesc  5) texture object oluştur
-cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);   // texel başına bir 32-bit float
 cudaArray_t cuArray;
-cudaMallocArray(&cuArray, &ch, width, height);
+cudaMallocArray(&amp;cuArray, &amp;ch, width, height);
 cudaMemcpy2DToArray(cuArray, 0, 0, img, width * sizeof(float), width * sizeof(float), height,
                     cudaMemcpyHostToDevice);
 
-cudaResourceDesc resDesc = {};  resDesc.resType = cudaResourceTypeArray;  resDesc.res.array.array = cuArray;
+cudaResourceDesc resDesc = {};
+resDesc.resType = cudaResourceTypeArray;
+resDesc.res.array.array = cuArray;
 cudaTextureDesc texDesc = {};
-texDesc.addressMode[0] = cudaAddressModeWrap;   texDesc.addressMode[1] = cudaAddressModeWrap;
+texDesc.addressMode[0] = cudaAddressModeWrap;   // [0, 1) dışına çıkan x başa sarar ...
+texDesc.addressMode[1] = cudaAddressModeWrap;   // ... y de
 texDesc.filterMode = cudaFilterModeLinear;      // bilineer interpolasyon bedava
 texDesc.readMode = cudaReadModeElementType;
 texDesc.normalizedCoords = 1;                   // koordinatlar [0, 1)
 cudaTextureObject_t texObj = 0;
-cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
+cudaCreateTextureObject(&amp;texObj, &amp;resDesc, &amp;texDesc, NULL);
 
 // Device: normalize koordinatı merkez etrafında θ kadar döndür, texture'dan oku
 __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int width, int height, float theta) {
     unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x < width && y < height) {
-        float u = x / (float)width - 0.5f, v = y / (float)height - 0.5f;
-        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
+    if (x &lt; width &amp;&amp; y &lt; height) {
+        float u = x / (float)width - 0.5f;          // görüntünün ortasına göre koordinatlar
+        float v = y / (float)height - 0.5f;
+        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;   // döndür, sonra [0, 1)'e geri taşı
         float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
-        output[y * width + x] = tex2D<float>(texObj, tu, tv);
+        output[y * width + x] = tex2D&lt;float&gt;(texObj, tu, tv);   // kesirli koordinat: donanım interpolasyon yapar
     }
 }
 // dim3 block(16, 16); dim3 grid((width + 15) / 16, (height + 15) / 16);

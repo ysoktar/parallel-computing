@@ -45,10 +45,10 @@
   <li>Başlatma asenkron olduğu için asenkron hataları görmek isteyen uygulama başlatma ile Peek/Get arasında senkronize olmalıdır.</li>
 </ul>
 <pre class="code" data-run="errors.cu" data-title="Önerilen desen">
-cudaGetLastError();                        // make sure the error variable is cudaSuccess before the launch
+cudaGetLastError();                               // önceki hataları temizle: başlatmadan önce hata değişkeni cudaSuccess olsun
 k<<<(n + 255) / 256, 256>>>(d, n);
-cudaError_t l2 = cudaGetLastError();       // launch / configuration errors
-cudaError_t r2 = cudaDeviceSynchronize();  // errors during execution
+cudaError_t launchErr = cudaGetLastError();       // başlatma / konfigürasyon hataları
+cudaError_t runErr = cudaDeviceSynchronize();     // çalışma sırasında oluşan hatalar
 </pre>
 <table class="simple">
   <thead><tr><th>Hata türü</th><th>Örnek</th><th>Nerede yakalanır?</th></tr></thead>

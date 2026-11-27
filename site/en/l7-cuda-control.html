@@ -45,10 +45,10 @@
   <li>Since launches are asynchronous, an application that wants to see asynchronous errors must synchronise between the launch and Peek/Get.</li>
 </ul>
 <pre class="code" data-run="errors.cu" data-title="The recommended pattern">
-cudaGetLastError();                        // make sure the error variable is cudaSuccess before the launch
+cudaGetLastError();                               // clear earlier errors: the error variable must be cudaSuccess before the launch
 k<<<(n + 255) / 256, 256>>>(d, n);
-cudaError_t l2 = cudaGetLastError();       // launch / configuration errors
-cudaError_t r2 = cudaDeviceSynchronize();  // errors during execution
+cudaError_t launchErr = cudaGetLastError();       // launch / configuration errors
+cudaError_t runErr = cudaDeviceSynchronize();     // errors during execution
 </pre>
 <table class="simple">
   <thead><tr><th>Error type</th><th>Example</th><th>Where is it caught?</th></tr></thead>
