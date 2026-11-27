@@ -37,69 +37,313 @@
 <tr><td>Hata ve kontrol akışı (<a href="l7-cuda-control.html">7.1</a>, <a href="l7-branching.html">7.2</a>)</td><td>launch → <code>cudaGetLastError()</code> → <code>cudaDeviceSynchronize()</code>; predication ≠ prediction; unroll'un bedeli register</td><td>Hatayı “yanlış satırda” aramak; <code>unsigned</code> sayaçla geri saymak</td></tr>
 </tbody></table>
 
-<h2>Ayrıntılı özet</h2>
+<h2>Lecture 1 · Neden paralel, ne kadar hızlanır</h2>
 
-<h3>Lecture 1: neden paralel, ne kadar hızlanır</h3>
+<h3>Moore yasası, güç duvarı, çok çekirdek</h3>
 <ul>
-<li><strong>Güç duvarı:</strong> güç ≈ f³; ~2005'te frekans 2–4 GHz'de durdu. Moore yasası transistör sayısı içindir, frekans için değil; fazla transistörler çekirdeğe gitti.</li>
-<li><strong>Flynn:</strong> SISD, SIMD, MISD, MIMD. GPU'nun programlama modeli SIMT (bir warp = tek komut, 32 thread). Paylaşımlı bellek (ortak adres uzayı; NUMA'da uzak bellek yavaş ama adres ortak) ↔ dağıtık bellek (mesajlaşma, çok ölçeklenir).</li>
-<li><strong>Ölçüm kuralları:</strong> aynı donanım ve koşullar; seri taraf bilinen en hızlı seri çözüm olmalı; kernel-only ve uçtan uca (kopyalar dahil) hızlanma ayrı.</li>
-<li><strong>Amdahl</strong> (sabit problem, strong scaling): S = 1/((1−α)+α/N) → N → ∞ iken 1/(1−α). <strong>Gustafson</strong> (sabit süre, weak scaling): S = (1−α)+αN.</li>
-<li><strong>Karınca–fil:</strong> pahalı CPU r kat hızlıysa N ucuz CPU'nun ona göre hızlanması 1/((1−α)r + αr/N); r ≥ 1/(1−α) ise asla 1'i geçmez.</li>
-<li><strong>Gecikme ↔ throughput:</strong> CPU tek işi hızlı bitirir, GPU birim zamanda çok iş bitirir.</li>
+<li><strong>Moore yasası:</strong> bir yongadaki transistör sayısı ~2 yılda iki katına çıkar. Frekans hakkında <em>değildir</em>; sınavda "Moore yasası frekansın iki katına çıktığını söyler" yanlıştır.</li>
+<li><strong>Güç duvarı:</strong> dinamik güç ≈ C·V²·f ve f yükselince V de yükselmek zorunda ⇒ güç ≈ f³. Voltaj (~1,29 V'a kadar) düşürüldü ama yetmedi; ~2004–2005'te frekans 2–4 GHz'de durdu. Ayrıca yüksek frekanslı saat sinyalini yonga boyunca bozulmadan dağıtmak zorlaştı.</li>
+<li><strong>Sonuç:</strong> artan transistörler daha çok çekirdeğe gitti (ilk çift çekirdekli tek yonga IBM Power 4, 2001). Performans artık kendiliğinden gelmiyor: <strong>paralel yazılım</strong> şart.</li>
+<li><strong>Frekans tek başına ölçüt değildir:</strong> işlemler farklı sayıda saat çevrimi sürer (x86-64'te int toplama 1, FP çarpma ~4 çevrim).</li>
+<li><strong>GPGPU:</strong> tek GPU çekirdeği zayıf ama binlerce çekirdek + yüksek bant genişliği; watt başına daha çok iş (sunucuda elektrik maliyeti işlemci fiyatını aşabilir).</li>
 </ul>
 
-<h3>Lecture 2: tasarım</h3>
+<h3>Flynn taksonomisi ve bellek mimarileri</h3>
+<table class="simple"><thead><tr><th>Sınıf</th><th>Anlamı</th><th>Örnek</th></tr></thead><tbody>
+<tr><td>SISD</td><td>tek komut, tek veri</td><td>klasik tek çekirdek</td></tr>
+<tr><td>SIMD</td><td>tek komut, çok veri</td><td>vektör işlemci, SSE/AVX; bir GPU warp'ı (SIMT)</td></tr>
+<tr><td>MISD</td><td>çok komut, aynı veri</td><td>hata toleransı (aynı veri birden çok makinede, çoğunluk oyu)</td></tr>
+<tr><td>MIMD</td><td>her işlemci kendi komutu, kendi verisi</td><td>çok çekirdekli CPU, bütün GPU, kümeler</td></tr>
+</tbody></table>
 <ul>
-<li><strong>Önce sor:</strong> paralel gerekli mi, algoritma izin veriyor mu?</li>
-<li><strong>PCAM:</strong> Partitioning (işlemci sayısının 10–100 katı parça), Communication (bağımlılık grafı), Agglomeration (iletişimi azaltmak için grupla, ~10 katı), Mapping (yük dengesi + yoğun iletişimlileri aynı düğüme; genel hâli NP-complete).</li>
-<li><strong>Ayrıştırma desenleri:</strong> task parallelism (ölçeklenmez), böl ve yönet (paralellik bağımlılık grafından okunur), geometrik (halo gerekir), özyinelemeli veri (prefix sum), pipeline (throughput ≤ 1/en uzun aşama), olay tabanlı.</li>
-<li><strong>Program yapısı:</strong> GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA kernel'i = geometrik ayrıştırma + SPMD.</li>
-<li><strong>Pipeline zamanı:</strong> ilk çıktı = aşama sürelerinin toplamı, sonra her "en uzun aşama"da bir çıktı.</li>
+<li><strong>Paylaşımlı bellek MIMD:</strong> ortak adres uzayı; iletişim paylaşılan değişkenle (ucuz), ölçek sınırlı (bellek yolu, önbellek tutarlılığı). <strong>NUMA:</strong> bellek CPU'lara bölünmüş, yerel hızlı uzak yavaş ama adresleme ortak (hâlâ paylaşımlı!). <strong>SMP:</strong> bütün CPU'lar eşdeğer.</li>
+<li><strong>Dağıtık bellek (shared-nothing):</strong> her düğümün özel belleği; mesajlaşma (MPI); iletişim pahalı ama paylaşılan darboğaz yok ⇒ binlerce–milyonlarca çekirdeğe ölçeklenir; programlaması zor (veriyi açıkça dağıtmak).</li>
+<li><strong>CPU ↔ GPU:</strong> CPU büyük önbellek + karmaşık kontrol (dallanma tahmini, sıra dışı yürütme) ile <em>gecikme</em> için; GPU küçük önbellek + çok sayıda basit ALU + geniş bellek yolu ile <em>throughput</em> için tasarlanır.</li>
 </ul>
 
-<h3>Lecture 3: thread'ler ve senkronizasyon</h3>
+<h3>Ölçüm: speedup, verim, altın kurallar</h3>
+<div class="formula-box">S = T_seq / T_par
+E = S / N
+doğrusal speedup: S = N (E = %100)</div>
 <ul>
-<li>Thread'ler adres uzayını paylaşır (stack, register, program sayacı ayrı). <strong>Data race:</strong> eş zamanlı erişim, en az biri yazma, senkronizasyon yok (C++'ta tanımsız). <strong>Race condition:</strong> sıralama yüzünden yanlış sonuç.</li>
-<li><code>counter++</code> = oku + ekle + yaz; iki thread aynı eski değeri okursa bir güncelleme kaybolur.</li>
-<li><strong>Mutex:</strong> tek thread + sahiplik. <strong>Semafor:</strong> N izin (counting), binary semafor "olay" sinyali. <strong>Atomik:</strong> tek bölünmez işlem (CAS, LL/SC). <strong>Monitör / condition variable:</strong> kilidi bırakıp koşulu bekle; koşul <code>while</code> ile.</li>
-<li><strong>Deadlock</strong> (dört koşul: karşılıklı dışlama, tut ve bekle, elden alınamama, döngüsel bekleme; CPU boşta) ↔ <strong>livelock</strong> (CPU meşgul, ilerleme yok) ↔ <strong>starvation</strong> (biri hiç sıra alamaz). Önlem: kilitleri hep aynı sırada al, <code>std::scoped_lock</code>.</li>
-<li><strong>Producer-consumer:</strong> <code>slotsAvail</code> (boş yer), <code>resAvail</code> (dolu yer) semaforları + indeks mutex'i; önce semafor, sonra mutex.</li>
-<li><strong>Bellek sıralaması:</strong> seq_cst (varsayılan, herkes aynı sırayı görür), acquire/release (çiftler arası), relaxed (sıra garantisi yok).</li>
+<li><strong>Altın kural 1:</strong> seri ve paralel aynı donanım, derleyici, bayrak ve koşullarda ölçülür. <strong>Altın kural 2:</strong> T<sub>seq</sub>, problemin <em>bilinen en hızlı</em> seri çözümüdür (paralel kodu 1 thread'le çalıştırmak değil).</li>
+<li>Speedup girdiye göre değişir: birçok girdi üzerinde ortalama/min/maks raporlanır.</li>
+<li>GPU'da iki hızlanma ayrı raporlanır: <strong>kernel-only</strong> (sadece kernel süresi) ve <strong>uçtan uca</strong> (H2D + kernel + D2H). Örnek: CPU 80 ms, H2D 6, kernel 4, D2H 10 ⇒ kernel-only 20×, uçtan uca 80/20 = 4×.</li>
+<li><strong>Süperdoğrusal speedup</strong> (S &gt; N) mümkündür: çekirdek başına veri önbelleğe sığmaya başlar ya da seri taraf kötü seçilmiştir.</li>
 </ul>
 
-<h3>Lecture 4–5: CUDA modeli, kernel, tiling</h3>
+<h3>Amdahl, Gustafson, karınca–fil</h3>
+<div class="formula-box">Amdahl (sabit problem):
+S(N) = 1 / ((1−α) + α/N)
+S(∞) = 1/(1−α)
+Gustafson (sabit süre):
+S(N) = (1−α) + α·N
+Karınca–fil:
+S = 1 / ((1−α)·r + α·r/N)
+(r = pahalı CPU'nun hız oranı)</div>
 <ul>
-<li><strong>Host</strong> hazırlar (cudaMalloc → cudaMemcpy H2D → kernel → cudaMemcpy D2H → cudaFree), <strong>device</strong> yürütür. Kernel başlatma asenkron; süre ölçmeden önce <code>cudaDeviceSynchronize()</code>.</li>
-<li><strong>Niteleyiciler:</strong> <code>__global__</code> (host'tan çağrılır, device'ta çalışır, void), <code>__device__</code>, <code>__host__</code>.</li>
-<li><strong>Hiyerarşi:</strong> blok ≤ 1024 thread, aynı SM'de; warp = ardışık 32 lineer id; bloklar bağımsız ve sırasız → ölçeklenebilirlik. Kısmi warp tam warp slotu kaplar.</li>
-<li><strong>Divergence:</strong> sadece warp içinde; iki yol sırayla çalışır, süre toplamı. Koşul <code>threadIdx / 32</code>'ye hizalıysa divergence yok.</li>
-<li><strong>Bariyer:</strong> <code>__syncthreads()</code> blok içi; bloğun bütün thread'leri ulaşmalı (if içinde, erken return'den sonra, thread'e bağlı tur sayılı döngüde tanımsız).</li>
-<li><strong>Latency hiding:</strong> bekleyen warp yerine hazır warp çalışır (sıfır maliyetli geçiş); bunun için çok warp gerekir.</li>
-<li><strong>CGMA:</strong> naive matmul 1 (2 okuma, 2 FLOP). G80: 86,4 GB/s ⇒ 21,6 GFLOPS ≈ tepe 367'nin %6'sı. T×T tiling: CGMA = T; dikdörtgen BX×BY blokta azalma 2·BX·BY/(BX+BY).</li>
-<li><strong>Tiled kernel:</strong> faz başına herkes M ve N karosundan birer eleman yükler; bariyer (1) karo dolsun, bariyer (2) üzerine yazılmasın; faz sayısı ⌈width/T⌉, kenarda 0 yüklenir.</li>
+<li>α = <strong>paralelleştirilebilen</strong> oran (seri kısım 1−α). En sık hata ikisini karıştırmak.</li>
+<li><strong>Amdahl'ın sezgisi:</strong> çekirdek eklemek sadece paralel kısmı küçültür; seri kısım taban olur. α = 0,9: N = 10 ⇒ 5,26; N = 100 ⇒ 9,17; N = ∞ ⇒ 10. Verim hızla düşer.</li>
+<li><strong>Gustafson'ın sezgisi:</strong> gerçek hayatta çekirdek artınca problemi büyütürüz (daha ince ızgara); paralel kısım N ile büyür, seri kısım sabit kalır ⇒ S ≈ N. Süper bilgisayarların neden binlerce ucuz çekirdekten oluştuğunu açıklar.</li>
+<li>İkisinin de kusuru: iletişim maliyetini sıfır sayarlar. Pratikte %90 üzeri verim iyi bir başarıdır.</li>
+<li><strong>Karınca–fil:</strong> r ≥ 1/(1−α) ise ucuz CPU'lar kaç tane olursa olsun pahalı tek CPU'yu geçemez (sabit problemde).</li>
+<li><strong>Gecikme ↔ throughput:</strong> t = 0'da gelen iş: CPU ilk sonucu erken, GPU geç ama birim zamanda çok daha fazla sonuç verir.</li>
 </ul>
 
-<h3>Lecture 6: derleme ve bellek</h3>
+<h2>Lecture 2 · Paralel program tasarımı</h2>
+
+<h3>Önce sor, sonra PCAM</h3>
 <ul>
-<li><strong>Derleme:</strong> .cu → PTX (sanal ISA) → ptxas → SASS (cubin). cubin X.y sadece X.z (z ≥ y) üzerinde çalışır; yeni GPU için PTX gömülmeli (JIT). <code>-arch</code> PTX'i, <code>-code</code> ikiliyi seçer. Register sayısı: <code>--ptxas-options=-v</code>.</li>
-<li><strong>Bellek haritası:</strong> register (thread, ~1 çevrim) · shared (blok, birkaç çevrim, bank'lar) · local (thread ama DRAM'de!) · global (grid + host, 400–600 çevrim, coalescing) · constant (salt okunur, aynı adres → yayın) · texture (salt okunur, 2D yerellik, interpolasyon, sınır modları).</li>
-<li><strong>Occupancy:</strong> SM başına blok = min(thread sınırı/Bt, warp sınırı/Bw, register/(Bt·reg), shared/Bshared, blok sınırı). Register spill → local memory.</li>
-<li><strong>Bank'lar:</strong> 32 bank, bank = kelime indeksi % 32; aynı bank'ta farklı kelime = conflict, aynı kelime = yayın. <code>s[k·threadIdx.x]</code> için derece EBOB(k, 32). 32×32 karoda sütun okuma 32-yollu → <code>[32][33]</code>.</li>
-<li><strong>Coalescing:</strong> warp'ın adresleri 32/64/128 B hizalı segmentlere toplanır; verim = kullanılan/taşınan. Pitch bayt cinsindendir: satır r = <code>(char*)p + r·pitch</code>. Hizalama: tip 1/2/4/8/16 B ve doğal hizalı.</li>
-<li><strong>Transpose:</strong> naive'de yazma stride'lı; shared karo ile ikisi de coalesced; 32×8 blok + 4 eleman/thread; copy kernel'i tavan ve indeks testi.</li>
+<li><strong>Önce sor:</strong> paralel gerçekten gerekli mi (seri yeterince hızlı mı)? Algoritma izin veriyor mu (bazıları doğası gereği seri: Newton yöntemi, çoğu sıkıştırma)? Zaman/mühendislik kaynağı var mı? GPU'da genelde algoritma baştan tasarlanır.</li>
+<li><strong>Hedefler:</strong> doğruluk (paralel programda komut sırası her çalıştırmada değişebilir) ve performans.</li>
+</ul>
+<table class="simple"><thead><tr><th>Adım</th><th>Ne yapılır</th><th>Pratik kural</th></tr></thead><tbody>
+<tr><td>Partitioning</td><td>işi olabildiğince küçük görevlere böl: fonksiyonel (adımlara göre) ya da veri (veriye göre) ayrıştırması</td><td>görev sayısı işlemci sayısının 10–100 katı</td></tr>
+<tr><td>Communication</td><td>görevler arası bağımlılık ve veri hacmini belirle → bağımlılık grafı (düğüm = görev, kenar = iletişim)</td><td>ideali bağımsız görevler</td></tr>
+<tr><td>Agglomeration</td><td>iletişimi azaltmak için görevleri grupla (grup içi iletişim bedava); bazen hesabı tekrarlamak iletmekten ucuzdur</td><td>grup sayısı işlemci sayısının ~10 katı</td></tr>
+<tr><td>Mapping</td><td>grupları işlemcilere ata: yük dengesi + yoğun iletişimli grupları aynı düğüme</td><td>genel hâli NP-complete → sezgisel</td></tr>
+</tbody></table>
+<p><strong>Örnek, 2D konvolüsyon:</strong> P: çıktı pikseli başına görev; C: 8 komşunun girdisi; A: pikselleri karolara grupla, sadece kenar satırları (halo) dışarıdan gelir; M: eşit karolar. GPU'da karo = blok, halo shared'a yüklenir.</p>
+
+<h3>Ayrıştırma desenleri</h3>
+<table class="simple"><thead><tr><th>Desen</th><th>Ne zaman</th><th>Dikkat</th></tr></thead><tbody>
+<tr><td>Task parallelism</td><td>az sayıda farklı modül (oyun döngüsü: girdi, çizim, ses, yapay zekâ)</td><td>ölçeklenmez: düğüm sayısı görev sayısını aşamaz</td></tr>
+<tr><td>Böl ve yönet</td><td>problem kendine benzer alt problemlere bölünür (merge sort, quicksort)</td><td>görevler dinamik; paralellik bağımlılık grafından okunur (8 elemanlı merge sort'ta en çok 4 eşzamanlı görev); ebeveyn bir alt problemi kendisi çözer (N − 1 yeni görev)</td></tr>
+<tr><td>Geometrik</td><td>düzenli ızgara/matris (görüntü filtresi, matris toplama/çarpma)</td><td>komşu bağımlılığı varsa sınırlarda halo; bağımlılık yoksa embarrassingly parallel</td></tr>
+<tr><td>Özyinelemeli veri</td><td>ağaç, liste, graf; prefix sum</td><td>seri algoritma dönüştürülür (2'li, 4'lü, 8'li grupların toplamları)</td></tr>
+<tr><td>Pipeline</td><td>veri sabit aşamalardan geçer (video çöz: oku → çöz → filtrele → göster)</td><td>aşamalar eşit sürmeli; throughput ≤ 1/en uzun aşama</td></tr>
+<tr><td>Olay tabanlı</td><td>etkileşimler çalışma zamanında belli (ayrık olay simülasyonu)</td><td>yürütme profili önceden bilinmez</td></tr>
+</tbody></table>
+<div class="formula-box">Pipeline: ilk çıktı = Σ aşama süresi
+n öğe ≈ Σ aşama + (n − 1) · max aşama</div>
+
+<h3>Program yapısı desenleri</h3>
+<ul>
+<li><strong>GPLS</strong> (globally parallel, locally sequential): birçok görev eş zamanlı, her biri kendi içinde seri. <strong>SPMD:</strong> herkes aynı program, kimliğine göre farklı veri (CUDA kernel'i, MPI). <strong>MPMD:</strong> farklı programlar (heterojen platform). <strong>Master-worker:</strong> master dağıtır/toplar, işçiler çalışır; boşta kalana iş verildiği için örtük yük dengesi; tek master darboğaz olabilir. <strong>Map-reduce:</strong> bağımsız verilere map, kısmi sonuçlara reduce.</li>
+<li><strong>GSLP</strong> (globally sequential, locally parallel): program seri, istenen kısım paralel. <strong>Fork/join:</strong> görevler dinamik oluşturulur, ebeveyn devam etmeden biterler. <strong>Loop parallelism:</strong> mevcut kodun zaman alan döngülerini paralelleştir (OpenMP); az emek, genelde az kazanç.</li>
+<li>Platform deseni dayatır: MPI → SPMD/MPMD, OpenMP → loop parallelism, CUDA → SPMD.</li>
 </ul>
 
-<h3>Lecture 7: hata ve kontrol akışı</h3>
+<h2>Lecture 3 · Thread'ler ve senkronizasyon</h2>
+
+<h3>Process, thread, yarışlar</h3>
 <ul>
-<li>Runtime çağrıları <code>cudaError_t</code> döndürür, kernel başlatma döndürmez. Konfigürasyon hatası → başlatmadan hemen sonra <code>cudaGetLastError()</code>; yürütme hatası → <code>cudaDeviceSynchronize()</code> ya da sonraki ilgisiz bir çağrı. Yürütme hataları kalıcıdır (sticky).</li>
-<li><code>cudaPeekAtLastError()</code> okur; <code>cudaGetLastError()</code> okur ve sıfırlar.</li>
-<li><strong>Predication</strong> (GPU): komutlar atlanmaz, predicate'i false olan thread'de etkisizdir; kısa dallar için. <strong>Prediction</strong> (CPU): tahmin + spekülatif yürütme.</li>
-<li><code>#pragma unroll N</code> döngünün hemen önünde; sayısız: sabit tur sayısında tam açar; <code>1</code>: açmaz. Bedel: register ve kod boyutu → spill / occupancy.</li>
-<li>Sayaç <code>int</code> olsun: signed taşma tanımsız, derleyici daha çok optimize eder; <code>unsigned</code> ile geri sayan <code>i &gt;= 0</code> döngüsü hiç bitmez.</li>
+<li><strong>Process:</strong> kendi adres uzayı, açık dosyaları, PID'si (fork pahalı). <strong>Thread:</strong> process içinde ayrı yürütme akışı; program sayacı, stack, register'lar thread'e özel; <strong>adres uzayı (heap, global) ortak</strong>. Oluşturma ve geçiş ucuz.</li>
+<li>Thread'ler ne için: performans, arka plan işleri, asenkron (bloklamayan) işlem, program yapısı. C++11'den beri <code>std::thread</code> (öncesi pThreads).</li>
+<li><strong>Data race:</strong> aynı konuma eş zamanlı erişim, en az biri yazma, senkronizasyon yok ⇒ C/C++'ta tanımsız davranış. Sadece okuma sorun değildir.</li>
+<li><strong>Race condition:</strong> olayların sırası yüzünden yanlış sonuç. Her data race bir race condition doğurmaz (şans eseri doğru çıkabilir); her race condition da data race'ten gelmez (atomiklerle data race'i kaldırsanız da sıra farklı sonuç verebilir).</li>
+<li><strong>counter++</strong> = load, add, store. İki thread 5'i okur, ikisi de 6 yazar ⇒ bir güncelleme kaybolur. 4 thread × 1000 kez korumasız ⇒ sonuç ≤ 4000, genelde daha az, teorik alt sınır çok küçük (2'ye kadar).</li>
+<li>x86'da hizalı 8 baytlık load/store atomik olsa da buna güvenilmez: derleyici yeniden sıralayabilir, tipler büyüyebilir.</li>
 </ul>
 
-<h2>Zor hesap soruları</h2>
+<h3>Araçlar: mutex, semafor, atomik, monitör</h3>
+<table class="simple"><thead><tr><th>İhtiyaç</th><th>Araç</th><th>Not</th></tr></thead><tbody>
+<tr><td>Bir veri yapısını aynı anda tek thread değiştirsin</td><td>mutex + <code>lock_guard</code></td><td>sahiplik: alan bırakır; recursive mutex aynı thread'in tekrar almasına izin verir</td></tr>
+<tr><td>Tek bir sayı/bayrak</td><td><code>std::atomic</code></td><td>donanım komutu (CAS: x86 CMPXCHG; LL/SC: ARM)</td></tr>
+<tr><td>En fazla N thread bir kaynağı kullansın</td><td>counting semafor</td><td>N izin; içerideki N thread birbirine karşı korunmaz!</td></tr>
+<tr><td>Bir koşul olana kadar bekle</td><td>condition variable (monitör)</td><td><code>wait</code> kilidi bırakıp uyur; koşul <code>while</code> ile (sahte uyanma); sinyal saklanmaz</td></tr>
+<tr><td>Bir olay bir kez sinyallensin</td><td>binary semafor / <code>future</code></td><td>semafor sinyali saklar (condition variable'dan farkı)</td></tr>
+<tr><td>Herkes bir noktaya gelmeden devam yok</td><td>bariyer</td><td>GPU'da <code>__syncthreads()</code> (sadece blok içi)</td></tr>
+</tbody></table>
+<ul>
+<li><strong>Strong semafor:</strong> bekleyenler FIFO; <strong>weak:</strong> değil (starvation olabilir). Donanımda atomik destek olmadan gerçek paralel programlama imkânsızdır: bütün kilitler atomik komutlar üzerine kurulur.</li>
+<li><strong>Spin lock:</strong> <code>atomic&lt;bool&gt;</code> + CAS döngüsü; kısa kritik bölgelerde iyi, uzun beklemede CPU yakar.</li>
+<li><strong>Monitör:</strong> metotları karşılıklı dışlamayla çalışan nesne; semaforlara göre mantık tek yerde, hata yapmak zor.</li>
+<li><strong>Bellek sıralaması:</strong> <code>seq_cst</code> (varsayılan, herkes aynı sırayı görür) · acquire/release (yazan release, okuyan acquire; ARM/PowerPC gibi zayıf sıralı işlemcilerde fark eder) · relaxed (garanti yok, emin değilseniz kullanmayın).</li>
+</ul>
+
+<h3>Ters gidenler ve producer-consumer</h3>
+<ul>
+<li><strong>Deadlock:</strong> karşılıklı dışlama + tut ve bekle + elden alınamama + döngüsel bekleme, dördü birlikte. Thread'ler uyur, CPU boşta. En pratik önlem: kilitleri <strong>hep aynı sırada</strong> al ya da <code>std::scoped_lock(m1, m2)</code>.</li>
+<li><strong>Livelock:</strong> thread'ler bloklu değil ama birbirine tepki vermekle meşgul (koridorda aynı yöne kaçan iki kişi); CPU yüksek, ilerleme yok.</li>
+<li><strong>Starvation:</strong> devam edebilecek bir thread adaletsiz zamanlama/öncelik yüzünden hiç sıra alamaz; deadlock yoktur.</li>
+<li><strong>Producer-consumer:</strong> tampon (BUFFSIZE), <code>slotsAvail</code> = BUFFSIZE (boş yer), <code>resAvail</code> = 0 (dolu yer), mutex <code>l</code> indeksler için. Üretici: slotsAvail.acquire → l → yaz, in++ → l bırak → resAvail.release. Tüketici simetrik. <strong>Sıra:</strong> önce semafor, sonra mutex; tersi (mutex'i tutarken semaforda uyumak) deadlock.</li>
+<li>Sonlandırma: paylaşılan sayaç ya da "poison pill" mesajı. Senkronizasyonsuz hatalar: dolu tampona yazma, boştan okuma, aynı indeksi iki thread'in kullanması.</li>
+<li><strong>Thread havuzu:</strong> görev başına thread oluşturma maliyeti yok, thread sayısı işe göre (G/Ç ağırlıklıda çok, CPU ağırlıklıda çekirdek başına bir); bağımlı görevlerde deadlock riski. <code>std::async</code> + <code>future</code> ile asenkron sonuç.</li>
+</ul>
+
+<h2>Lecture 4 · GPU ve CUDA'ya giriş</h2>
+
+<h3>GPU, CUDA, SIMT</h3>
+<ul>
+<li>GPU grafik için tasarlandı; oyun pazarı sayesinde ucuz ve çok yüksek FP throughput + bant genişliği. CUDA öncesi genel hesap, veriyi OpenGL dokularına sarıp çizim işlemi gibi yaptırarak yapılırdı.</li>
+<li><strong>CUDA:</strong> GPU'yu programlanabilir yapan donanım + yazılım; C/C++'a küçük bir uzantı. <strong>SM</strong> (Streaming Multiprocessor): GPU'nun yapı taşı; SP'ler (CUDA çekirdekleri), register dosyası, shared memory, önbellekler. Bir blok tek bir SM'de çalışır.</li>
+<li><strong>SIMD ↔ SIMT:</strong> SIMD tek komutu vektör elemanlarına uygular; SIMT'de her thread'in kendi register'ı ve kimliği vardır, farklı işler yapabilir, ama bir warp aynı anda tek komut yürüttüğü için farklı yollar sırayla çalışır (divergence).</li>
+<li>Aritmetik yoğunluk (bellek erişimi başına hesap) yüksekse bellek gecikmesi büyük önbellek yerine başka warp'ların hesabıyla gizlenir.</li>
+</ul>
+
+<h3>Genel CUDA yaklaşımı ve terimler</h3>
+<ol>
+<li>Profil çıkar: zamanı alan, hesap/bant genişliği yoğun kısımları bul (disk, ağ beklemesi değil).</li>
+<li>Veri paralel kısımları seç.</li>
+<li>Girdileri CPU'dan GPU'ya kopyala (PCIe; istisna: zero-copy, ortak DRAM).</li>
+<li>Kernel'leri yaz: iyi bir thread → veri eşlemesi.</li>
+<li>Sonuçları geri kopyala; CPU sonucu ile tolerans içinde karşılaştır (FP toplama birleşmeli değil: (a+b)+c ≠ a+(b+c) olabilir).</li>
+<li>Teorik tepe GFLOPS ve GB/s'ye ne kadar yakınız? Optimize et, tekrarla.</li>
+</ol>
+<p><strong>Terimler:</strong> host = CPU + belleği (hazırlar, başlatır); device = GPU + belleği (yürütür). Kernel = <code>__global__</code> fonksiyon, <code>&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> ile başlatılır. Blok (CTA) = aynı SM'de çalışan, shared memory paylaşan thread grubu. Warp = birlikte zamanlanan 32 thread.</p>
+
+<h3>Thread hiyerarşisi, warp'lar, divergence</h3>
+<div class="formula-box">blok içi lineer id = tx + ty·Bx + tz·Bx·By
+warp = id / 32
+lane = id % 32
+global x = bx·Bx + tx
+global y = by·By + ty
+(x sütun, y satır; x en hızlı değişir)</div>
+<ul>
+<li>Blok başına en fazla 1024 thread (eski 1.x: 512). Grid ve blok 1D/2D/3D olabilir (<code>dim3</code>). Thread boyutunu veri boyutuna uydurun.</li>
+<li><strong>Warp'lar her zaman tek bloğun içindedir;</strong> 48 thread'lik blok = 2 warp (ikincisi yarı dolu, ama tam warp slotu kaplar). Blok boyutunu 32'nin katı seçin.</li>
+<li>Örnek: <code>dim3 block(16, 8, 2)</code>, <code>threadIdx = (5, 3, 1)</code> ⇒ id = 5 + 3·16 + 1·128 = 181 ⇒ warp 5, lane 21.</li>
+<li><strong>Divergence:</strong> sadece bir warp'ın <em>içinde</em> olur; iki yol sırayla, süre toplamı. Yanlış sonuç vermez, yavaşlatır. Koşulu <code>id / 32</code>'ye hizalayın. 2D blokta warp, x boyunca Bx·(32/Bx) satır kaplar: 16×16 blokta warp = 2 satır.</li>
+<li><strong>Thread block cluster</strong> (compute 9.0): blok → cluster; cluster'ın blokları aynı GPC'de birlikte zamanlanır, <code>cluster.sync()</code> ve distributed shared memory.</li>
+</ul>
+
+<h3>Bloklar, ölçeklenebilirlik, bellek, compute capability</h3>
+<ul>
+<li>Bloklar <strong>bağımsız</strong> çalışmak zorunda: herhangi bir sırada, paralel ya da seri. Hangi bloğun hangi SM'de çalışacağını kontrol edemezsiniz ⇒ aynı program 2 SM'de de 100 SM'de de çalışır. Blok 0'ın önce başlayacağı varsayılamaz.</li>
+<li>Tasarım: problemi bloklarda bağımsız çözülebilen kaba parçalara, sonra bloktaki thread'lerin işbirliğiyle çözeceği ince parçalara böl. Blok içi işbirliği: shared memory + <code>__syncthreads()</code>; bloklar arası: kernel sınırı (ya da atomikler).</li>
+<li><strong>Bellek:</strong> thread başına register/local, blok başına shared (blok yaşadıkça), herkese global; salt okunur constant ve texture. Global, constant ve texture kernel'ler arası kalıcıdır.</li>
+<li><strong>Compute capability</strong> major.minor: aynı major = aynı mimari (1 Tesla, 2 Fermi, 3 Kepler, 5 Maxwell, 6 Pascal, 7 Volta/Turing, 8 Ampere/Ada, 9 Hopper); CUDA toolkit sürümü değildir.</li>
+</ul>
+
+<h2>Lecture 5 · Kernel, indeksleme, tiling</h2>
+
+<h3>Döngüden kernel'e ve host'un beş adımı</h3>
+<ul>
+<li>Düzenli indeksli iç içe döngüler ⇒ büyük ihtimalle paralelleştirilebilir. Çıktıdan başlayın: bir çıktı elemanı = bir thread; dış döngüler thread'lere dönüşür, iç çarpım döngüsü (k) thread'in içinde kalır.</li>
+<li><strong>Beş adım:</strong> <code>cudaMalloc((void**)&amp;d, bytes)</code> → <code>cudaMemcpy(d, h, bytes, cudaMemcpyHostToDevice)</code> → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(…)</code> → <code>cudaMemcpy(h, d, bytes, cudaMemcpyDeviceToHost)</code> → <code>cudaFree(d)</code>. Boyutlar <strong>bayt</strong>. <code>cudaMemcpy</code> senkron, kernel başlatma asenkron.</li>
+<li><code>cudaMalloc</code>'a <code>&amp;d</code> verilir, çünkü fonksiyon ayırdığı adresi pointer değişkenine yazar.</li>
+<li><strong>Niteleyiciler:</strong> <code>__global__</code> (host'tan çağrılır, device'ta çalışır, void döner), <code>__device__</code> (device'tan çağrılır), <code>__host__</code> (varsayılan); <code>__host__ __device__</code> ikisi birden.</li>
+<li>Tuzak: <code>float* Md, Nd, Pd;</code> sadece Md'yi pointer yapar; doğrusu <code>float *Md, *Nd, *Pd;</code>.</li>
+<li>Tek bloklu ilk matmul: matris en fazla 32×32 (1024 thread); blockIdx kullanılmazsa farklı bloklar aynı elemanı hesaplar.</li>
+</ul>
+
+<h3>İndeksleme, sınır kontrolü, örnek <<<(3,3),(8,32)>>></h3>
+<div class="formula-box">grid = ⌈N / B⌉ = (N + B − 1) / B
+if (i &lt; N) …
+A[row][col] → A[row·W + col]</div>
+<ul>
+<li>1000 elemana 256'lık bloklar ⇒ 4 blok = 1024 thread, son 24 thread'in elemanı yok ⇒ <code>if</code> şart.</li>
+<li><code>&lt;&lt;&lt;dim3(3,3), dim3(8,32)&gt;&gt;&gt;</code>: blok 256 thread = 8 warp, 9 blok = 2304 thread, 72 warp. Kapsanan alan 96 satır × 24 sütun. <code>blockIdx=(2,1), threadIdx=(5,10)</code> ⇒ row = 1·32 + 10 = 42, col = 2·8 + 5 = 21, P[42·24 + 21] = P[1029]; lineer id 10·8 + 5 = 85 ⇒ warp 2.</li>
+<li>Bu blokta warp = 4 satır × 8 sütun: <code>N[k·24 + col]</code> okuması 4 satırda aynı 8 float ⇒ 1 segment; <code>P</code> yazması 4 ayrı 32 B segment; <code>M[row·K + k]</code> 4 farklı adres. Blok genişliğinin 32'nin katı olması bu yüzden önerilir.</li>
+<li>Girdi ve çıktı eşlemesi farklı olabilir (transpose, shared hazırlığı).</li>
+</ul>
+
+<h3>Senkronizasyon, blok atama, latency hiding</h3>
+<ul>
+<li><code>__syncthreads()</code>: bloğun her thread'i oraya gelene kadar bekler; bir sonraki faza geçmeden herkes önceki fazı bitirmiş olur. Bütün thread'ler çağırmalı: if/else içinde (koşul bloğun tamamı için aynı değilse), erken return'den sonra, thread'e bağlı tur sayılı döngüde <strong>tanımsız</strong>.</li>
+<li>Bloklar arası senkronizasyon kernel içinde yok (CUDA 9 cooperative groups özel başlatma ister); kernel'i bölmek en basit yol.</li>
+<li>Bloklar SM'lere blok blok atanır; SM başına blok ve thread sınırı var (GT200: SM başına 8 blok, 1024 thread; 30 SM ⇒ 240 blok, 30.720 thread aynı anda).</li>
+<li><strong>Latency hiding:</strong> uzun gecikmeli işlem bekleyen warp seçilmez, hazır warp çalışır; geçiş maliyetsiz. "CUDA yazmak için warp'ı bilmeniz gerekmez, hızlı CUDA yazmak için gerekir."</li>
+<li><strong>GT200 blok seçimi:</strong> 8×8 ⇒ 8 blok × 64 = 512 thread (yarı boş); 16×16 ⇒ 4 blok = 1024 ✓; 32×32 = 1024 &gt; 512 thread/blok ✗.</li>
+</ul>
+
+<h3>CGMA, bellek türleri, tiling</h3>
+<div class="formula-box">CGMA = FP işlem / global bellek erişimi
+tavan ≈ BW/4 · CGMA   (float)
+naive matmul: 2 okuma, 2 FLOP ⇒ CGMA 1
+G80: 86,4/4 = 21,6 GFLOPS (tepe 367'nin ~%6'sı)
+T×T tiling: thread başına okuma 2·W/T ⇒ CGMA = T
+BX×BY blok: azalma = 2·BX·BY/(BX + BY)</div>
+<ul>
+<li><strong>Bellek türleri:</strong> otomatik skaler → register; otomatik dizi → local (global'de, yavaş; sabit indeksliyse register'a konabilir); <code>__shared__</code> → blok; <code>__device__</code>/cudaMalloc → global; <code>__constant__</code> (fonksiyon dışında, ~64 KB, salt okunur).</li>
+<li><strong>Tiling fikri:</strong> blok içindeki thread'ler aynı satırı/sütunu tekrar tekrar okur (2×2 örneğinde her eleman iki kez). Karoyu bir kez shared'a yükle, T kez kullan.</li>
+<li><strong>Faz m:</strong> thread (tx, ty) <code>M[Row][m·T + tx]</code> ve <code>N[m·T + ty][Col]</code>'i yükler (ikisi de warp içinde coalesced), bariyer, T çarp-topla, bariyer. Faz sayısı W/T (W, T'nin katı değilse ⌈W/T⌉ ve dışarısı 0).</li>
+<li><strong>İki bariyer:</strong> (1) yüklemeden sonra (read-after-write: başkasının yüklediğini okuyacaksın), (2) hesaptan sonra (write-after-read: sonraki faz üzerine yazmasın).</li>
+<li><strong>Kaynak hesabı (G80):</strong> 16×16 karo ⇒ Mds + Nds = 2 KB/blok ⇒ shared'a göre 8 blok; ama 768/256 = 3 blok (thread sınırı) ⇒ sadece 6 KB kullanılır.</li>
+<li><strong>Kare olmayan blok (8×32):</strong> Mds[32][8], Nds[8][8]; Nds'yi sadece ty &lt; 8 yükler, bariyerler if'in dışında.</li>
+</ul>
+
+<h2>Lecture 6 · Derleme, bellek, coalescing</h2>
+
+<h3>API, nvcc, uyumluluk, başlatma</h3>
+<ul>
+<li><strong>Runtime API</strong> (<code>cuda*</code>): context ve modülü örtük yönetir, kısa kod. <strong>Driver API</strong> (<code>cu*</code>): context (cihaz için process'in karşılığı) ve modül (dinamik kütüphanenin karşılığı) açık; daha çok kontrol. Primary context: process başına cihaz başına bir tane; bir eklentinin <code>cudaDeviceReset()</code>'i hepsini bozar.</li>
+<li><strong>Derleme zinciri:</strong> .cu → nvcc ön ucu → PTX (sanal ISA, metin) → ptxas → SASS (belirli sm_XY için makine kodu, cubin içinde). <code>nvcc -keep</code>/<code>-ptx</code>, <code>cuobjdump -sass</code>, <code>--ptxas-options=-v</code> (register/lmem).</li>
+<li><strong>İkili uyumluluk:</strong> X.y cubin'i sadece X.z (z ≥ y) üzerinde çalışır: aynı major içinde ileri, major'lar arası değil. <strong>PTX uyumluluğu:</strong> X için PTX, X ve üstü her ikiliye derlenebilir (eski PTX yeni özellikleri kullanamaz). Gelecek GPU'lar için PTX gömülmeli ⇒ JIT (sonuç compute cache'te).</li>
+<li><code>-gencode arch=compute_70,code=sm_70</code> sadece SASS; <code>code="compute_70,sm_70"</code> PTX'i de gömer. <code>__CUDA_ARCH__</code> sadece device kodunda tanımlı (compute_80 ⇒ 800).</li>
+<li><strong>Başlatma:</strong> CUDA 12'den beri <code>cudaInitDevice</code>/<code>cudaSetDevice</code>; yoksa ilk çağrı yavaştır. <strong>Zaman ölçümü:</strong> GPU ısınmış olmalı, kernel'den sonra <code>cudaDeviceSynchronize()</code> (ya da event'ler).</li>
+</ul>
+
+<h3>Bellek haritası ve sınırlar (occupancy)</h3>
+<table class="simple"><thead><tr><th>Bellek</th><th>Nerede</th><th>Kim görür / ömür</th><th>Hız için kural</th></tr></thead><tbody>
+<tr><td>Register</td><td>SM</td><td>thread / thread</td><td>sınırı aşma (spill)</td></tr>
+<tr><td>Shared</td><td>SM</td><td>blok / blok</td><td>farklı bank'lar ya da aynı kelime</td></tr>
+<tr><td>Global</td><td>DRAM (L2 üzerinden)</td><td>grid + host / uygulama</td><td>ardışık ve hizalı (coalescing)</td></tr>
+<tr><td>Local</td><td>DRAM</td><td>thread / thread</td><td>herkes aynı göreli indeks</td></tr>
+<tr><td>Constant</td><td>DRAM + constant cache</td><td>grid / uygulama</td><td>herkes aynı adres (yayın)</td></tr>
+<tr><td>Texture</td><td>DRAM + texture cache</td><td>grid / uygulama</td><td>2D'de yakın adresler</td></tr>
+</tbody></table>
+<div class="formula-box">SM başına blok = min( ⌊Tmax/Bt⌋, ⌊Wmax/Bw⌋, ⌊Reg/(Bt·r)⌋, ⌊Shm/Bs⌋, Bmax )
+occupancy = yerleşik warp / Wmax</div>
+<ul>
+<li>G80: SM başına 8192 register, 768 thread ⇒ thread başına ≈ 10 register. 16 KB shared, 8 blok ⇒ blok başına ≤ 2 KB ile 8 blok.</li>
+<li>Register spill: fazlası local'e (DRAM) gider, kernel çalışır ama yavaşlar. Yüksek occupancy hız garantisi değildir.</li>
+<li>Veriyi yerleştirme sırası: tek thread → register (büyükse local, küçültün); blokça tekrar kullanım → shared; salt okunur ve herkes aynı değer → constant; salt okunur, 2D yerel, kesirli koordinat → texture; diğerleri → global (coalesced, pitch).</li>
+</ul>
+
+<h3>Shared memory bank'ları</h3>
+<div class="formula-box">bank = (bayt adresi / 4) % 32
+s[k·t] (t = threadIdx.x) için derece = EBOB(k, 32)
+tile[32][32]: tile[r][c] bankı = c   ⇒ sütun okuma 32-yollu
+tile[32][33]: bank = (r + c) % 32</div>
+<ul>
+<li>Aynı bankta <em>farklı</em> kelimeler ⇒ istek sıralanır (n-yollu ⇒ throughput / n). Aynı kelime ⇒ yayın, conflict yok. Global'den farklı olarak shared beklerken başka warp'a geçilmez: conflict doğrudan yavaşlatır.</li>
+<li>Örnekler: k = 1, 3, 33 ⇒ yok; k = 2 ⇒ 2-yollu; k = 4 ⇒ 4; k = 16 ⇒ 16; k = 32 ⇒ 32; <code>s[t % 16]</code> ⇒ yok (çiftler aynı kelime); <code>tile[t][t]</code> ⇒ yok (köşegen); <code>tile[t/2][t%2]</code> ⇒ 16-yollu.</li>
+<li>Padding'in bedeli: 32 float (128 B). Ama padding başka bir deseni bozabilir: [32][33]'te köşegen 2-yollu olur.</li>
+</ul>
+
+<h3>Local, constant, texture, L2</h3>
+<ul>
+<li><strong>Local:</strong> sabit indeksli olduğu belirlenemeyen diziler, çok büyük struct/diziler, spill. PTX'te <code>.local</code>, <code>ld.local</code>. Ardışık 32-bit kelimeler ardışık thread'lere düşecek şekilde düzenlenir: herkes aynı göreli indekse erişirse tam coalesced. 5.x'ten beri L2'de önbelleklenir.</li>
+<li><strong>Constant:</strong> <code>__constant__</code> fonksiyon dışında, host <code>cudaMemcpyToSymbol</code> ile yazar. Warp isteği farklı adres sayısı kadar parçaya bölünür: herkes aynı adres ⇒ tek istek; ardışık adresler ⇒ 32 istek (global'in tersi!).</li>
+<li><strong>Texture:</strong> salt okunur (surface yazılabilir); 2D uzaysal yerellik için önbellek (hit DRAM trafiğini azaltır, gecikmeyi değil); bedava bilineer filtre, sınır modları (clamp varsayılan, border, wrap, mirror; wrap/mirror sadece normalize koordinatla), normalize koordinat [0,1), 8/16-bit → [0,1]/[−1,1] float dönüşümü. Bedeli: veriyi CUDA array'e kopyalamak. Host adımları: CUDA array ayır → kopyala → resDesc → texDesc → texture object.</li>
+<li><strong>L2 kontrolü</strong> (CC 8.0+): L2'nin bir kısmı tekrar tekrar erişilen (persisting) veriye ayrılabilir.</li>
+</ul>
+
+<h3>Coalescing, hizalama, pitch</h3>
+<div class="formula-box">verim = istenen bayt / taşınan bayt
+stride k ⇒ ≈ 1/k
+sütun (stride W) ⇒ 4/32 = %12,5
+pitch: satır başı = (char*)p + r·pitch
+(pitch BAYT; 256 B hizalama: 5/50/250 → 256, 500 → 512, 700 → 768)</div>
+<ul>
+<li>Global bellek 32/64/128 B'lık, boyutuna hizalı transaction'larla okunur; "11 bayt" okunmaz, 32 okunur. Rastgele 32 adres ⇒ 32 × 32 B = 1024 B; ardışık hizalı ⇒ 128 B ⇒ 8 kat fark.</li>
+<li>Tek komut şartı: tip 1/2/4/8/16 B ve doğal hizalı. Struct'lar için <code>__align__(8/16)</code>; 12 baytlık struct üç 4 B okumaya bölünür. <code>cudaMalloc</code> adresleri ≥ 256 B hizalı; tek blokta birden çok dizi saklamak hizayı bozabilir (float'tan sonra float2 8 B'ye hizalı olmayabilir ⇒ yanlış sonuç).</li>
+<li>Hızlı kontrol: adreste <code>threadIdx.x</code> (ya da ondan türeyen col) çarpansız ve en sağda mı? <code>A[row·W + col]</code> ✓, <code>A[col·W + row]</code> ✗, <code>A[2·col]</code> yarı verim, <code>a[i + 1]</code> bir fazla segment.</li>
+<li>2D'de tam coalescing için blok genişliği ve dizi genişliği 32'nin katı olmalı ⇒ <code>cudaMallocPitch</code>/<code>cudaMalloc3D</code>, kopyalama <code>cudaMemcpy2D</code>/<code>3D</code>. Pitch'i eleman sayısı sanmak klasik hata.</li>
+</ul>
+
+<h3>Transpose ve loop unrolling</h3>
+<ul>
+<li><strong>Transpose serisi:</strong> copy (tavan ve indeks testi; "önce hesap yapmadan kopyala") → naive (okuma coalesced, yazma stride W ⇒ 32 segment) → shared karo ile coalesced (karoyu satır satır oku, bariyer, sütununu satır olarak yaz; blok konumu da bx ↔ by) → <code>[32][33]</code> padding ile bank conflict'siz.</li>
+<li>Blok 32×8 = 256 thread, karo 32×32: her thread 4 eleman (y, y+8, y+16, y+24) ⇒ indeks maliyeti paylaşılır, warp'ın ardışıklığı bozulmaz.</li>
+<li>İndeks takibi örneği (N = 1024): blockIdx (1,2), threadIdx (5,3) ⇒ yüklerken x = 37, y = 67 (satır 67, 75, 83, 91); yazarken x = 69, y = 35.</li>
+<li>Ölçümler: global coalescing en kritik etken; bariyer ve shared maliyeti küçük; padding coalesced transpose'u copy hızına yaklaştırır.</li>
+<li><strong>Loop unrolling:</strong> gövdeyi kopyala, tur sayısını azalt ⇒ daha az sayaç/karşılaştırma/dallanma, sabit indeksler, bağımsız load'lar art arda (ILP). Bedeli: kod büyür, canlı değişken ve register artar ⇒ spill / düşük occupancy. Sabit tur sayılı döngüleri derleyici zaten açar; <code>width/T</code> gibi çalışma zamanı değerleri tam açılamaz.</li>
+</ul>
+
+<h2>Lecture 7 · Hata kontrolü ve kontrol akışı</h2>
+
+<h3>Hata kontrolü</h3>
+<ul>
+<li>Bütün runtime fonksiyonları <code>cudaError_t</code> döndürür; asenkron fonksiyon cihaz işi bitmeden döner, bu yüzden sonradan olacak hatayı bildiremez. Kernel başlatma hiç döndürmez.</li>
+<li>Asenkron hata sonraki <em>ilgisiz</em> bir çağrıda görünür ("yanlış satırda"). Yürütme hataları kalıcıdır (sticky): sonraki bütün çağrılar başarısız olur.</li>
+<li>Host thread'i başına bir hata değişkeni: <code>cudaPeekAtLastError()</code> okur, <code>cudaGetLastError()</code> okur ve <code>cudaSuccess</code>'a sıfırlar.</li>
+<li><strong>Önerilen desen:</strong> <code>cudaGetLastError();</code> (temizle) → <code>k&lt;&lt;&lt;…&gt;&gt;&gt;(…);</code> → <code>launchErr = cudaGetLastError();</code> (konfigürasyon: 2048 thread/blok, çok shared, geçersiz argüman) → <code>runErr = cudaDeviceSynchronize();</code> (yürütme: sınır dışı, null pointer).</li>
+</ul>
+
+<h3>Dallanma, predication, döngüler</h3>
+<ul>
+<li>Her akış kontrolü (if, switch, for, while, do) warp'ı diverge ettirebilir; farklı yollar seri, sonra converge. Koşulu thread ID'sine bağlıysa warp sınırına hizalayın (warp dağılımı deterministik).</li>
+<li>128 thread (4 warp): <code>t % 2 == 0</code> ⇒ 4; <code>t &lt; 64</code> ⇒ 0; <code>t &lt; 70</code> ⇒ 1 (warp 2); <code>t / 32 == 1</code> ⇒ 0. 16×16 blokta <code>threadIdx.y % 2 == 0</code> ⇒ 8 (hepsi).</li>
+<li><strong>Prediction</strong> (CPU): dalı tahmin et, spekülatif yürüt, yanlışsa at. <strong>Predication</strong> (GPU): komutlar atlanmaz, thread başına predicate; false olanlar sonuç yazmaz, adres hesaplamaz, operand okumaz. Kısa dallarda zıplama ve divergence yok.</li>
+<li>Dallanma optimizasyonu pipelining yüzünden gerekli: dal, sonraki komut belli olana kadar boru hattını bekletir.</li>
+<li><code>#pragma unroll</code> döngünün hemen önüne, sadece o döngüye: sayısız ⇒ sabit tur sayısında tam açar (değilse açmaz); <code>N</code> ⇒ N kat (artan turlar için kod eklenir, n &lt; N'de de doğru); <code>1</code> ⇒ açmaz.</li>
+<li><strong>Signed sayaç:</strong> signed taşma tanımsız ⇒ derleyici "i taşmaz" varsayıp <code>offset + stride·i</code>'yi pointer artırımına çevirebilir. unsigned taşma tanımlı (2<sup>32</sup>'de sarar) ⇒ bu dönüşümler yapılamaz; ayrıca <code>for (unsigned i = n−1; i &gt;= 0; i--)</code> hiç bitmez.</li>
+</ul>
+
+<h2>Kazık sorular 1 · Hesap</h2>
 <p>Hepsi hesap makinesiz yapılabilir. Her soruda iki ayrı konu birleşiyor; önce hangi formüllerin gerektiğini yazın.</p>
 
 <h3>H1 · Amdahl, tersten</h3>
@@ -142,7 +386,7 @@
 <p>G80: tepe 367 GFLOPS, 86,4 GB/s. (a) Matmul'ün hesapla sınırlı olması için CGMA en az kaç olmalı? (b) T = 16 tiling yeterli mi, ulaşılan tavan? (c) T = 32 neden G80'de mümkün değil?</p>
 <div class="hint"><p>(a) 86,4/4 = 21,6 G float/s ⇒ 21,6·CGMA ≥ 367 ⇒ CGMA ≥ <strong>17</strong>. (b) T = 16 ⇒ CGMA 16 ⇒ 21,6·16 = <strong>345,6 GFLOPS</strong>: hâlâ az farkla bellekle sınırlı ama tepeye çok yakın. (c) 32×32 = 1024 thread, G80'in blok başına 512 sınırını aşar (shared açısından 2·32²·4 = 8 KB sığardı). Bir thread'e birden çok eleman verilerek (ör. 32×16 blok) aşılabilir.</p></div>
 
-<h2>Kod oku, hatayı bul</h2>
+<h2>Kazık sorular 2 · Kodu oku, hatayı bul</h2>
 <p>Bu kodların hepsi derlenir; bazıları yine de yanlıştır. Her birinde önce ne yaptığını, sonra neyin bozuk olduğunu ve düzeltmeyi yazın. Hepsi aynı programda: ▶ ile düzeltilmiş versiyonları çalıştırabilirsiniz.</p>
 
 <h3>K1 · Bir bariyer eksik</h3>
@@ -224,7 +468,7 @@ void reverseCopy(const float* in, float* out, unsigned n) {
 <p>Ne olur? n = 0 için ayrıca ne olur? Lecture 7'nin signed sayaç tavsiyesiyle bağlantısı?</p>
 <div class="hint"><p><code>unsigned</code> hiçbir zaman &lt; 0 olmaz: <code>i &gt;= 0</code> hep doğru; i = 0'dan sonra <code>i--</code> 2<sup>32</sup> − 1'e sarar ⇒ dizi dışına yazar, sonsuz döngü / çökme. n = 0'da baştan i = 2<sup>32</sup> − 1. Düzeltme: <code>for (int i = (int)n - 1; i &gt;= 0; i--)</code>. Bağlantı: unsigned taşma <em>tanımlı</em> (başa sarar); hem bu hataya yol açar hem de derleyicinin optimizasyonlarını kısıtlar. Signed sayaç iki açıdan da daha iyi.</p></div>
 
-<h2>Tasarım ve "neden" soruları</h2>
+<h2>Kazık sorular 3 · Tasarım ve "neden"</h2>
 
 <h3>T1 · 10⁸ elemanı topla</h3>
 <p>10⁸ float'ın toplamını GPU'da hesaplayın. Neden tek bir kernel'de bütün blokların sonucunu bir bariyerle birleştiremezsiniz? Önerdiğiniz tasarımın adımlarını ve her adımdaki senkronizasyonu yazın.</p>
@@ -242,7 +486,7 @@ void reverseCopy(const float* in, float* out, unsigned n) {
 <p>Program şunları yapıyor: <code>k1&lt;&lt;&lt;…&gt;&gt;&gt;(); k2&lt;&lt;&lt;…&gt;&gt;&gt;(); cudaMemcpy(…);</code>. <code>cudaMemcpy</code> "illegal memory access" döndürüyor. Hangi kernel suçlu olabilir, nasıl bulursunuz, ve hatadan sonra neden sonraki her çağrı da başarısız oluyor?</p>
 <div class="hint"><p>İkisi de olabilir: başlatmalar asenkron, hata ilk senkronize eden çağrıda (burada <code>cudaMemcpy</code>) raporlanır. Bulmak için her kernel'den sonra <code>cudaGetLastError()</code> (başlatma hatası) ve <code>cudaDeviceSynchronize()</code> (yürütme hatası) kontrol edin; hangisinden sonra hata çıkarsa o. Yürütme hataları <strong>kalıcıdır</strong> (sticky): context bozulur, process'teki sonraki bütün CUDA çağrıları aynı hatayı döndürür; düzeltmek için programı yeniden başlatmak gerekir.</p></div>
 
-<h2>Tuzak sorular</h2>
+<h2>Kazık sorular 4 · Çoktan seçmeli tuzaklar</h2>
 <div class="quiz" data-answer="3">
   <p>Bir warp'ın 32 thread'i <code>__constant__ float c[64]</code>'ten <code>c[threadIdx.x]</code> okuyor. Ne olur?</p>
   <ol>
@@ -331,6 +575,51 @@ void reverseCopy(const float* in, float* out, unsigned n) {
     <li data-why="Doğru: toplam önbellek N ile büyür; ya da altın kural ihlal edilmiştir (seri taraf yavaş bir versiyon).">Her çekirdeğe düşen veri önbelleğe sığmaya başladı (ya da seri versiyon en hızlı değil).</li>
     <li data-why="Gustafson problemin büyüdüğünü varsayar; burada problem aynı.">Gustafson yasası.</li>
     <li data-why="Mümkün; önbellek etkisiyle sık görülür.">İmkânsız; ölçüm hatası.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Kernel'den hemen sonra <code>cudaMemcpy(h, d, bytes, cudaMemcpyDeviceToHost)</code> çağrılıyor (varsayılan stream). Kopyadan önce <code>cudaDeviceSynchronize()</code> şart mı?</p>
+  <ol>
+    <li data-why="Varsayılan stream&#x27;deki işler sırayla yürür; kopya kernel&#x27;i bekler.">Evet; yoksa kernel bitmeden eski veri kopyalanır.</li>
+    <li data-why="Doğru: senkron kopya önceki işleri bekler. Süre ölçerken ise kernel&#x27;i ayrıca beklemek gerekir.">Hayır: aynı (varsayılan) stream'deki <code>cudaMemcpy</code> önceki kernel'in bitmesini bekler; ama yürütme hatasını yakalamak için senkronizasyonun dönüşüne bakmak yine iyi fikirdir.</li>
+    <li data-why="İşletim sistemine bağlı değil.">Sadece Windows'ta şart.</li>
+    <li data-why="Kernel başlatma asenkrondur; bekleyen kopyadır.">Hayır, çünkü kernel başlatma senkrondur.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Mutex ile binary semafor arasındaki asıl fark?</p>
+  <ol>
+    <li data-why="Binary = 0/1, tek thread.">Binary semafor aynı anda iki thread'e izin verir.</li>
+    <li data-why="Her kilit atomik komutlarla kurulur.">Mutex atomik komut gerektirmez.</li>
+    <li data-why="Sahiplik farkı var.">Fark yok.</li>
+    <li data-why="Doğru: sahiplik. Binary semaforla bir thread release, diğeri acquire ederek bekleşebilir.">Mutex'in sahibi vardır (alan bırakır); semaforu başka bir thread release edebilir, bu yüzden "olay" sinyali için kullanılır.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Bir kernel'de <code>float buf[100]; … buf[threadIdx.x % k] …</code> (k çalışma zamanında). <code>buf</code> büyük ihtimalle nerede?</p>
+  <ol>
+    <li data-why="Doğru: register&#x27;lar indekslenemez; dinamik indeksli diziler local&#x27;e gider (yavaş).">Local memory: thread'e özel ama DRAM'de, çünkü çalışma zamanında indeksleniyor.</li>
+    <li data-why="Sadece sabit indeksli küçük diziler register&#x27;a konabilir.">Register'da: otomatik değişken.</li>
+    <li data-why="Shared için &lt;code&gt;__shared__&lt;/code&gt; gerekir.">Shared memory'de.</li>
+    <li data-why="Constant salt okunurdur ve &lt;code&gt;__constant__&lt;/code&gt; ister.">Constant memory'de.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Texture'da <code>cudaAddressModeWrap</code>, normalize edilmemiş (texel) koordinatlarla kullanılırsa?</p>
+  <ol>
+    <li data-why="Wrap ve mirror normalize koordinat ister.">Normal çalışır.</li>
+    <li data-why="Filtre ayrı bir ayardır.">Bilineer filtre kapanır.</li>
+    <li data-why="Doğru: normalize olmayan koordinatlarda sadece clamp ve border anlamlıdır.">Desteklenmez: wrap ve mirror sadece normalize koordinatlarla; diğerlerinde clamp/border kullanılır.</li>
+    <li data-why="Yazmak için surface gerekir.">Texture yazılabilir olur.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>Gustafson yasasındaki α neyin oranıdır?</p>
+  <ol>
+    <li data-why="Bu Amdahl&#x27;ın α&#x27;sıdır.">Seri programdaki paralelleştirilebilir sürenin.</li>
+    <li data-why="Doğru: Gustafson süreyi paralel makinede sabit tutar ve oranı orada ölçer; bu yüzden S = (1−α) + αN.">Paralel makinedeki çalışma süresinin, bütün işlemcilerin çalıştığı kısmının.</li>
+    <li data-why="İki yasa da iletişimi sıfır sayar.">İletişim süresinin.</li>
+    <li data-why="N çekirdek sayısıdır.">Çekirdek sayısının.</li>
   </ol>
 </div>
 
