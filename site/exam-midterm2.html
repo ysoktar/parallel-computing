@@ -202,7 +202,7 @@ __global__ void reverseBlock(int* d)
 <div class="callout class">
   <p><strong>"Önce işlem yapmadan sadece kopyala."</strong> Shared memory'ye, yazacağınız bölgenin dışından da veri (ör. konvolüsyonda kenar/halo bölgesi) gerekiyorsa: önce kernel'i sadece "global → shared → global" kopyası yapacak şekilde yazın ve <strong>çıktının girdiyle aynı olduğunu</strong> doğrulayın. İndeksler doğruysa hesaplamayı sonra ekleyin. Sınavda da shared'a yükleme indekslerini ayrı ayrı kontrol edin.</p>
 </div>
-<p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-tiling.html#tiling-ile-shared-memory">L5 sayfası</a>. Kısa hâli:</p>
+<p>Tiled matris çarpımının tamamı, faz faz görselleştirmesiyle: <a href="l5-tiling.html#tiling-ile-shared-memory">5.3</a>. Kısa hâli:</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slayt 90: tiled matmul (TILE_WIDTH × TILE_WIDTH blok)">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
@@ -265,7 +265,7 @@ out[threadIdx.x] = s[threadIdx.x % 16];
   <li>Ardışık thread'ler (<code>threadIdx.x</code>) ardışık adreslere gitmeli: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
 </ul>
 <div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
-<p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing-transpose.html#matris-transpose">Coalescing sayfası</a>. Özet:</p>
+<p>Naive transpose'un neden yavaş olduğu ve shared memory ile nasıl düzeltildiği: <a href="coalescing-transpose.html#matris-transpose">6.7 (transpose)</a>. Özet:</p>
 <div class="two-col">
 <pre class="code" data-run="transpose_simple.cu" data-title="Naive transpose: okuma ✓, yazma ✗">
 // in: height×width, out: width×height
@@ -397,7 +397,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <p><code>__global__</code> ile işaretli bir fonksiyon için hangisi doğru?</p>
   <ol>
     <li data-why="Bu __device__ fonksiyonun tanımı.">Cihazda çalışır, sadece cihazdan çağrılır.</li>
-    <li data-why="Kernel: cihazda çalışır, host'tan <<<…>>> ile çağrılır (void döner).">Cihazda çalışır, host'tan çağrılır.</li>
+    <li data-why="Kernel: cihazda çalışır, host'tan &lt;&lt;&lt;…&gt;&gt;&gt; ile çağrılır (void döner).">Cihazda çalışır, host'tan çağrılır.</li>
     <li data-why="Bu __host__ (varsayılan).">Host'ta çalışır, host'tan çağrılır.</li>
     <li data-why="__host__ __device__ birlikte yazılınca iki versiyon derlenir; __global__ böyle değil.">Hem host'ta hem cihazda çalışır.</li>
   </ol>
@@ -412,7 +412,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <li>Bir erişim deseni için dokunulan 32/128 B segment sayısı ve verim.</li>
   <li>Naive transpose neden yavaş, shared memory ile nasıl düzelir.</li>
   <li>Loop unrolling: ne kazandırır, maliyeti.</li>
-  <li>Bellek türleri tablosu (kapsam, ömür, hız, kim yazar): <a href="l5-tiling.html#cuda-bellek-turleri">L5</a>.</li>
+  <li>Bellek türleri tablosu (kapsam, ömür, hız, kim yazar): <a href="l5-tiling.html#cuda-bellek-turleri">5.3</a>.</li>
   <li>G80/GT200 sayısal örnekleri ve CGMA.</li>
 </ul>
 

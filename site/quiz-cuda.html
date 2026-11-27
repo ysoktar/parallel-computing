@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CUDA quiz: çözümlü sorular · Paralel Hesaplama</title>
-<meta name="description" content="24 Kasım yazılı CUDA quiz'i için 31 çözümlü soru, son konulardan başlayarak: hata kontrolü, divergence, coalescing, bank conflict, pitch, senkronizasyon, tiling, CGMA, occupancy, kernel yazma, indeksleme.">
+<meta name="description" content="24 Kasım'daki yazılı CUDA quiz'i için hazırlanmış, final tekrarı için de kullanılabilecek 31 çözümlü soru, son konulardan başlayarak: hata kontrolü, divergence, coalescing, bank conflict, pitch, senkronizasyon, tiling, CGMA, occupancy, kernel yazma, indeksleme.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 <script src="js/theme-init.js"></script>
@@ -14,7 +14,7 @@
 <main><div class="content">
 
 <h1>CUDA quiz: çözümlü sorular</h1>
-<p class="lead">24 Kasım Salı ders başındaki yazılı quiz için 31 soru. Sıra <strong>son konulardan</strong> başlar (L7 → L6 → senkronizasyon → tiling → CGMA → occupancy → kernel yazma → indeksleme). Her soruyu önce kendiniz çözün, sonra <strong>Çözümü göster</strong>.</p>
+<p class="lead">24 Kasım'daki yazılı CUDA quiz'i için hazırlanmış 31 soru; final için de iyi bir CUDA tekrarı. Sıra <strong>son konulardan</strong> başlar (L7 → L6 → senkronizasyon → tiling → CGMA → occupancy → kernel yazma → indeksleme). Her soruyu önce kendiniz çözün, sonra <strong>Çözümü göster</strong>.</p>
 
 <div class="callout key">
   <p><strong>Dört bağlantıyı birlikte düşünün:</strong> thread eşlemesi → warp adresleri → coalescing / divergence · karo boyutu → shared/register kullanımı → occupancy → latency hiding · veri yeniden kullanımı → CGMA → arithmetic intensity → bant genişliği tavanı · veri bağımlılığı → bariyer / atomic / ayrı kernel aşaması.</p>
@@ -29,15 +29,15 @@
 k&lt;&lt;&lt;g,b&gt;&gt;&gt;(...);
 cudaError_t launch = cudaGetLastError();     // != cudaSuccess ise raporla, dur
 cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess ise raporla, dur</pre>
-<p>Launch hata kodu döndürmez. Get son hatayı alır ve <code>cudaSuccess</code>'a sıfırlar; Peek sıfırlamaz. Launch kontrolü konfigürasyon/parametre hatasını, sync kontrolü yürütme sırasında oluşan asenkron hatayı bulur. Bütün runtime çağrılarının dönüşleri de denetlenmeli. Çalışan örnek: <a href="l7-cuda-control.html">L7</a>.</p>
+<p>Launch hata kodu döndürmez. Get son hatayı alır ve <code>cudaSuccess</code>'a sıfırlar; Peek sıfırlamaz. Launch kontrolü konfigürasyon/parametre hatasını, sync kontrolü yürütme sırasında oluşan asenkron hatayı bulur. Bütün runtime çağrılarının dönüşleri de denetlenmeli. Çalışan örnek: <a href="l7-cuda-control.html">7.1</a>.</p>
 </div>
 
 <h3>Soru 29 · Predication, unrolling, blok sırası</h3>
-<p>Predication prediction'dan nasıl farklıdır? <code>#pragma unroll 4</code> neden her zaman daha hızlı değildir? Sıradan blokların çalışma sırası neden garanti edilmez?</p>
+<p>Predication prediction'dan nasıl farklıdır? <code>#pragma unroll 4</code> neden her zaman daha hızlı değildir? Normal (cluster'sız) blokların çalışma sırası neden garanti edilmez?</p>
 <div class="hint"><p>Prediction (CPU): dalı tahmin et, spekülatif yürüt, yanlışsa geri al. Predication (GPU): koşullu komutlar atlanmaz, thread başına predicate (mask) ile; false olanlar sonuç yazmaz, operand okumaz. Unroll döngü kontrolünü azaltır ama register baskısı ve kod boyutu artar (spill, düşük occupancy). Blokların bağımsızlığı donanımın onları farklı sayıda SM'ye serbestçe dağıtmasını sağlar; sıra garantisi bu esnekliği (ölçeklenebilirliği) bozar. CC 9.0 cluster'ları özel bir istisnadır.</p></div>
 
 <h3>Soru 24 · Divergence sayısı</h3>
-<p>Blok 128 thread: <code>if (t &lt; 70)</code> ve <code>if (t % 2 == 0)</code> için kaç warp diverge olur? 16×16 2D blokta <code>if (threadIdx.y % 2 == 0)</code>?</p>
+<p>Blok 128 thread, <code>t = threadIdx.x</code>: <code>if (t &lt; 70)</code> ve <code>if (t % 2 == 0)</code> için kaç warp diverge olur? 16×16 2D blokta <code>if (threadIdx.y % 2 == 0)</code>?</p>
 <div class="hint"><p><code>t &lt; 70</code>: warp 0, 1 tamamen true; warp 2 (64–95) karışık; warp 3 false → <strong>1</strong>. <code>t % 2</code>: 4 warp'ın hepsi karışık → <strong>4</strong>. 16×16 blokta x hızlı değişir, her warp iki satırdır (biri çift biri tek) → 8 warp'ın <strong>hepsi</strong>. Farklı warp'ların farklı dal seçmesi divergence sayılmaz.</p></div>
 
 <h2>2. Global ve shared bellek erişimi (L6)</h2>
@@ -55,8 +55,8 @@ cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess ise raporla, dur<
 <div class="hint"><p>Ofset = 7·512 + 9·4 = <strong>3620 B</strong>. Satırda gerçek veri 400 B, padding 112 B. Toplam 50·512 = 25600 B, mantıksal veri 20000 B, padding 5600 B. Erişim: <code>((float*)((char*)p + 7*pitch))[9]</code>. Pitch bayt, sütun ofseti eleman cinsinden.</p></div>
 
 <h3>Soru 22 · Shared bank</h3>
-<p>Warp <code>s[lane*k]</code> okuyor. k = 1, 2, 3, 4, 16, 32, 33 için conflict derecesi? Herkes <code>s[0]</code> okursa?</p>
-<div class="hint"><p>EBOB(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: her lane farklı adres ama aynı bank → 32-yollu. k = 33 (padding): bank'lar dağılır. <code>s[0]</code>: aynı adres → yayın, conflict değil. Global segment ile shared bank farklı kavramlardır. Görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">L6 bank'lar</a>.</p></div>
+<p>Bir warp <code>s[lane*k]</code> okuyor (<code>lane = threadIdx.x % 32</code>, <code>float s[]</code>, 32 bank). k = 1, 2, 3, 4, 16, 32, 33 için conflict derecesi? Herkes <code>s[0]</code> okursa?</p>
+<div class="hint"><p>EBOB(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: her lane farklı adres ama aynı bank → 32-yollu. k = 33 (padding): bank'lar dağılır. <code>s[0]</code>: aynı adres → yayın, conflict değil. Global segment ile shared bank farklı kavramlardır. Görselleştirme: <a href="l6-memory-types.html#bank-lar-ve-bank-conflict-ler">6.3, bank'lar</a>.</p></div>
 
 <h3>Soru 26 · Bellek seçimi</h3>
 <p>(a) Thread'in toplayıcısı, (b) blokça paylaşılan karo, (c) tüm warp'ın aynı katsayıyı okuduğu filtre, (d) 2D yakınlık ve bilineer interpolasyon, (e) büyük, thread'e özel dizi: hangi bellek?</p>

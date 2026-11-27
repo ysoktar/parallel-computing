@@ -202,7 +202,7 @@ __global__ void reverseBlock(int* d)
 <div class="callout class">
   <p><strong>"First just copy, without computing."</strong> If shared memory also needs data from outside the region you will write (e.g. the border/halo region in a convolution): first write the kernel so that it only does a "global → shared → global" copy and check that <strong>the output equals the input</strong>. Once the indices are right, add the computation. In the exam, too, check the shared-memory load indices separately.</p>
 </div>
-<p>The whole tiled matrix multiplication, with a phase-by-phase visualisation: <a href="l5-tiling.html#tiling-with-shared-memory">L5 page</a>. In short:</p>
+<p>The whole tiled matrix multiplication, with a phase-by-phase visualisation: <a href="l5-tiling.html#tiling-with-shared-memory">5.3</a>. In short:</p>
 <pre class="code" data-run="matmul_gpu.cu" data-title="Slide 90: tiled matmul (TILE_WIDTH × TILE_WIDTH block)">
 __global__ void MatrixMulKernel(float* Md, float* Nd, float* Pd, int width)
 {
@@ -265,7 +265,7 @@ out[threadIdx.x] = s[threadIdx.x % 16];
   <li>Consecutive threads (<code>threadIdx.x</code>) should go to consecutive addresses: <code>A[row*width + col]</code> ✓, <code>A[col*width + row]</code> ✗.</li>
 </ul>
 <div class="wgt-mount" data-widget="coalesce" data-preset="seq"></div>
-<p>Why the naive transpose is slow and how shared memory fixes it: <a href="coalescing-transpose.html#matrix-transpose">Coalescing page</a>. Summary:</p>
+<p>Why the naive transpose is slow and how shared memory fixes it: <a href="coalescing-transpose.html#matrix-transpose">6.7 (transpose)</a>. Summary:</p>
 <div class="two-col">
 <pre class="code" data-run="transpose_simple.cu" data-title="Naive transpose: read ✓, write ✗">
 // in: height×width, out: width×height
@@ -397,7 +397,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <p>Which is true for a function marked <code>__global__</code>?</p>
   <ol>
     <li data-why="That describes a __device__ function.">Runs on the device, callable only from the device.</li>
-    <li data-why="A kernel: runs on the device, called from the host with <<<…>>> (returns void).">Runs on the device, called from the host.</li>
+    <li data-why="A kernel: runs on the device, called from the host with &lt;&lt;&lt;…&gt;&gt;&gt; (returns void).">Runs on the device, called from the host.</li>
     <li data-why="That is __host__ (the default).">Runs on the host, called from the host.</li>
     <li data-why="__host__ __device__ together compile two versions; __global__ is not that.">Runs on both the host and the device.</li>
   </ol>
@@ -412,7 +412,7 @@ out[y * height + x] = tile[threadIdx.x][threadIdx.y];
   <li>For an access pattern: the number of 32/128 B segments touched and the efficiency.</li>
   <li>Why the naive transpose is slow, how shared memory fixes it.</li>
   <li>Loop unrolling: what it gains, what it costs.</li>
-  <li>The memory types table (scope, lifetime, speed, who writes): <a href="l5-tiling.html#cuda-memory-types">L5</a>.</li>
+  <li>The memory types table (scope, lifetime, speed, who writes): <a href="l5-tiling.html#cuda-memory-types">5.3</a>.</li>
   <li>The G80/GT200 numerical examples and CGMA.</li>
 </ul>
 

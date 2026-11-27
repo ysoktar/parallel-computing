@@ -37,26 +37,26 @@
 <div class="wgt-mount" data-widget="drill"></div>
 
 <h2>Warp access and coalescing</h2>
-<p>Shows the addresses of a warp's 32 threads and the segments they touch. Detailed explanation: <a href="coalescing.html">Coalescing page</a>.</p>
+<p>Shows the addresses of a warp's 32 threads and the segments they touch. Detailed explanation: <a href="coalescing.html">6.6 (coalescing)</a>.</p>
 <div class="wgt-mount" data-widget="coalesce" data-preset="col"></div>
 
 <h2>Tiled matrix multiplication</h2>
-<p>Which block computes which tile, which elements arrive in shared memory in phase <code>m</code>, which element each thread loads. Code: <a href="l5-tiling.html#tiling-with-shared-memory">L5</a>.</p>
+<p>Which block computes which tile, which elements arrive in shared memory in phase <code>m</code>, which element each thread loads. Code: <a href="l5-tiling.html#tiling-with-shared-memory">5.3 (tiling)</a>.</p>
 <div class="wgt-mount" data-widget="tiling"></div>
 
 
-<h2>New: Transpose thread tracer</h2>
-<p><strong>Exam scope:</strong> Trace which input element a thread reads and which output location it writes in naive and shared-memory transpose. After <code>__syncthreads()</code>, a thread can read a value another thread loaded into shared memory. Related to <a href="l5-cuda-kernels.html">Lecture 5</a>.</p>
+<h2>Transpose thread tracer</h2>
+<p><strong>Exam scope:</strong> Trace which input element a thread reads and which output location it writes in naive and shared-memory transpose. After <code>__syncthreads()</code>, a thread can read a value another thread loaded into shared memory. Explained on <a href="coalescing-transpose.html">6.7 (transpose)</a>; the barrier on <a href="l5-indexing.html">5.2</a>.</p>
 <div data-exam-widget="transpose"></div>
 
-<h2>New: __syncthreads() timeline</h2>
-<p>Advance four threads in different orders. See how the block barrier requires all participating threads to reach the synchronization point before their neighbours' shared data can be consumed. <strong>Without synchronization the actual GPU result is not guaranteed.</strong></p>
+<h2>__syncthreads() timeline</h2>
+<p>Advance four threads in different orders. See step by step how the barrier keeps anyone from reading the shared data until every thread of the block has finished writing it. <strong>Without synchronization the actual GPU result is not guaranteed.</strong></p>
 <div data-exam-widget="barrier"></div>
 
-<h2>New: Inspect every warp member</h2>
+<h2>Inspect every warp member</h2>
 <p>The linear thread ID <code>threadIdx.y * blockDim.x + threadIdx.x</code> determines warp membership. Compare 8×32, 12×8, and 32×8 block shapes.</p>
 <div data-exam-widget="warp-shape"></div>
-<p class="wgt-sub">Shared-memory bank optimization is outside Midterm 2 scope.</p>
+<p class="wgt-sub">Shared-memory bank conflicts were not on midterm 2 but are on the final: <a href="l6-memory-types.html">6.3</a>.</p>
 
 <h2>Actually running CUDA code</h2>
 <p>Every code block on the site has a <strong>▶ Run</strong> button. Since a browser cannot run a compiler, a small helper program on your computer compiles and runs the code: C/C++ with <code>g++</code>/<code>clang++</code> on the CPU, CUDA with <code>nvcc</code> on the GPU.</p>
