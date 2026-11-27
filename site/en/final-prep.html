@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All-out final prep · Parallel Computing</title>
+<meta name="description" content="BİL 455/533 final prep: a detailed summary of the whole course and hard questions that combine topics (calculations, code reading, design, trick questions), with hidden solutions.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="final-prep">
+<main><div class="content">
+
+<h1>All-out final prep</h1>
+<p class="lead">The instructor said the questions will be very hard. This page gathers the whole term in one place: first a detailed summary of Lectures 1–7, then calculation, code-reading, design and trick questions that combine two topics. The solutions are hidden; solve them yourself first.</p>
+
+<div class="callout note" data-label="How to use it"><ul>
+<li>First read the <strong>detailed summary</strong>; every item is explained in the linked subpage.</li>
+<li>Then solve the questions <strong>on paper, without a calculator</strong>; open a solution only when you are done. The questions deliberately combine two topics: that is how the final will ask.</li>
+<li>Repeat any question type you got stuck on in the "Check yourself" section of the matching subpage.</li>
+</ul></div>
+
+<h2>The whole course in one table</h2>
+<table class="simple">
+<thead><tr><th>Topic</th><th>Rule / formula to know</th><th>Most common trap</th></tr></thead>
+<tbody>
+<tr><td>Speedup (<a href="l1-performance.html">1.2</a>)</td><td>S = T<sub>seq</sub>/T<sub>par</sub>, E = S/N; Amdahl 1/((1−α)+α/N), ceiling 1/(1−α); Gustafson (1−α)+αN</td><td>Taking α for the serial part; using Gustafson for a fixed problem</td></tr>
+<tr><td>Design (<a href="l2-design.html">2.1</a>, <a href="l2-patterns.html">2.2</a>)</td><td>PCAM; patterns; pipeline speed = slowest stage</td><td>Skipping agglomeration; thinking task parallelism scales</td></tr>
+<tr><td>Threads (<a href="l3-threads.html">3.1</a>, <a href="l3-coordination.html">3.2</a>)</td><td>Read-modify-write must be indivisible; mutex/semaphore/atomic/monitor; always take locks in the same order</td><td>Using a semaphore instead of a mutex; <code>if</code> with a condition variable</td></tr>
+<tr><td>CUDA model (<a href="l4-cuda-intro.html">4.1</a>, <a href="l4-hierarchy.html">4.2</a>)</td><td>grid → block → warp (32) → thread; linear id = x + y·Bx + z·Bx·By; blocks are independent</td><td>Counting different warps taking different branches as divergence</td></tr>
+<tr><td>Kernels and indices (<a href="l5-cuda-kernels.html">5.1</a>, <a href="l5-indexing.html">5.2</a>)</td><td>col = bx·Bx + tx, row = by·By + ty; round the grid up, bound with <code>if</code></td><td>Making x the row; giving cudaMalloc an element count</td></tr>
+<tr><td>Tiling (<a href="l5-tiling.html">5.3</a>)</td><td>CGMA naive 1, T with T×T tiles; rectangular reduction 2·BX·BY/(BX+BY); two barriers</td><td>Forgetting the second <code>__syncthreads()</code></td></tr>
+<tr><td>Memory (<a href="l6-memory-map.html">6.2</a>, <a href="l6-memory-types.html">6.3</a>, <a href="l6-texture.html">6.4</a>)</td><td>Register &lt; shared &lt; L2 &lt; DRAM; occupancy = the tightest limit; bank = word % 32, degree gcd(stride, 32)</td><td>Thinking local memory is fast; reading consecutive addresses from constant memory</td></tr>
+<tr><td>Coalescing (<a href="coalescing.html">6.6</a>, <a href="coalescing-transpose.html">6.7</a>)</td><td>32/64/128 B aligned segments; <code>threadIdx.x</code> unscaled and rightmost in the address</td><td>Mixing up coalescing (global) and bank conflicts (shared)</td></tr>
+<tr><td>Errors and control flow (<a href="l7-cuda-control.html">7.1</a>, <a href="l7-branching.html">7.2</a>)</td><td>launch → <code>cudaGetLastError()</code> → <code>cudaDeviceSynchronize()</code>; predication ≠ prediction; unrolling costs registers</td><td>Looking for the error "on the wrong line"; counting down with an <code>unsigned</code> counter</td></tr>
+</tbody></table>
+
+<h2>Detailed summary</h2>
+
+<h3>Lecture 1: why parallel, how much faster</h3>
+<ul>
+<li><strong>Power wall:</strong> power ≈ f³; around 2005 frequency stopped at 2–4 GHz. Moore's law is about transistor count, not frequency; the extra transistors went into cores.</li>
+<li><strong>Flynn:</strong> SISD, SIMD, MISD, MIMD. The GPU's programming model is SIMT (a warp = one instruction, 32 threads). Shared memory (one address space; on NUMA remote memory is slower but addressing is shared) ↔ distributed memory (message passing, scales very far).</li>
+<li><strong>Measurement rules:</strong> same hardware and conditions; the serial side must be the fastest known serial solution; report kernel-only and end-to-end (with copies) speedup separately.</li>
+<li><strong>Amdahl</strong> (fixed problem, strong scaling): S = 1/((1−α)+α/N) → 1/(1−α) as N → ∞. <strong>Gustafson</strong> (fixed time, weak scaling): S = (1−α)+αN.</li>
+<li><strong>Ants vs elephants:</strong> if the expensive CPU is r times faster, the speedup of N cheap CPUs relative to it is 1/((1−α)r + αr/N); if r ≥ 1/(1−α) it never exceeds 1.</li>
+<li><strong>Latency ↔ throughput:</strong> a CPU finishes one job fast, a GPU finishes many jobs per unit time.</li>
+</ul>
+
+<h3>Lecture 2: design</h3>
+<ul>
+<li><strong>Ask first:</strong> is parallelism necessary, does the algorithm allow it?</li>
+<li><strong>PCAM:</strong> Partitioning (10–100 times as many pieces as processors), Communication (dependency graph), Agglomeration (group to cut communication, ~10 times), Mapping (load balance + heavily communicating groups on one node; NP-complete in general).</li>
+<li><strong>Decomposition patterns:</strong> task parallelism (does not scale), divide and conquer (parallelism read from the dependency graph), geometric (needs halos), recursive data (prefix sum), pipeline (throughput ≤ 1/longest stage), event-based.</li>
+<li><strong>Program structure:</strong> GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). A CUDA kernel = geometric decomposition + SPMD.</li>
+<li><strong>Pipeline time:</strong> first output = the sum of the stage times, then one output per "longest stage".</li>
+</ul>
+
+<h3>Lecture 3: threads and synchronisation</h3>
+<ul>
+<li>Threads share the address space (stack, registers, program counter are separate). <strong>Data race:</strong> concurrent access, at least one write, no synchronisation (undefined in C++). <strong>Race condition:</strong> a wrong result because of the ordering.</li>
+<li><code>counter++</code> = read + add + write; if two threads read the same old value, one update is lost.</li>
+<li><strong>Mutex:</strong> one thread + ownership. <strong>Semaphore:</strong> N permits (counting); a binary semaphore signals an "event". <strong>Atomic:</strong> one indivisible operation (CAS, LL/SC). <strong>Monitor / condition variable:</strong> release the lock and wait for a condition; check the condition with <code>while</code>.</li>
+<li><strong>Deadlock</strong> (four conditions: mutual exclusion, hold and wait, no preemption, circular wait; CPU idle) ↔ <strong>livelock</strong> (CPU busy, no progress) ↔ <strong>starvation</strong> (one thread never gets a turn). Prevention: always take locks in the same order, <code>std::scoped_lock</code>.</li>
+<li><strong>Producer-consumer:</strong> <code>slotsAvail</code> (free slots) and <code>resAvail</code> (filled slots) semaphores + a mutex for the indices; semaphore first, then mutex.</li>
+<li><strong>Memory ordering:</strong> seq_cst (default, everyone sees the same order), acquire/release (between pairs), relaxed (no ordering guarantee).</li>
+</ul>
+
+<h3>Lectures 4–5: the CUDA model, kernels, tiling</h3>
+<ul>
+<li>The <strong>host</strong> prepares (cudaMalloc → cudaMemcpy H2D → kernel → cudaMemcpy D2H → cudaFree), the <strong>device</strong> executes. Kernel launches are asynchronous; <code>cudaDeviceSynchronize()</code> before taking the time.</li>
+<li><strong>Qualifiers:</strong> <code>__global__</code> (called from the host, runs on the device, void), <code>__device__</code>, <code>__host__</code>.</li>
+<li><strong>Hierarchy:</strong> a block ≤ 1024 threads, on one SM; a warp = 32 consecutive linear ids; blocks are independent and unordered → scalability. A partial warp takes a full warp slot.</li>
+<li><strong>Divergence:</strong> only within a warp; the two paths run one after the other, the time is the sum. No divergence if the condition is aligned to <code>threadIdx / 32</code>.</li>
+<li><strong>Barrier:</strong> <code>__syncthreads()</code> is per block; every thread of the block must reach it (undefined inside an if, after an early return, in a loop whose trip count depends on the thread).</li>
+<li><strong>Latency hiding:</strong> a ready warp runs instead of a waiting one (zero-cost switch); this needs many warps.</li>
+<li><strong>CGMA:</strong> naive matmul 1 (2 reads, 2 FLOPs). G80: 86.4 GB/s ⇒ 21.6 GFLOPS ≈ 6% of the 367 peak. T×T tiling: CGMA = T; for a rectangular BX×BY block the reduction is 2·BX·BY/(BX+BY).</li>
+<li><strong>Tiled kernel:</strong> in each phase everyone loads one element of the M and N tiles; barrier (1) so the tile is full, barrier (2) so it is not overwritten; ⌈width/T⌉ phases, 0 loaded at the edges.</li>
+</ul>
+
+<h3>Lecture 6: compilation and memory</h3>
+<ul>
+<li><strong>Compilation:</strong> .cu → PTX (virtual ISA) → ptxas → SASS (cubin). A cubin for X.y runs only on X.z (z ≥ y); for new GPUs PTX must be embedded (JIT). <code>-arch</code> chooses the PTX, <code>-code</code> the binary. Register count: <code>--ptxas-options=-v</code>.</li>
+<li><strong>Memory map:</strong> register (thread, ~1 cycle) · shared (block, a few cycles, banks) · local (per thread but in DRAM!) · global (grid + host, 400–600 cycles, coalescing) · constant (read-only, same address → broadcast) · texture (read-only, 2D locality, interpolation, border modes).</li>
+<li><strong>Occupancy:</strong> blocks per SM = min(thread limit/Bt, warp limit/Bw, registers/(Bt·reg), shared/Bshared, block limit). Register spill → local memory.</li>
+<li><strong>Banks:</strong> 32 banks, bank = word index % 32; different words in one bank = conflict, the same word = broadcast. For <code>s[k·threadIdx.x]</code> the degree is gcd(k, 32). Reading a column of a 32×32 tile is 32-way → <code>[32][33]</code>.</li>
+<li><strong>Coalescing:</strong> a warp's addresses are gathered into 32/64/128 B aligned segments; efficiency = used/moved. The pitch is in bytes: row r = <code>(char*)p + r·pitch</code>. Alignment: type of 1/2/4/8/16 B and naturally aligned.</li>
+<li><strong>Transpose:</strong> naive writes are strided; with a shared tile both sides coalesce; 32×8 blocks + 4 elements per thread; the copy kernel is the ceiling and the index test.</li>
+</ul>
+
+<h3>Lecture 7: errors and control flow</h3>
+<ul>
+<li>Runtime calls return a <code>cudaError_t</code>; a kernel launch does not. Configuration error → <code>cudaGetLastError()</code> right after the launch; execution error → <code>cudaDeviceSynchronize()</code> or a later, unrelated call. Execution errors are sticky.</li>
+<li><code>cudaPeekAtLastError()</code> reads; <code>cudaGetLastError()</code> reads and resets.</li>
+<li><strong>Predication</strong> (GPU): instructions are not skipped, they have no effect in threads whose predicate is false; for short branches. <strong>Prediction</strong> (CPU): guess + speculative execution.</li>
+<li><code>#pragma unroll N</code> right before the loop; without a number: fully unrolls a constant trip count; <code>1</code>: no unrolling. Cost: registers and code size → spill / occupancy.</li>
+<li>Make the counter an <code>int</code>: signed overflow is undefined, so the compiler optimises more; a count-down loop <code>i &gt;= 0</code> with an <code>unsigned</code> counter never ends.</li>
+</ul>
+
+<h2>Hard calculation questions</h2>
+<p>All of them can be done without a calculator. Each question combines two topics; first write down which formulas you need.</p>
+
+<h3>H1 · Amdahl, backwards</h3>
+<p>95% of a program can be parallelised. (a) Speedup and efficiency on 16 cores? (b) At least how many cores give a speedup of 15? (c) Can a speedup of 20 be reached? (d) What does Gustafson give for the same program on 16 cores, and which law do you use when?</p>
+<div class="hint"><p>(a) 1/(0.05 + 0.95/16) = 1/(0.05 + 0.059375) = 1/0.109375 ≈ <strong>9.14</strong>; efficiency 9.14/16 ≈ <strong>57%</strong>. (b) 1/(0.05 + 0.95/N) ≥ 15 ⇒ 0.05 + 0.95/N ≤ 1/15 ≈ 0.0667 ⇒ 0.95/N ≤ 0.0167 ⇒ N ≥ 57. (c) No: the ceiling 1/0.05 = 20 is only approached as N → ∞, never reached. (d) 0.05 + 0.95·16 = <strong>15.25</strong>. Fixed problem size (the same job faster): Amdahl; fixed time with the problem growing with N: Gustafson.</p></div>
+
+<h3>H2 · An army of ants or an elephant?</h3>
+<p>An expensive CPU is r = 4 times faster than a cheap one. α = 0.8 of the program is parallel. (a) How many cheap CPUs beat the single expensive one? (b) What if r = 5? (c) Why does this seem to contradict how Top500 machines are built?</p>
+<div class="hint"><p>Speedup relative to the expensive CPU: 1/((1−α)r + αr/N). (a) 0.2·4 + 3.2/N &lt; 1 ⇒ 3.2/N &lt; 0.2 ⇒ N &gt; 16 ⇒ <strong>17</strong> cheap CPUs. (b) (1−α)r = 0.2·5 = 1: the denominator is always &gt; 1, <strong>no N is enough</strong> (r ≥ 1/(1−α) = 5). (c) The calculation keeps the problem fixed (Amdahl). Supercomputers solve bigger problems: the parallel part grows with N (Gustafson), so many cheap cores win.</p></div>
+
+<h3>H3 · A pipeline and a replicated stage</h3>
+<p>A 4-stage pipeline: 3, 7, 2, 4 ms. (a) How long do 50 items take? (b) What if the 7 ms stage runs as two copies? (c) Why does it still not drop to 2 ms?</p>
+<div class="hint"><p>(a) The first item leaves at 3+7+2+4 = 16 ms, then one every 7 ms: 16 + 49·7 = <strong>359 ms</strong>. (b) Two copies ⇒ that stage effectively delivers one item every 3.5 ms; the new bottleneck is the 4 ms stage: 16 + 49·4 = <strong>212 ms</strong>. (c) The <em>slowest</em> stage sets the speed; the 4 ms stage (then the 3 ms one) is next. Removing one bottleneck reveals the next.</p></div>
+
+<h3>H4 · Occupancy: which limit wins?</h3>
+<p>SM: at most 2048 threads, 64 warps, 32 blocks, 65,536 registers, 64 KB shared. Kernel: 192-thread blocks, 40 registers per thread, 9 KB shared per block. (a) Blocks per SM, occupancy? (b) If shared drops to 8 KB? (c) If registers also drop to 32?</p>
+<div class="hint"><p>A block = 6 warps, 192·40 = 7680 registers. (a) Threads: ⌊2048/192⌋ = 10; warps: 64/6 = 10; registers: ⌊65536/7680⌋ = 8; shared: ⌊64/9⌋ = 7; blocks: 32 ⇒ <strong>7 blocks</strong> = 42 warps / 64 = <strong>65.6%</strong> (shared is the limit). (b) Shared 64/8 = 8, registers 8 ⇒ 8 blocks = 48 warps = <strong>75%</strong> (registers and shared limit together). (c) 192·32 = 6144 ⇒ ⌊65536/6144⌋ = 10; shared 8; threads 10 ⇒ still <strong>8</strong>: with one bottleneck gone, shared limits. Lesson: improving one limit is not enough; look at the smallest.</p></div>
+
+<h3>H5 · double with stride 3: how many segments?</h3>
+<p>A warp reads <code>a[3*threadIdx.x]</code> from a 128 B-aligned <code>double</code> array. How many 32 B segments are moved, and what is the efficiency? And for <code>float</code>?</p>
+<div class="hint"><p><code>double</code>: lane i reads bytes 24i … 24i+7; the last lane 744–751. The gap between elements is 16 B &lt; 32 B, so every 32 B segment from 0 to 767 is touched: <strong>24 segments = 768 B</strong> moved, 32·8 = 256 B used ⇒ <strong>33%</strong>. <code>float</code>: lane i bytes 12i…12i+3, the last 372–375 ⇒ 12 segments from 0 to 383 = 384 B, 128 B used ⇒ again <strong>33%</strong>. With stride k the efficiency is ≈ 1/k (when an element is smaller than a segment).</p></div>
+
+<h3>H6 · 3D index, warp and lane</h3>
+<p>Grid (4,3,2), block (8,4,4); volume W = 32, H = 12, D = 8 (x fastest). For <code>blockIdx = (3,2,1)</code>, <code>threadIdx = (7,3,2)</code>: global (x, y, z), the linear index in the volume, the linear id in the block, warp and lane, the block's linear number?</p>
+<div class="hint"><p>x = 3·8 + 7 = <strong>31</strong>, y = 2·4 + 3 = <strong>11</strong>, z = 1·4 + 2 = <strong>6</strong>. Linear = x + W·(y + H·z) = 31 + 32·(11 + 72) = 31 + 2656 = <strong>2687</strong>. In the block: 7 + 8·(3 + 4·2) = 7 + 88 = <strong>95</strong> ⇒ warp 95/32 = <strong>2</strong>, lane 95 % 32 = <strong>31</strong>. Block number: 3 + 4·(2 + 3·1) = <strong>23</strong>. Check: the grid covers 4·8 = 32 = W, 3·4 = 12 = H, 2·4 = 8 = D, so the volume is covered exactly.</p></div>
+
+<h3>H7 · Divergence in a 2D block</h3>
+<p>Block (16,16). How many warps diverge for each condition? (a) <code>if (threadIdx.x &lt; 8)</code> (b) <code>if (threadIdx.y &lt; 8)</code> (c) <code>if ((threadIdx.y * 16 + threadIdx.x) % 64 &lt; 32)</code> (d) <code>if (threadIdx.y % 2 == 0)</code></p>
+<div class="hint"><p>In a 16×16 block a warp = two rows (y = 2w and 2w+1), each row x = 0..15. (a) Half of every row is true ⇒ <strong>all 8 warps</strong>. (b) y &lt; 8 ⇒ warps 0–3 all true, 4–7 all false ⇒ <strong>0</strong>. (c) Linear id % 64 &lt; 32 ⇒ even warps true, odd warps false; each warp is uniform ⇒ <strong>0</strong>. (d) A warp holds one even and one odd row ⇒ <strong>8</strong>. Trap: counting (b) as divergence because “half are false”.</p></div>
+
+<h3>H8 · Tile + halo traffic in a convolution</h3>
+<p>A 5×5 filter, a 16×16 output tile, one tile per block. (a) Global reads per output without shared memory? (b) If the tile with its halo is loaded into shared memory once, reads per block and per output? (c) How many times fewer? (d) How many bytes of shared memory? (e) Where should the filter live?</p>
+<div class="hint"><p>(a) 25. (b) The halo is 2 on each side ⇒ (16+4)² = <strong>400</strong> reads / 256 outputs ≈ <strong>1.56</strong>. (c) 25/1.5625 = <strong>16 times</strong>. (d) 400·4 = <strong>1600 B</strong>. (e) <code>__constant__</code>: at the same loop step every thread of a warp reads the same coefficient ⇒ one request, broadcast. Bigger tiles shrink the halo/interior ratio (with 32×32: 36²/1024 ≈ 1.27 reads per output) but grow the shared and thread limits.</p></div>
+
+<h3>H9 · Pitch and wrong pointer arithmetic</h3>
+<p>Rows of 1000 floats, 256 B alignment. (a) Pitch? (b) Byte offset of row 3, column 999? (c) Where does someone who writes <code>p[3*pitch + 999]</code> for a <code>float* p</code> end up?</p>
+<div class="hint"><p>(a) 4000 B → the next multiple of 256, <strong>4096 B</strong>. (b) 3·4096 + 999·4 = 12288 + 3996 = <strong>16284 B</strong>. (c) <code>float*</code> arithmetic counts elements: 3·4096 + 999 = 13287 <em>elements</em> = 53148 B, the middle of row 12 (wrong, and out of bounds if the allocation is small). Correct: <code>((float*)((char*)p + 3*pitch))[999]</code>.</p></div>
+
+<h3>H10 · Compute or memory bound? Is tiling enough?</h3>
+<p>G80: 367 GFLOPS peak, 86.4 GB/s. (a) What CGMA makes matmul compute bound? (b) Is T = 16 tiling enough, and what is the ceiling? (c) Why is T = 32 not possible on the G80?</p>
+<div class="hint"><p>(a) 86.4/4 = 21.6 G floats/s ⇒ 21.6·CGMA ≥ 367 ⇒ CGMA ≥ <strong>17</strong>. (b) T = 16 ⇒ CGMA 16 ⇒ 21.6·16 = <strong>345.6 GFLOPS</strong>: still just memory bound but very close to the peak. (c) 32×32 = 1024 threads exceeds the G80's 512 threads per block (shared would fit: 2·32²·4 = 8 KB). Giving each thread several elements (e.g. 32×16 blocks) gets around it.</p></div>
+
+<h2>Read the code, find the bug</h2>
+<p>All of these compile; some are still wrong. For each, first write what it does, then what is broken and the fix. They are all in one program: ▶ runs the fixed versions.</p>
+
+<h3>K1 · A barrier is missing</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="Tiled matmul, something is missing">
+for (int m = 0; m &lt; width / T; ++m) {
+    Ms[ty][tx] = M[row * width + m * T + tx];
+    Ns[ty][tx] = N[(m * T + ty) * width + col];
+    __syncthreads();
+    for (int k = 0; k &lt; T; ++k)
+        sum += Ms[ty][k] * Ns[k][tx];
+}
+</pre>
+<p>What can go wrong? Why does it usually give the right result when you test it?</p>
+<div class="hint"><p>There is no barrier after the inner loop: a fast warp writes the next phase's <code>Ms</code>/<code>Ns</code> element while a slow warp is still reading the old phase's value (a write-after-read race) ⇒ the result is <strong>undefined</strong>. In small blocks the warps move almost together, so it usually works; "it ran" is no proof. Fix: a second <code>__syncthreads()</code> after the inner loop.</p></div>
+
+<h3>K2 · An early return</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="n = 1000, blocks of 256">
+__global__ void earlyReturn(const float* in, float* out, int n) {
+    __shared__ float s[256];
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i &gt;= n) return;
+    s[threadIdx.x] = in[i];
+    __syncthreads();
+    out[i] = s[255 - threadIdx.x];
+}
+</pre>
+<p>In which block are there two separate bugs? Write the fixed code.</p>
+<div class="hint"><p>In the last block (block 3: i = 768…1023) 24 threads (i ≥ 1000) return: (1) not every thread reaches the barrier ⇒ undefined behaviour; (2) valid threads read <code>s[255 − threadIdx.x]</code> from slots those 24 threads never wrote ⇒ garbage. Fix: <code>s[threadIdx.x] = (i &lt; n) ? in[i] : 0;</code>, everyone calls <code>__syncthreads()</code>, then <code>if (i &lt; n) out[i] = …</code>.</p></div>
+
+<h3>K3 · Histogram: two barriers, still wrong</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="A shared-memory histogram">
+__shared__ unsigned int local[BINS];
+if (threadIdx.x &lt; BINS) local[threadIdx.x] = 0;
+__syncthreads();
+int i = blockIdx.x * blockDim.x + threadIdx.x;
+if (i &lt; n) local[data[i] % BINS]++;
+__syncthreads();
+if (threadIdx.x &lt; BINS) hist[threadIdx.x] += local[threadIdx.x];
+</pre>
+<p>Find the two separate races. Why are the barriers not enough? What is the fix, and why count in shared memory first and add to global memory later?</p>
+<div class="hint"><p>(1) <code>local[bin]++</code>: many threads of a block read-add-write the same bin ⇒ lost updates. (2) <code>hist[...] += ...</code>: different blocks write the same global bin ⇒ lost again. A barrier only coordinates <em>progress</em>; it does not stop simultaneous writes. Fix: <code>atomicAdd(&amp;local[bin], 1u)</code> and <code>atomicAdd(&amp;hist[b], local[b])</code> (<code>histFixed</code> in the program). Shared atomics are cheap, and global memory gets only <em>one</em> atomic per bin per block: 4096 blocks × 64 instead of 2<sup>20</sup>.</p></div>
+
+<h3>K4 · Right result, terrible speed</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="W = 4096, blocks of (32, 8)">
+int row = blockIdx.x * blockDim.x + threadIdx.x;
+int col = blockIdx.y * blockDim.y + threadIdx.y;
+if (row &lt; H &amp;&amp; col &lt; W) A[row * W + col] *= 2;
+</pre>
+<p>With the right grid the result is correct. Describe one warp's access: how many segments, what efficiency? The fix?</p>
+<div class="hint"><p>In a warp <code>threadIdx.x</code> = 0..31 varies and <code>threadIdx.y</code> is fixed ⇒ <code>row</code> is consecutive, <code>col</code> fixed. The addresses are W = 4096 floats = 16 KB apart ⇒ every lane its own 32 B segment: 32 segments to read, 32 to write, each 32 B piece using 4 B ⇒ <strong>12.5%</strong>. Fix: column from x, row from y: <code>col = blockIdx.x*blockDim.x + threadIdx.x; row = blockIdx.y*blockDim.y + threadIdx.y;</code> (and the grid to match).</p></div>
+
+<h3>K5 · A barrier inside a loop</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="One block of 128 threads">
+for (int k = 0; k &lt; threadIdx.x % 4; ++k) {
+    __syncthreads();
+    s[threadIdx.x] += s[(threadIdx.x + 1) % 128];
+}
+</pre>
+<p>The barrier is not inside an <code>if</code>. Why is it still wrong? Is there a second race?</p>
+<div class="hint"><p>The trip count depends on the thread (0, 1, 2 or 3): threads with <code>threadIdx.x % 4 == 0</code> never reach the barrier, the others reach it a different number of times ⇒ the barrier is not called the same number of times by every thread ⇒ <strong>undefined</strong>. Second race: thread t reads <code>s[t+1]</code> while thread t+1 may be updating it (the barrier is not between the read and the write). Fix: make the trip count the same for the whole block (e.g. 3 rounds, threads that need fewer do nothing), and put a barrier between reading and writing (read into a temporary, barrier, then write).</p></div>
+
+<h3>K6 · One tile, three reads</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="One warp, t = threadIdx.x = 0..31">
+__shared__ float tile[32][32];
+float a = tile[t][0];
+float b = tile[t][t];
+float c = tile[t / 2][t % 2];
+</pre>
+<p>How many ways does each of the three reads conflict? What if the tile were <code>tile[32][33]</code>?</p>
+<div class="hint"><p>The bank of <code>tile[r][c]</code> is (32r + c) % 32 = c. (a) c is always 0 ⇒ 32 different words in one bank ⇒ <strong>32-way</strong>. (b) bank = t ⇒ all different ⇒ <strong>no conflict</strong> (the diagonal). (c) bank = t % 2 ⇒ only 2 banks with 16 different words each ⇒ <strong>16-way</strong>. With [32][33] the bank is (33r + c) % 32 = (r + c) % 32: (a) r = t ⇒ all different, no conflict; (b) 2t % 32 ⇒ t and t+16 share a bank ⇒ <strong>2-way</strong> (padding broke the diagonal!); (c) (t/2 + t%2) % 32 ⇒ values 0,1,1,2,2,3,… ⇒ banks such as 1, 2 each get two different words ⇒ 2-way.</p></div>
+
+<h3>K7 · An endless loop on the CPU side</h3>
+<pre class="code" data-run="final_tricky.cu" data-title="Copy an array in reverse">
+void reverseCopy(const float* in, float* out, unsigned n) {
+    for (unsigned i = n - 1; i &gt;= 0; i--)
+        out[n - 1 - i] = in[i];
+}
+</pre>
+<p>What happens? And for n = 0? How does it connect to Lecture 7's advice on signed counters?</p>
+<div class="hint"><p>An <code>unsigned</code> is never &lt; 0: <code>i &gt;= 0</code> is always true; after i = 0, <code>i--</code> wraps to 2<sup>32</sup> − 1 ⇒ out-of-bounds writes, an endless loop / crash. With n = 0, i starts at 2<sup>32</sup> − 1. Fix: <code>for (int i = (int)n - 1; i &gt;= 0; i--)</code>. Connection: unsigned overflow is <em>defined</em> (it wraps); it causes this bug and also limits the compiler's optimisations. A signed counter is better on both counts.</p></div>
+
+<h2>Design and "why" questions</h2>
+
+<h3>T1 · Sum 10⁸ elements</h3>
+<p>Compute the sum of 10⁸ floats on the GPU. Why can you not combine all blocks' results with a barrier inside one kernel? Write the steps of your design and the synchronisation in each step.</p>
+<div class="hint"><p><code>__syncthreads()</code> is per block, and blocks run in any order, maybe not at the same time: a "grid barrier" that assumes all of them are resident can hang (cooperative groups need a special launch). Design: (1) each block sums its part as a tree in shared memory (half the threads per step, <code>__syncthreads()</code> between steps; with the divisor aligned to <code>threadIdx.x / 32</code> there is no divergence except in the last steps); (2) the block's result goes to <code>partial[blockIdx.x]</code>; (3) a second kernel (or the same kernel with one block) sums <code>partial</code>. The kernel boundary is the barrier between blocks. Alternative: one <code>atomicAdd</code> per block; short, but the float result may not repeat bit for bit because the order of additions changes.</p></div>
+
+<h3>T2 · The heat equation: cluster or GPU?</h3>
+<p>On a 2D grid every cell takes the average of its 4 neighbours each step (1000 steps). Design it with PCAM for a 100-node distributed-memory cluster and for a GPU. Where is the communication, and where do the two designs differ?</p>
+<div class="hint"><p>P: one task per cell (geometric/data decomposition). C: 4 neighbours each step; a dependency between steps (step t+1 waits for step t). A: on the cluster 100 pieces (10×10 tiles or strips; tiles shrink the halo/interior ratio), and at the end of each step only the edge rows/columns go to the neighbour as messages. M: equal pieces, neighbouring pieces on nearby nodes. GPU: tile = block, the halo is loaded into shared memory, a step = a kernel launch (the kernel boundary is the global barrier between steps), two buffers (old/new) alternate. Difference: on the cluster communication is expensive messages ⇒ big tiles; on the GPU it is global memory traffic ⇒ coalesced rows and reuse through shared memory.</p></div>
+
+<h3>T3 · Is more occupancy always faster?</h3>
+<p>A friend cut registers from 64 to 32 with <code>-maxrregcount</code> and raised occupancy from 50% to 100%, but the kernel got slower. Explain two possible reasons.</p>
+<div class="hint"><p>(1) <strong>Register spill:</strong> values that do not fit in 32 go to local memory (DRAM); every access costs hundreds of cycles and eats the latency hiding gained. (2) If the kernel is already bandwidth bound, or 50% already gives enough warps to hide latency, extra warps gain nothing; also each warp gets less cache. Occupancy is a tool, not the goal: measure (check spills with <code>--ptxas-options=-v</code>).</p></div>
+
+<h3>T4 · The error on the wrong line</h3>
+<p>A program does <code>k1&lt;&lt;&lt;…&gt;&gt;&gt;(); k2&lt;&lt;&lt;…&gt;&gt;&gt;(); cudaMemcpy(…);</code>. <code>cudaMemcpy</code> returns "illegal memory access". Which kernel may be guilty, how do you find out, and why does every later call fail too?</p>
+<div class="hint"><p>Either: launches are asynchronous, so the error is reported by the first synchronising call (here <code>cudaMemcpy</code>). To find it, check <code>cudaGetLastError()</code> (launch error) and <code>cudaDeviceSynchronize()</code> (execution error) after each kernel; the one after which the error appears is guilty. Execution errors are <strong>sticky</strong>: the context is broken and every later CUDA call in the process returns the same error; the program has to restart.</p></div>
+
+<h2>Trick questions</h2>
+<div class="quiz" data-answer="3">
+  <p>The 32 threads of a warp read <code>c[threadIdx.x]</code> from <code>__constant__ float c[64]</code>. What happens?</p>
+  <ol>
+    <li data-why="Consecutive addresses are good for global memory, not for constant memory.">One request, full efficiency: consecutive addresses.</li>
+    <li data-why="Banks belong to shared memory.">A 32-way bank conflict.</li>
+    <li data-why="Correct: a constant request is split into as many parts as there are different addresses; the ideal pattern is everyone reading the same address.">The request is split into 32 separate requests.</li>
+    <li data-why="It can be; it is just slow.">A compile error: constant memory cannot be indexed by thread.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>s[threadIdx.x % 16]</code> (float, 32 banks) is read. Conflict degree?</p>
+  <ol>
+    <li data-why="Same bank but the &lt;em&gt;same word&lt;/em&gt;: a broadcast, not a conflict.">2-way: two threads in one bank.</li>
+    <li data-why="Correct: 16 different words in 16 different banks; pairs reading the same word are served by broadcast.">No conflict.</li>
+    <li data-why="16 different banks are used, one word each.">16-way.</li>
+    <li data-why="They are not all in one bank.">32-way.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>A block has 48 threads. The SM allows 64 warps, 2048 threads, 32 blocks. Warp occupancy and the active-thread ratio?</p>
+  <ol>
+    <li data-why="2 warps per block; the warp limit allows 32 blocks, so does the block limit ⇒ 64 warps.">75% and 75%</li>
+    <li data-why="The empty slots of a partial warp are not active threads.">100% and 100%</li>
+    <li data-why="The warp count is wrong.">50% and 75%</li>
+    <li data-why="Correct: 32 blocks × 2 warps = 64 warps (100%), but 32 × 48 = 1536 threads = 75%: a partial warp takes a full slot.">100% warps, 75% active threads</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Which is always <strong>false</strong>?</p>
+  <ol>
+    <li data-why="Correct (the statement is false): block order is not guaranteed; correctness cannot rely on it.">Block 0 starts before block 1.</li>
+    <li data-why="This is always true.">All threads of a warp are in the same block.</li>
+    <li data-why="This is always true.">Threads of one block run on the same SM.</li>
+    <li data-why="This is true (asynchronous).">A kernel launch returns to the host at once.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>A counting semaphore initialised to 3 lets 3 threads do a shared <code>counter++</code>. The result?</p>
+  <ol>
+    <li data-why="3 permits = 3 threads inside at once.">Correct: the semaphore provides mutual exclusion.</li>
+    <li data-why="Nobody waits for anybody.">A deadlock.</li>
+    <li data-why="Correct: a semaphore limits the count, it does not guarantee exclusive access; the counter needs a mutex or an atomic.">Still a data race: 3 threads can read-add-write at once.</li>
+    <li data-why="The hardware does not save it.">Correct only on x86.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>A program built with <code>-gencode arch=compute_70,code=sm_70</code> on an 8.6 GPU:</p>
+  <ol>
+    <li data-why="JIT compiles PTX; it does not translate binaries.">Runs; the driver JIT-translates the sm_70 binary.</li>
+    <li data-why="Correct: &lt;code&gt;code=sm_70&lt;/code&gt; embeds SASS only; &lt;code&gt;code=compute_70&lt;/code&gt; (PTX) should have been added for 8.x.">Fails with "no kernel image": binaries do not cross majors, no PTX embedded.</li>
+    <li data-why="That would be true if PTX were embedded.">Runs but does not use Tensor Cores.</li>
+    <li data-why="Compilation succeeds; the problem is at run time.">A compile error.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>In tiled matmul, what does going from T = 16 to T = 32 certainly change?</p>
+  <ol>
+    <li data-why="Traffic drops, but speed also depends on occupancy, barrier waits etc.">The kernel becomes 2 times faster.</li>
+    <li data-why="width/T halves.">The number of phases stays the same.</li>
+    <li data-why="2·T²·4 B: from 2 KB to 8 KB.">Shared memory per block stays the same.</li>
+    <li data-why="Correct: reads are 2·width/T, threads T² = 256 → 1024 (above the limit on some GPUs).">Global reads per thread halve and threads per block grow 4 times.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p><code>notify_one()</code> is called when no thread is waiting on a condition variable. Then a thread enters <code>wait()</code> (without checking a condition). What happens?</p>
+  <ol>
+    <li data-why="Correct: a condition variable does not store signals (unlike a semaphore). That is why the condition is checked under the lock first: &lt;code&gt;wait(lock, predicate)&lt;/code&gt;.">The signal is lost; the thread sleeps until the next notify.</li>
+    <li data-why="That is how a semaphore behaves.">The thread wakes at once: the signal was stored.</li>
+    <li data-why="Another notify wakes it.">A guaranteed deadlock.</li>
+    <li data-why="The behaviour is defined: the signal is lost.">Undefined behaviour.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is true about divergence?</p>
+  <ol>
+    <li data-why="It only slows down.">It can give wrong results.</li>
+    <li data-why="Only within a warp.">It happens when different blocks take different branches.</li>
+    <li data-why="Correct: the instructions go to everyone and have no effect where the predicate is false.">For short branches the compiler can remove the branch entirely with predication.</li>
+    <li data-why="Warp 0 all true, warp 1 all false: no divergence."><code>if (threadIdx.x &lt; 32)</code> makes both warps of a 64-thread block diverge.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>A speedup of 18 was measured on 16 cores (superlinear). The most likely explanation?</p>
+  <ol>
+    <li data-why="Amdahl is an ideal bound; it does not explain the measurement.">Amdahl's law is wrong.</li>
+    <li data-why="Correct: the total cache grows with N; or the golden rule was broken (a slow serial version).">Each core's share of the data started to fit in cache (or the serial version is not the fastest).</li>
+    <li data-why="Gustafson assumes the problem grows; here it is the same.">Gustafson's law.</li>
+    <li data-why="Possible; often seen because of cache effects.">Impossible; a measurement error.</li>
+  </ol>
+</div>
+
+<h2>The night before the exam</h2>
+<ul>
+<li>Revise the formulas by writing them: Amdahl, Gustafson, ants vs elephants, pipeline time, CGMA, the rectangular tiling reduction, occupancy, segment counts, bank degree with gcd, pitch offsets.</li>
+<li>Write tiled matmul from memory (two barriers, edge checks, ⌈width/T⌉ phases) and set it up with a non-square block (8×32).</li>
+<li>For every code question check in order: (1) which axis each index comes from, (2) the bounds check, (3) does everyone reach the barrier, (4) does anyone write at the same time, (5) is the global access coalesced, (6) is there a bank conflict in shared memory.</li>
+<li>In explanation questions write the "why": why blocks are independent, why local memory is slow, why a barrier is no substitute for an atomic, why a semaphore is not a mutex.</li>
+<li>Solve every question on this page once more without looking at the solution; then the <a href="quiz-cuda.html">31 solved CUDA questions</a> and the "Check yourself" section of each subpage.</li>
+</ul>
+
+</div></main>
+</body>
+</html>
