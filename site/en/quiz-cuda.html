@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CUDA quiz: solved questions · Parallel Computing</title>
-<meta name="description" content="31 solved questions for the 24 November written CUDA quiz, latest topics first: error checking, divergence, coalescing, bank conflicts, pitch, synchronisation, tiling, CGMA, occupancy, writing kernels, indexing.">
+<meta name="description" content="31 solved questions prepared for the 24 November written CUDA quiz, also useful for revising for the final, latest topics first: error checking, divergence, coalescing, bank conflicts, pitch, synchronisation, tiling, CGMA, occupancy, writing kernels, indexing.">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../css/style.css">
 <script src="../js/theme-init.js"></script>
@@ -14,7 +14,7 @@
 <main><div class="content">
 
 <h1>CUDA quiz: solved questions</h1>
-<p class="lead">31 questions for the written quiz at the start of class on Tuesday 24 November. The order starts with <strong>the latest topics</strong> (L7 → L6 → synchronisation → tiling → CGMA → occupancy → writing kernels → indexing). Solve each one yourself first, then <strong>Show the solution</strong>.</p>
+<p class="lead">31 questions prepared for the written CUDA quiz of 24 November; also a good CUDA revision for the final. The order starts with <strong>the latest topics</strong> (L7 → L6 → synchronisation → tiling → CGMA → occupancy → writing kernels → indexing). Solve each one yourself first, then <strong>Show the solution</strong>.</p>
 
 <div class="callout key">
   <p><strong>Think of four chains together:</strong> thread mapping → warp addresses → coalescing / divergence · tile size → shared/register use → occupancy → latency hiding · data reuse → CGMA → arithmetic intensity → bandwidth ceiling · data dependency → barrier / atomic / separate kernel stage.</p>
@@ -29,15 +29,15 @@
 k&lt;&lt;&lt;g,b&gt;&gt;&gt;(...);
 cudaError_t launch = cudaGetLastError();     // != cudaSuccess: report and stop
 cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess: report and stop</pre>
-<p>A launch returns no error code. Get takes the last error and resets it to <code>cudaSuccess</code>; Peek does not reset. The launch check finds configuration/parameter errors, the sync check finds asynchronous errors during execution. The return values of all runtime calls should be checked too. Runnable example: <a href="l7-cuda-control.html">L7</a>.</p>
+<p>A launch returns no error code. Get takes the last error and resets it to <code>cudaSuccess</code>; Peek does not reset. The launch check finds configuration/parameter errors, the sync check finds asynchronous errors during execution. The return values of all runtime calls should be checked too. Runnable example: <a href="l7-cuda-control.html">7.1</a>.</p>
 </div>
 
 <h3>Question 29 · Predication, unrolling, block order</h3>
-<p>How is predication different from prediction? Why is <code>#pragma unroll 4</code> not always faster? Why is the execution order of ordinary blocks not guaranteed?</p>
+<p>How is predication different from prediction? Why is <code>#pragma unroll 4</code> not always faster? Why is the execution order of normal (non-cluster) blocks not guaranteed?</p>
 <div class="hint"><p>Prediction (CPU): guess the branch, execute speculatively, roll back if wrong. Predication (GPU): conditional instructions are not skipped but masked with a per-thread predicate; false ones neither write results nor read operands. Unrolling reduces loop control but increases register pressure and code size (spills, lower occupancy). Block independence lets the hardware distribute blocks freely over any number of SMs; an order guarantee would break that flexibility (scalability). CC 9.0 clusters are a special exception.</p></div>
 
 <h3>Question 24 · Counting divergence</h3>
-<p>A 128-thread block: how many warps diverge for <code>if (t &lt; 70)</code> and <code>if (t % 2 == 0)</code>? And <code>if (threadIdx.y % 2 == 0)</code> in a 16×16 2D block?</p>
+<p>A 128-thread block, <code>t = threadIdx.x</code>: how many warps diverge for <code>if (t &lt; 70)</code> and <code>if (t % 2 == 0)</code>? And <code>if (threadIdx.y % 2 == 0)</code> in a 16×16 2D block?</p>
 <div class="hint"><p><code>t &lt; 70</code>: warps 0, 1 all true; warp 2 (64–95) mixed; warp 3 false → <strong>1</strong>. <code>t % 2</code>: all 4 warps mixed → <strong>4</strong>. In a 16×16 block x varies fastest, each warp is two rows (one even, one odd) → <strong>all</strong> 8 warps. Different warps taking different branches does not count as divergence.</p></div>
 
 <h2>2. Global and shared memory access (L6)</h2>
@@ -55,8 +55,8 @@ cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess: report and stop<
 <div class="hint"><p>Offset = 7·512 + 9·4 = <strong>3620 B</strong>. Real data per row 400 B, padding 112 B. Total 50·512 = 25600 B, logical data 20000 B, padding 5600 B. Access: <code>((float*)((char*)p + 7*pitch))[9]</code>. The pitch is in bytes, the column offset in elements.</p></div>
 
 <h3>Question 22 · Shared banks</h3>
-<p>A warp reads <code>s[lane*k]</code>. Conflict degree for k = 1, 2, 3, 4, 16, 32, 33? And if everyone reads <code>s[0]</code>?</p>
-<div class="hint"><p>gcd(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: every lane a different address but the same bank → 32-way. k = 33 (padding): the banks spread. <code>s[0]</code>: the same address → broadcast, no conflict. A global segment and a shared bank are different concepts. Visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">L6 banks</a>.</p></div>
+<p>A warp reads <code>s[lane*k]</code> (<code>lane = threadIdx.x % 32</code>, <code>float s[]</code>, 32 banks). Conflict degree for k = 1, 2, 3, 4, 16, 32, 33? And if everyone reads <code>s[0]</code>?</p>
+<div class="hint"><p>gcd(k, 32) = <strong>1, 2, 1, 4, 16, 32, 1</strong>. k = 32: every lane a different address but the same bank → 32-way. k = 33 (padding): the banks spread. <code>s[0]</code>: the same address → broadcast, no conflict. A global segment and a shared bank are different concepts. Visualisation: <a href="l6-memory-types.html#banks-and-bank-conflicts">6.3, banks</a>.</p></div>
 
 <h3>Question 26 · Choosing the memory</h3>
 <p>(a) A thread's accumulator, (b) a tile shared by the block, (c) a filter where the whole warp reads the same coefficient, (d) 2D locality and bilinear interpolation, (e) a large thread-private array: which memory?</p>

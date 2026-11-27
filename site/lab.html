@@ -37,26 +37,26 @@
 <div class="wgt-mount" data-widget="drill"></div>
 
 <h2>Warp erişimi ve coalescing</h2>
-<p>Bir warp'ın 32 thread'inin adreslerini ve dokunduğu segmentleri gösterir. Ayrıntılı açıklama: <a href="coalescing.html">Coalescing sayfası</a>.</p>
+<p>Bir warp'ın 32 thread'inin adreslerini ve dokunduğu segmentleri gösterir. Ayrıntılı açıklama: <a href="coalescing.html">6.6 (coalescing)</a>.</p>
 <div class="wgt-mount" data-widget="coalesce" data-preset="col"></div>
 
 <h2>Tiled matris çarpımı</h2>
-<p>Hangi blok hangi karoyu hesaplar, faz <code>m</code>'de shared memory'ye hangi elemanlar gelir, her thread hangi elemanı yükler. Kod: <a href="l5-tiling.html#tiling-ile-shared-memory">L5</a>.</p>
+<p>Hangi blok hangi karoyu hesaplar, faz <code>m</code>'de shared memory'ye hangi elemanlar gelir, her thread hangi elemanı yükler. Kod: <a href="l5-tiling.html#tiling-ile-shared-memory">5.3 (tiling)</a>.</p>
 <div class="wgt-mount" data-widget="tiling"></div>
 
 
-<h2>Yeni: Transpose thread izleyici</h2>
-<p><strong>Sınav kapsamı:</strong> Naive transpose ile shared-memory transpose işlemlerinde bir thread'in hangi girdiyi okuyup hangi çıktı konumuna yazdığını izle. <code>__syncthreads()</code> sonrasında aynı thread, başka bir thread'in shared memory'ye yüklediği değeri okuyabilir. Bu örnek <a href="l5-cuda-kernels.html">L5</a> konularıyla bağlantılıdır.</p>
+<h2>Transpose thread izleyici</h2>
+<p><strong>Sınav kapsamı:</strong> Naive transpose ile shared-memory transpose işlemlerinde bir thread'in hangi girdiyi okuyup hangi çıktı konumuna yazdığını izle. <code>__syncthreads()</code> sonrasında aynı thread, başka bir thread'in shared memory'ye yüklediği değeri okuyabilir. Açıklaması: <a href="coalescing-transpose.html">6.7 (transpose)</a>; bariyer: <a href="l5-indexing.html">5.2</a>.</p>
 <div data-exam-widget="transpose"></div>
 
-<h2>Yeni: __syncthreads() zaman çizelgesi</h2>
-<p>Dört thread'i farklı sıralarda ilerlet. Bariyerin bütün blok thread'lerinin paylaşılan veriyi okumadan önce yazma adımına ulaşmasını nasıl sağladığını gör. <strong>Bariyersiz durumda GPU çıktısı kesin olarak tahmin edilemez.</strong></p>
+<h2>__syncthreads() zaman çizelgesi</h2>
+<p>Dört thread'i farklı sıralarda ilerlet. Bariyerin, bloktaki bütün thread'ler yazma adımını bitirmeden kimsenin paylaşılan veriyi okumamasını nasıl sağladığını adım adım gör. <strong>Bariyersiz durumda GPU çıktısı kesin olarak tahmin edilemez.</strong></p>
 <div data-exam-widget="barrier"></div>
 
-<h2>Yeni: Warp üyelerini tek tek gör</h2>
+<h2>Warp üyelerini tek tek gör</h2>
 <p><code>threadIdx.y * blockDim.x + threadIdx.x</code> ile bulunan lineer thread kimliği warp'a atanır. Özellikle 8×32, 12×8 ve 32×8 blok şekillerini karşılaştır.</p>
 <div data-exam-widget="warp-shape"></div>
-<p class="wgt-sub">Shared-memory bank optimization ikinci vize kapsamında değildir.</p>
+<p class="wgt-sub">Shared memory bank conflict'leri 2. vizede yoktu ama finalde var: <a href="l6-memory-types.html">6.3</a>.</p>
 
 <h2>CUDA kodunu gerçekten çalıştırmak</h2>
 <p>Sitedeki her kod bloğunun altında <strong>▶ Çalıştır</strong> düğmesi var. Tarayıcı derleyici çalıştıramadığı için kodu sizin bilgisayarınızdaki küçük bir yardımcı program derleyip çalıştırır: C/C++ <code>g++</code>/<code>clang++</code> ile CPU'da, CUDA <code>nvcc</code> ile GPU'da.</p>
