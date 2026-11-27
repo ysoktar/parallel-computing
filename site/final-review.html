@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finale hazırlık · Paralel Hesaplama</title>
+<meta name="description" content="BİL 455/533 final hazırlığı: her dersin ana fikirleri, sık yapılan hatalar, final için açık uçlu sorular ve sınama soruları tek sayfada.">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/theme-init.js"></script>
+<script type="module" src="js/layout.js"></script>
+</head>
+<body data-page="final-review">
+<main><div class="content">
+
+<h1>Finale hazırlık</h1>
+<p class="lead">Her dersin son sayfasındaki ana fikirler, sık yapılan hatalar, final için açık uçlu sorular ve sınama soruları tek sayfada, ders sırasıyla. Çözümler gizli. Daha ayrıntılı özet ve çok daha zor sorular için: <a href="final-prep.html">deli gibi finale hazırlık</a>.</p>
+
+
+<h2>Lecture 1 · Giriş ve performans</h2>
+<p class="small muted">Kaynak sayfa: <a href="l1-review.html">l1-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>Moore yasası <strong>transistör sayısı</strong> hakkındadır, frekans hakkında değil. Frekans güç ve ısı yüzünden ~2005'te 2–4 GHz'de durdu (güç ∝ f³); fazla transistörler çekirdeklere harcandı.</li>
+  <li>Çok çekirdekten performans almak <strong>paralel yazılım</strong> ister; bu dersin konusu bu.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Çok çekirdekli CPU'lar ve GPU'lar MIMD; GPU'nun programlama modeli SIMT.</li>
+  <li>Paylaşımlı bellek (ortak adres uzayı, kolay, sınırlı ölçek; NUMA) ↔ dağıtık bellek (mesajlaşma, zor, çok ölçeklenir).</li>
+  <li>CPU gecikme için (büyük önbellek, karmaşık kontrol), GPU throughput için (çok sayıda basit ALU, geniş bellek yolu) tasarlanır.</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, verim = speedup/N. Amdahl: 1/((1−α) + α/N), tavan 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>α'yı seri kısım sanmak. Bu derste α <strong>paralelleştirilebilen</strong> kısım; seri kısım 1 − α.</li>
+  <li>Speedup ile verimi karıştırmak: 16 çekirdekte speedup 8 ise verim %50'dir, "8 kat verim" diye bir şey yok.</li>
+  <li>NUMA'yı dağıtık bellek sanmak: NUMA'da adresleme ortaktır, sadece uzak bellek daha yavaştır.</li>
+  <li>Seri programı yavaş bir versiyonla karşılaştırmak: altın kural, en hızlı bilinen seri çözümle kıyaslanır.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir programın %95'i paralelleştirilebiliyor. 19 çekirdekte speedup ve verim nedir? Sonsuz çekirdekte en fazla ne olur?</p>
+<div class="hint"><p>1/(0,05 + 0,95/19) = 1/(0,05 + 0,05) = <strong>10</strong>; verim 10/19 ≈ <strong>%53</strong>. Sınır: 1/0,05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> Aynı program için Gustafson'a göre 19 çekirdekte speedup ve verim nedir? Neden Amdahl'dan farklı?</p>
+<div class="hint"><p>0,05 + 19·0,95 = 0,05 + 18,05 = <strong>18,1</strong>; verim 0,05/19 + 0,95 ≈ <strong>%95,3</strong>. Gustafson problem boyutunun çekirdek sayısıyla büyüdüğünü (sabit süre) varsayar, Amdahl problemi sabit tutar.</p></div>
+<p><strong>3.</strong> Saat frekansını artırmaya devam etmek neden mümkün olmadı? İki neden yazın.</p>
+<div class="hint"><p>(1) Güç frekansla çok hızlı (yaklaşık f³) artar: ısı atılamaz. (2) Yüksek frekanslı saat sinyalini üretmek ve yonga boyunca dağıtmak zorlaşır (dalga şekli bozulur). Voltajı düşürmek bir süre yardımcı oldu ama yetmedi.</p></div>
+<p><strong>4.</strong> Bir sunucu çiftliğinde 10.000 düğüm birlikte çalışacak. Paylaşımlı mı dağıtık bellek mi? Neden?</p>
+<div class="hint"><p>Dağıtık bellek: paylaşımlı bellek tek bir ortak ortamda (bellek yolu, önbellek tutarlılığı) darboğaz yapar ve onlarca-yüzlerce çekirdekte tıkanır. Dağıtık bellekte her düğüm kendi belleğine sahiptir, iletişim mesajla olur; pahalıdır ama paylaşılan bir darboğaz olmadığı için çok ölçeklenir.</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="2">
+  <p>Bir programın %80'i paralelleştirilebiliyor. Amdahl'a göre sonsuz işlemciyle en fazla speedup?</p>
+  <ol>
+    <li data-why="Bu α'nın kendisi; formül 1/(1−α).">0,8</li>
+    <li data-why="1/(1 − 0,8) = 1/0,2 = 5.">5</li>
+    <li data-why="Gustafson'da sınır yok; Amdahl'da var.">Sınırsız</li>
+    <li data-why="1/0,8 = 1,25 seri kısımla paralel kısmı karıştırmak olur.">1,25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Hangisi dağıtık bellek MIMD için doğrudur?</p>
+  <ol>
+    <li data-why="Bu paylaşımlı bellek.">Tüm işlemciler ortak bir adres uzayını paylaşır.</li>
+    <li data-why="Programlaması daha zordur.">Programlaması paylaşımlı belleğe göre daha kolaydır.</li>
+    <li data-why="NUMA paylaşımlı bellek tasarımıdır.">NUMA bir dağıtık bellek tasarımıdır.</li>
+    <li data-why="Doğru: iletişim mesajlaşmayla; paylaşılan ortam olmadığı için çok yüksek ölçeklenir.">İletişim mesajlaşmayla olur ve çok yüksek ölçeklenebilir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>16 çekirdekte speedup 12 ölçüldü. Verim nedir?</p>
+  <ol>
+    <li data-why="12/16 = 0,75.">%75</li>
+    <li data-why="16/12 ters oran.">%133</li>
+    <li data-why="Verim speedup'ın çekirdek sayısına oranı.">%12</li>
+    <li data-why="Doğrusal speedup olsaydı %100 olurdu.">%100</li>
+  </ol>
+</div>
+
+<h2>Lecture 2 · Paralel program tasarımı</h2>
+<p class="small muted">Kaynak sayfa: <a href="l2-review.html">l2-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (olabildiğince çok parça, işlemci sayısının 10–100 katı), <strong>C</strong>ommunication (bağımlılık grafı), <strong>A</strong>gglomeration (iletişimi azaltmak için grupla, ~10 katı), <strong>M</strong>apping (yük dengesi + iletişim; genel hâli NP-complete).</li>
+  <li>Ayrıştırma: fonksiyonel (adımlara göre), veri (veriye göre), veri akışı (pipeline, olay).</li>
+  <li>Pipeline'ın hızını <strong>en yavaş aşama</strong> belirler; fayda ancak aşamalar eş zamanlı çalışırsa.</li>
+  <li>Divide-and-conquer'da paralellik <strong>bağımlılık grafından</strong> okunur, çağrı grafından değil.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Task parallelism'i ölçeklenir sanmak: görev sayısı sabit olduğu için çekirdek sayısını takip edemez.</li>
+  <li>Pipeline'ın toplam gecikmesini throughput'u ile karıştırmak: 2+5+3 ms'lik pipeline'da bir öğenin gecikmesi 10 ms, ama kararlı durumda her 5 ms'de bir çıktı.</li>
+  <li>Agglomeration'ı unutmak: N² minik görev teoride çok paralel, pratikte iletişim ve görev yönetimi maliyeti yüzünden yavaş.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Bir histogram hesabını (Exercise 1) PCAM adımlarıyla tasarlayın. Hangi adımda yarış (race) sorunu çıkar, nasıl çözersiniz?</p>
+<div class="hint"><ul><li><strong>P:</strong> her piksel bir görev (veri ayrıştırması).</li><li><strong>C:</strong> her görev 256 kutudan birini günceller; herkes aynı küçük diziye yazar → yoğun iletişim ve <strong>yarış</strong>.</li><li><strong>A:</strong> pikselleri thread başına grupla; her thread önce <strong>kendi yerel histogramını</strong> tutsun, sonda toplanır.</li><li><strong>M:</strong> eşit büyüklükte parçalar.</li></ul><p>Ortak histograma doğrudan yazılırsa atomic ya da mutex gerekir (L3); GPU'da blok başına shared memory histogramı + <code>atomicAdd</code>.</p></div>
+<p><strong>2.</strong> 4 aşamalı bir pipeline'da aşama süreleri 4, 4, 8, 4 ms. 100 öğe ne kadar sürer? Darboğazı nasıl gidersiniz?</p>
+<div class="hint"><p>İlk çıktı 20 ms'de (doluş), sonra her 8 ms'de bir: yaklaşık 20 + 99·8 = <strong>812 ms</strong>. Darboğaz 8 ms'lik aşama: onu ikiye bölün (4+4) ya da o aşamayı iki kopya hâlinde paralel çalıştırın; o zaman her 4 ms'de bir çıktı alınır (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> SPMD ile master-worker arasındaki farkı birer örnekle açıklayın.</p>
+<div class="hint"><p>SPMD: herkes aynı programı çalıştırır, benzersiz ID'sine göre farklı veriyi işler (CUDA kernel'i, MPI). Master-worker: roller farklı: master iş dağıtır ve sonuç toplar, işçiler iş yapar; boşta kalan işçiye yeni iş verildiği için yük dengesi kendiliğinden olur (ör. bir render çiftliğinde kare dağıtmak).</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="3">
+  <p>PCAM'da yoğun iletişim kuran görevleri tek bir gruba toplamak hangi adımdır?</p>
+  <ol>
+    <li data-why="Partitioning parçalara böler, birleştirmez.">Partitioning</li>
+    <li data-why="Communication iletişim hacmini belirler.">Communication</li>
+    <li data-why="Doğru: agglomeration görevleri gruplayarak grup içi iletişimi yok eder.">Agglomeration</li>
+    <li data-why="Mapping grupları düğümlere atar.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Aşama süreleri 2, 5, 3 ms olan 3 aşamalı bir pipeline'ın kararlı durumdaki throughput'u?</p>
+  <ol>
+    <li data-why="En yavaş aşama 5 ms → 5 ms'de bir çıktı = 200 çıktı/s.">5 ms'de bir öğe</li>
+    <li data-why="Toplam 10 ms, tek öğenin gecikmesidir; throughput değil.">10 ms'de bir öğe</li>
+    <li data-why="Ortalama aşama süresi pipeline'ı belirlemez.">3,33 ms'de bir öğe</li>
+    <li data-why="En hızlı aşama değil, en yavaş aşama belirler.">2 ms'de bir öğe</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>CUDA kernel'leri hangi program yapısı desenine en çok uyar?</p>
+  <ol>
+    <li data-why="Görev sayısı sınırlı; CUDA veri paralel.">Task parallelism</li>
+    <li data-why="Her thread farklı program çalıştırmaz.">MPMD</li>
+    <li data-why="Olay tabanlı değil.">Event-based coordination</li>
+    <li data-why="Doğru: tek program (kernel), her thread kendi ID'siyle farklı veri.">SPMD</li>
+  </ol>
+</div>
+
+<h2>Lecture 3 · Thread'ler ve senkronizasyon</h2>
+<p class="small muted">Kaynak sayfa: <a href="l3-review.html">l3-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>Thread'ler process'in adres uzayını paylaşır: iletişim ucuz, ama paylaşılan veriye erişim senkronize edilmeli.</li>
+  <li><strong>Data race</strong>: en az biri yazan eş zamanlı erişim (C++'ta tanımsız davranış). <strong>Race condition</strong>: sıralama yüzünden yanlış sonuç.</li>
+  <li>Oku-değiştir-yaz bölünmez olmalı: mutex ya da atomik.</li>
+  <li>Mutex = tek thread + sahiplik; semafor = N thread, sayaç; condition variable = bir koşulu kilidi bırakarak beklemek.</li>
+  <li>Deadlock (kimse ilerlemez, CPU boşta), livelock (kimse ilerlemez, CPU meşgul), starvation (biri hiç sıra alamaz).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (boş yer), <code>resAvail</code> (dolu yer) semaforları + indeksleri koruyan mutex.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) ve LL/SC: atomiklerin ve kilitsiz yapıların donanım temeli.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Sadece yazan tarafı kilitleyip okuyan tarafı kilitlememek: okuma da yazmayla yarışır.</li>
+  <li>Condition variable'da <code>if</code> ile beklemek: uyanınca koşul tekrar kontrol edilmeli (<code>while</code> ya da <code>wait(lock, predicate)</code>).</li>
+  <li>Producer-consumer'da semafor ve mutex sırasını ters çevirmek: önce mutex'i alıp sonra dolu tampon için semafor beklemek deadlock'a yol açar (mutex'i tutan uyur, tüketici mutex'i alamaz).</li>
+  <li>"x86'da 8 bayt atomik" diye kilitsiz yazmak: derleyici ve tipler buna güvenmeyi yanlış yapar.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 4 thread her biri 1000 kez korumasız <code>counter++</code> yapıyor. Son değer en az kaç, en çok kaç olabilir? Neden 4000'den az çıkar?</p>
+<div class="hint"><p>En çok 4000 (hiç çakışma olmazsa). Pratikte daha az çünkü oku-ekle-yaz adımları iç içe geçer ve güncellemeler kaybolur (<a href="l3-threads.html">3.1</a>'deki adım adım <code>counter++</code> tablosu). Teorik alt sınır çok küçüktür (kötü bir sıralamayla 2'ye kadar inebilir); sınavda önemli olan nedenini açıklamaktır: güncellemeler kaybolur, sonuç belirsizdir.</p></div>
+<p><strong>2.</strong> Producer-consumer'da tüketici şu sırayla yazılmış: <code>l.acquire(); resAvail.acquire(); …</code>. Ne olur?</p>
+<div class="hint"><p>Tampon boşken tüketici mutex'i alır, sonra <code>resAvail</code>'de uyur, <strong>mutex'i tutarak</strong>. Üretici öğe koymak için mutex'i alamaz → kimse ilerleyemez: <strong>deadlock</strong>. Doğrusu önce semafor, sonra mutex.</p></div>
+<p><strong>3.</strong> Bir web sunucusu aynı anda en fazla 8 veritabanı bağlantısı açabiliyor. Hangi senkronizasyon aracını kullanırsınız? Kodun iskeletini yazın.</p>
+<div class="hint"><p>Başlangıç değeri 8 olan bir <strong>counting semafor</strong>: her istek <code>sem.acquire();</code> ile bağlantı alır, işi bitince <code>sem.release();</code>. 9. istek bir bağlantı boşalana kadar bekler.</p></div>
+<p><strong>4.</strong> Deadlock ile livelock'u CPU kullanımı açısından karşılaştırın ve birer gerçek hayat örneği verin.</p>
+<div class="hint"><p>Deadlock: thread'ler birbirinin kaynağını bekleyerek uyur, CPU kullanımı <strong>düşük</strong> (iki araba dar köprüde karşı karşıya, ikisi de geri çekilmiyor). Livelock: thread'ler bloklu değil, birbirine tepki vermekle meşgul, CPU kullanımı <strong>yüksek</strong> ama ilerleme yok (koridorda aynı yöne kaçan iki kişi).</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="2">
+  <p>İki thread aynı <code>int</code>'i sadece okuyor. Bu bir data race midir?</p>
+  <ol>
+    <li data-why="Data race için en az bir yazma gerekir.">Evet, eş zamanlı erişim her zaman data race'tir.</li>
+    <li data-why="Doğru: sadece okuma varsa sorun yok.">Hayır, en az bir thread yazmadıkça data race yoktur.</li>
+    <li data-why="Hizalama bunu değiştirmez.">Sadece değişken hizasızsa.</li>
+    <li data-why="Atomik gerekmez; yazma yok.">Sadece atomik değilse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Thread'ler ilerleyemiyor ama CPU kullanımı yüksek. Hangisi?</p>
+  <ol>
+    <li data-why="Deadlock'ta thread'ler bekler/uyur; CPU düşük.">Deadlock</li>
+    <li data-why="Starvation'da diğer thread'ler ilerler.">Starvation</li>
+    <li data-why="Doğru: livelock'ta thread'ler birbirine tepki vermekle meşgul.">Livelock</li>
+    <li data-why="Race condition yanlış sonuç demektir, ilerlememe değil.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Mutex ile semafor arasındaki temel fark?</p>
+  <ol>
+    <li data-why="Doğru: semafor sayaçla N thread'e izin verir; mutex tek thread ve sahiplik.">Semafor aynı anda N thread'in girmesine izin verebilir; mutex tek thread'e.</li>
+    <li data-why="İkisi de process'ler arası olabilir.">Semafor sadece tek process içinde çalışır.</li>
+    <li data-why="İkisi de atomik işlemlerle uygulanır.">Mutex atomik işlem gerektirmez.</li>
+    <li data-why="Mutex'te alan thread bırakmalı (sahiplik); semaforda başka thread release edebilir.">Mutex'i başka bir thread bırakabilir.</li>
+  </ol>
+</div>
+
+<h2>Lecture 4 · GPU ve CUDA'ya giriş</h2>
+<p class="small muted">Kaynak sayfa: <a href="l4-review.html">l4-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>GPU'da silikon kontrol ve önbellek yerine <strong>hesap birimlerine</strong> gider; GPU throughput, CPU gecikme odaklıdır.</li>
+  <li>CUDA = SIMT: aynı komut, çok thread. Divergence (warp içinde farklı yol) yavaşlatır.</li>
+  <li>Host işi hazırlar (ayır, kopyala, başlat), device yürütür. Akış: profil → paralel kısmı bul → kopyala → hesapla → geri kopyala → doğrula (FP birleşmeli değil) → tekrarla.</li>
+  <li>Hiyerarşi: grid → blok (≤ 1024 thread, aynı SM'de) → warp (32 ardışık thread) → thread. Lineer indeks: <code>tz·bx·by + ty·bx + tx</code>, warp = indeks/32.</li>
+  <li>Bloklar <strong>bağımsız</strong> ve sırasızdır → ölçeklenebilirlik. Blok içinde işbirliği: shared memory + <code>__syncthreads()</code>.</li>
+  <li>Bellek: thread başına local, blok başına shared, herkes için global; salt okunur constant ve texture.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li><code>blockDim</code> (blok başına thread) ile <code>gridDim</code>'i (grid başına blok) karıştırmak.</li>
+  <li>Bir warp'ın iki bloğa yayılabileceğini sanmak: warp'lar her zaman tek bir bloğun içindedir; 48 thread'lik blok = 2 warp (ikincisi yarı dolu).</li>
+  <li>Blok 0'ın blok 1'den önce çalışacağını varsaymak.</li>
+  <li>CPU ve GPU sonuçlarının bit bit aynı çıkmasını beklemek (toplama sırası farklı).</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 100 thread'lik bloklarla çalışan bir kernel'de blok başına kaç warp vardır, kaç thread slotu boşa gider?</p>
+<div class="hint"><p>⌈100/32⌉ = <strong>4 warp</strong>; 4·32 = 128 slot, 28'i boş (son warp'ta sadece 4 thread aktif). Blok boyutunu 32'nin katı seçmek bu israfı önler.</p></div>
+<p><strong>2.</strong> <code>if (threadIdx.x &lt; 48) A(); else B();</code> 128 thread'lik bir blokta kaç warp diverge olur?</p>
+<div class="hint"><p>Warp 0 (0–31): hepsi A, divergence yok. Warp 1 (32–63): 32–47 A, 48–63 B → <strong>diverge</strong>. Warp 2, 3: hepsi B. Yani sadece <strong>1 warp</strong>.</p></div>
+<p><strong>3.</strong> Bloklar neden bağımsız olmak zorunda? Bağımsız olmasalardı ne kaybederdik?</p>
+<div class="hint"><p>Çalışma zamanı blokları istediği SM'ye, istediği sırada dağıtabilsin diye. Bloklar birbirini bekleseydi (sıra varsayımı, bloklar arası senkronizasyon) aynı program farklı sayıda SM'li GPU'larda çalışmayabilir ya da kilitlenebilirdi: <strong>ölçeklenebilirlik</strong> kaybolurdu.</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="3">
+  <p><code>dim3 block(32, 4, 2)</code> bloğunda <code>threadIdx = (0, 2, 1)</code> olan thread kaçıncı warp'tadır?</p>
+  <ol>
+    <li data-why="z bileşeni unutulmuş: 2·32 = 64 → warp 2.">2</li>
+    <li data-why="Lineer indeks 192, 192/32 = 6, 1 değil.">1</li>
+    <li data-why="1·32·4 + 2·32 + 0 = 128 + 64 = 192 → 192/32 = 6.">6</li>
+    <li data-why="Bloktaki toplam warp sayısı 256/32 = 8; soru tek bir thread'in warp'ı.">8</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>CUDA programlarının farklı sayıda SM'li GPU'larda değişmeden çalışabilmesini sağlayan nedir?</p>
+  <ol>
+    <li data-why="Warp boyutu sabittir ama ölçeklenebilirliğin nedeni değildir.">Warp boyutunun her GPU'da 32 olması.</li>
+    <li data-why="Doğru: bağımsız bloklar istenen sırada istenen SM'ye dağıtılabilir.">Thread bloklarının bağımsız olması ve herhangi bir sırada çalıştırılabilmesi.</li>
+    <li data-why="__syncthreads blok içidir.">__syncthreads()'in tüm blokları senkronize etmesi.</li>
+    <li data-why="Programcı blok → SM atamasını kontrol edemez.">Programcının blokları SM'lere elle ataması.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU sonuçları CPU sonuçlarıyla bit bit aynı çıkmıyor. En olası neden?</p>
+  <ol>
+    <li data-why="GPU float'ı IEEE 754 ile destekler.">GPU float'ı desteklemez.</li>
+    <li data-why="Değişme özelliği korunur (a+b = b+a).">FP toplama değişmeli değildir.</li>
+    <li data-why="Bariyer eksikliği yanlış sonuç verir ama 'küçük farklar' tipik olarak sıralamadandır.">__syncthreads() her zaman eksiktir.</li>
+    <li data-why="Doğru: paralel toplama işlem sırasını değiştirir; FP birleşmeli değildir.">FP işlemleri birleşmeli değildir; paralel kod işlemleri farklı sırada yapar.</li>
+  </ol>
+</div>
+
+<h2>Lecture 5 · Kernel, indeksleme, tiling</h2>
+<p class="small muted">Kaynak sayfa: <a href="l5-review.html">l5-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>Kernel = döngünün gövdesi; dıştaki döngüler thread'lere dönüşür. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global indeks = <code>blockIdx·blockDim + threadIdx</code> (her eksende); row-major adres <code>row·width + col</code>; grid'i yukarı yuvarla, sınırı kontrol et.</li>
+  <li><code>__syncthreads()</code>: blok içi bariyer, bloktaki herkes çalıştırmalı.</li>
+  <li>Bloklar SM'lere blok blok atanır; warp = 32 thread, zamanlama birimi; çok warp = gecikme gizleme.</li>
+  <li>Naive matmul CGMA = 1 → bant genişliği sınırlı (~%6 verim). Tiling: karoyu shared'a bir kez yükle, T kez kullan → global trafik T kat az, CGMA = T.</li>
+  <li>Tiled kernel'de iki bariyer: yüklemeden sonra (karo dolsun) ve hesaptan sonra (üzerine yazılmasın).</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li><code>cudaMalloc</code>/<code>cudaMemcpy</code>'ye eleman sayısını vermek: boyut her zaman <strong>bayt</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Row için x, col için y kullanmak: ardışık thread'ler bellekte uzak elemanlara gider (coalescing bozulur) ve matris transpoze hesaplanır.</li>
+  <li>Tiled kernel'de ikinci <code>__syncthreads()</code>'i unutmak: hızlı thread bir sonraki fazın karosunu diğerleri okurken yazar.</li>
+  <li>Kernel'den hemen sonra süre ölçmek: başlatma asenkron, önce <code>cudaDeviceSynchronize()</code>.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>n</code> elemanlı bir diziyi <code>s</code> ile çarpan bir kernel ve onu başlatan host kodunu yazın (blok başına 256 thread, <code>n</code> 256'nın katı olmayabilir).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // fazla thread'ler bir şey yapmaz
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> TILE_WIDTH = T olan tiled matmul'ün CGMA oranı nedir? Gösterin.</p>
+<div class="hint"><p>Her fazda bir thread <strong>2 global okuma</strong> yapar (Mds ve Nds'ye birer eleman) ve iç döngüde T çarpma + T toplama = <strong>2T FP işlem</strong>. CGMA = 2T / 2 = <strong>T</strong>. T = 16 ile 16 kat iyileşme: G80'de 21,6 GFLOPS sınırı ~345 GFLOPS'a çıkar (tepe 367'ye yakın).</p></div>
+<p><strong>3.</strong> 16×16 tile matmul'de shared bellek kullanımını ve G80'de SM başına kaç blok sığacağını hesaplayın. Sınırlayan nedir?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/blok</strong>; 16 KB/SM → shared'a göre 8 blok. Ama 256 thread/blok ile 768/256 = <strong>3 blok</strong>. Sınırlayan: SM başına thread sayısı (shared değil).</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMalloc((void**)&amp;Md, size)</code> çağrısında neden <code>&amp;Md</code> veriliyor?</p>
+  <ol>
+    <li data-why="Md bir host pointer'ı değil; cihaz adresini tutacak bir değişken.">Md host belleğinde ayrılacağı için.</li>
+    <li data-why="size zaten bayt cinsinden; &amp; ile ilgisi yok.">Boyutu bayt cinsinden vermek için.</li>
+    <li data-why="Doğru: fonksiyon ayırdığı cihaz adresini bu pointer değişkenine yazar.">Fonksiyon ayırdığı adresi Md değişkenine yazabilsin diye.</li>
+    <li data-why="cudaMalloc sadece ayırır; kopyalama cudaMemcpy'nin işi.">Veriyi Md'ye kopyalamak için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>256 thread'lik bloklarla bir SM'de 3 blok varsa SM'de kaç warp vardır?</p>
+  <ol>
+    <li data-why="Bu tek bir bloğun warp sayısı.">8</li>
+    <li data-why="256/32 = 8 warp/blok × 3 = 24.">24</li>
+    <li data-why="768 thread sayısı, warp değil.">768</li>
+    <li data-why="Warp 32 thread'tir; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Naive matmul'ün CGMA oranı neden 1'dir?</p>
+  <ol>
+    <li data-why="Shared memory naive kernelde kullanılmıyor.">Her shared bellek erişimine bir FP işlem düşer.</li>
+    <li data-why="Thread başına toplam 2·width okuma var; oran tur başına hesaplanır.">Her thread bir eleman okur.</li>
+    <li data-why="CGMA FP işlem / global erişim; register'larla ilgisi yok.">Her thread bir register kullanır.</li>
+    <li data-why="Doğru: döngü turunda 2 global okuma (M ve N) ve 2 FP işlem (çarpma + toplama).">Her turda 2 global okuma ve 2 FP işlem (çarpma, toplama) yapılır.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Tiled kernel'deki <strong>ikinci</strong> <code>__syncthreads()</code> kaldırılırsa ne olabilir?</p>
+  <ol>
+    <li data-why="Doğru: hızlı bir thread bir sonraki fazın verisini Mds/Nds'ye yazarken yavaş bir thread hâlâ eski fazın değerlerini okuyor olabilir.">Bir thread bir sonraki fazın karosunu yüklerken başka bir thread hâlâ önceki fazın değerlerini okuyor olabilir.</li>
+    <li data-why="Derleyici bariyer eksikliğini yakalamaz.">Derleme hatası olur.</li>
+    <li data-why="Global yazma döngüden sonra; sorun shared bellekte.">Pd'ye yazma coalesced olmaz.</li>
+    <li data-why="Yarış koşulu tanımsız sonuç verir; her zaman doğru çıkma garantisi yok.">Hiçbir şey olmaz; ikinci bariyer gereksizdir.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>__constant__</code> değişkenler için hangisi doğru?</p>
+  <ol>
+    <li data-why="Constant bellek on-chip değil; global bellekte, önbellekli.">On-chip ayrı bir bellekte tutulur, önbelleğe gerek yoktur.</li>
+    <li data-why="Bildirim fonksiyon gövdesinin dışında olmalı.">Kernel içinde bildirilir.</li>
+    <li data-why="Doğru: kapsam tüm grid'ler, ömür uygulama boyu, global bellekte ama önbellekli.">Tüm grid'ler aynı versiyonu görür; global bellekte saklanır ama önbelleklenir.</li>
+    <li data-why="Kernel'den salt okunur; host cudaMemcpyToSymbol ile yazar.">Kernel'ler içine yazabilir.</li>
+  </ol>
+</div>
+
+<h2>Lecture 6 · Derleme ve bellek türleri</h2>
+<p class="small muted">Kaynak sayfa: <a href="l6-review.html">l6-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (sanal ISA) → ptxas → SASS (cubin). cubin X.y sadece X.z (z ≥ y) üzerinde çalışır; gelecekteki GPU'lar için PTX + JIT gerekir. <code>-arch</code> PTX'i, <code>-code</code> ikiliyi seçer.</li>
+  <li>Kernel başlatma asenkrondur: süre ölçerken <code>cudaDeviceSynchronize()</code>; ilk çağrı başlatma maliyetini içerir.</li>
+  <li>Register ve shared sınırları SM başına thread/blok sayısını belirler; aşırı register → spill → local memory (global kadar yavaş).</li>
+  <li>Global: coalescing (32/64/128 B hizalı segmentler), 2D'de pitch. Local: değişken indeksli diziler ve spill.</li>
+  <li>Shared: 32 bank, bank = kelime indeksi % 32; aynı bank'a farklı kelimeler = conflict; <code>s[stride·threadIdx.x]</code> için derece EBOB(stride, 32); sütun okumada <code>[32][33]</code> padding.</li>
+  <li>Constant: herkes <strong>aynı</strong> adresi okursa en iyi (yayın). Texture: 2D yerellik, interpolasyon, sınır işleme; salt okunur, CUDA array gerekir.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>Coalescing ile bank conflict'i karıştırmak: coalescing <strong>global</strong> bellekte ardışık adreslerle ilgilidir; bank conflict <strong>shared</strong> bellekte aynı bank'a düşen farklı kelimelerle. <code>s[2*threadIdx.x]</code> global'de yarı verim, shared'da 2-yollu conflict demektir.</li>
+  <li>Pitch'i eleman sayısı sanmak: pitch <strong>bayttır</strong>, satır başı <code>(char*)p + r*pitch</code>.</li>
+  <li>Constant belleğe ardışık thread'lerle ardışık adres okutmak: constant için bu kötü desen (32 ayrı istek).</li>
+  <li><code>-code=sm_70</code> ile derlenen ikilinin 8.x GPU'da çalışacağını sanmak (major değişince çalışmaz, PTX yoksa JIT de yok).</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> 32 thread <code>__shared__ float s[1024]</code>'ten <code>s[8*threadIdx.x + 1]</code> okuyor. Kaç-yollu bank conflict olur?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → sadece 4 bank kullanılır, her birine 8 farklı kelime → <strong>8-yollu</strong> (EBOB(8, 32) = 8; offset dereceyi değiştirmez).</p></div>
+<p><strong>2.</strong> Transpose'ta <code>__shared__ float tile[32][32]</code> yerine <code>tile[32][33]</code> neden kullanılır? Bank hesabıyla gösterin.</p>
+<div class="hint"><p>32 genişlikte <code>tile[r][c]</code>'nin bank'ı <code>(32r + c) % 32 = c</code>: bir sütunun 32 elemanı aynı bank'ta, sütun okuyan warp 32-yollu conflict yapar. 33 genişlikte bank <code>(33r + c) % 32 = (r + c) % 32</code>: r = 0..31 için 32 farklı bank → conflict yok. Bedel 32 float.</p></div>
+<p><strong>3.</strong> Bir kernel thread başına 40 register kullanıyor ve SM'de 65.536 register var. Blok başına 256 thread ile SM'ye en fazla kaç blok sığar (register'a göre)?</p>
+<div class="hint"><p>Blok başına 256·40 = 10.240 register; 65.536 / 10.240 = 6,4 → <strong>6 blok</strong> (1536 thread). Register sayısını 32'ye indirmek 8 blok (2048 thread) sağlar: register kullanımı occupancy'yi doğrudan belirler.</p></div>
+<p><strong>4.</strong> Hangi durumda constant, hangi durumda texture bellek seçersiniz? Birer örnek.</p>
+<div class="hint"><p>Constant: tüm thread'lerin aynı anda aynı küçük veriyi okuduğu durumlar, ör. konvolüsyon filtresinin katsayıları (her thread aynı katsayıyı aynı anda okur → yayın). Texture: 2D'de yerel ama düzensiz okumalar ve kesirli koordinatlar, ör. görüntü döndürme (<code>texRotate.cu</code>): komşu pikseller önbellekten gelir, bilineer interpolasyon ve kenar işleme donanımda.</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="2">
+  <p>Compute capability 8.6'lı bir GPU, sadece <code>-gencode arch=compute_70,code=sm_70</code> ile derlenmiş bir uygulamayı çalıştırabilir mi?</p>
+  <ol>
+    <li data-why="cubin aynı major içinde ileriye uyumludur; 7.x → 8.x major değişiyor.">Evet, sm_70 ikilisi 8.6'da çalışır.</li>
+    <li data-why="Doğru: ikili sadece 7.z'de çalışır ve PTX gömülmediği için JIT de yapılamaz.">Hayır: ikili major sürümler arasında uyumlu değil ve gömülü PTX yok.</li>
+    <li data-why="JIT için gömülü PTX gerekir; code=sm_70 sadece ikili gömer.">Evet, sürücü sm_70 ikilisini JIT ile yeniden derler.</li>
+    <li data-why="Uyumluluk compute capability'ye göre belirlenir.">Sadece aynı sürücü sürümüyle derlendiyse.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Kernel süresini ölçerken neden <code>cudaDeviceSynchronize()</code> gerekir?</p>
+  <ol>
+    <li data-why="Bellek ayırmayla ilgisi yok.">Bellek ayırmayı tamamlamak için.</li>
+    <li data-why="cudaMemcpy zaten senkron; soru kernel'i soruyor.">cudaMemcpy asenkron olduğu için.</li>
+    <li data-why="Bariyer blok içidir; host'u bekletmez.">Blokları birbirine senkronize etmek için.</li>
+    <li data-why="Doğru: başlatma hemen döner; beklemezseniz sadece başlatma süresini ölçersiniz.">Kernel başlatmaları asenkron; bitmesini beklemeden süre alınırsa çok kısa (yanlış) çıkar.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Hangisi local memory'ye konma ihtimali en yüksek değişkendir?</p>
+  <ol>
+    <li data-why="Doğru: derleyici sabit indekslendiğini belirleyemediği diziler local memory'ye gider.">Çalışma zamanında hesaplanan bir indeksle erişilen otomatik dizi.</li>
+    <li data-why="Skaler otomatik değişkenler register'a konur (spill yoksa).">Bir <code>int</code> döngü sayacı.</li>
+    <li data-why="__shared__ açıkça shared bellekte.">Bir <code>__shared__</code> dizi.</li>
+    <li data-why="__constant__ constant bellekte.">Bir <code>__constant__</code> dizi.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p><code>cudaMallocPitch</code> ile 700 baytlık satırlar ayrıldı (256 B hizalama). <code>r</code>. satırın başına nasıl ulaşılır?</p>
+  <ol>
+    <li data-why="Satırlar 700 değil, pitch kadar (768 B) aralıklı.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch bayt cinsinden; float* aritmetiği 4 ile çarpar.">p + r * pitch</li>
+    <li data-why="Doğru: pitch = 768 B; önce char*'a çevirip bayt ekle.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="Pitch genişlikten küçük olamaz.">(float*)((char*)p + r * 512)</li>
+  </ol>
+</div>
+
+<h2>Lecture 6 · Coalescing, transpose, unrolling</h2>
+<p class="small muted">Kaynak sayfa: <a href="coalescing-review.html">coalescing-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>Bir warp'ın erişimleri 32/64/128 baytlık, boyutuna hizalı segmentlere toplanır; ne kadar az segment, o kadar iyi.</li>
+  <li>Kontrol: adreste <code>threadIdx.x</code> çarpansız ve en sağda mı? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>2D dizilerde satır başları hizalı olsun diye <code>cudaMallocPitch</code>; pitch bayt cinsinden.</li>
+  <li>Transpose: naive'de yazma ✗; shared memory karosuyla okuma ve yazma ✓; <code>[32][33]</code> padding bank conflict'i kaldırır.</li>
+  <li>Loop unrolling: döngü kontrolünü azaltır, ILP'yi artırır; bedeli register.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> <code>float</code> dizisinde bir warp <code>a[threadIdx.x * 2 + 1]</code> okuyor (dizi 128 B hizalı). Kaç tane 32 B segment taşınır, verim nedir?</p>
+<div class="hint"><p>Adresler 4, 12, 20, …, 252 (bayt): 0–255 aralığındaki 8 segmentin hepsine dokunulur → 8 · 32 = 256 B taşınır, 128 B kullanılır: <strong>%50</strong>.</p></div>
+<p><strong>2.</strong> Shared memory'li transpose'ta neden hem global okuma hem global yazma coalesced olur? Hangi erişim dağınık kalır ve neden sorun değildir?</p>
+<div class="hint"><p>Okumada ve yazmada <code>threadIdx.x</code> global adresin en sağında (satır boyunca ardışık). Yer değiştirme shared memory içinde yapılır: <code>tile[threadIdx.x][…]</code> sütun okur, yani dağınık erişim <strong>shared</strong> bellektedir. Shared memory on-chip ve hızlı olduğu için bu ucuzdur; tek bedeli bank conflict'tir, o da <code>[32][33]</code> padding ile çözülür.</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="2">
+  <p>Bir warp 128 B hizalı bir <code>float</code> dizisinden <code>a[3*threadIdx.x]</code> okuyor. Kaç tane 32 B segmente dokunulur?</p>
+  <ol>
+    <li data-why="Ardışık olsaydı 4 olurdu; stride 3 ile 384 B'lık bir alana yayılır.">4</li>
+    <li data-why="Adresler 0, 12, 24, …, 372: 0–383 aralığındaki 12 segmentin hepsine dokunulur.">12</li>
+    <li data-why="Stride 3'te segment başına ~2,7 thread düşer; her thread ayrı segment değil.">32</li>
+    <li data-why="128 B satır sayısı 3; soru 32 B segmentleri soruyor.">3</li>
+  </ol>
+  <div class="explain">Taşınan 12·32 = 384 B, kullanılan 128 B → verim 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Transpose kernellerinde blok neden 32×32 değil de 32×8 thread?</p>
+  <ol>
+    <li data-why="32×32 = 1024 thread günümüz GPU'larında izinli; sebep bu değil.">32×32 blok başlatılamaz.</li>
+    <li data-why="Bank conflict'le ilgisi yok; çözümü padding.">Bank conflict'leri önlemek için.</li>
+    <li data-why="Doğru: her thread 4 eleman işler; indeks hesabı 4 elemana bölünür, döngü satır yönünde döndüğü için coalescing korunur.">Her thread karoda 4 eleman işlesin, indeks hesabının maliyeti paylaşılsın diye.</li>
+    <li data-why="Karo hâlâ 32×32; shared bellek aynı.">Shared bellekten tasarruf için.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p><code>transposeCoalesced</code>'da yazma aşamasında neden <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> kullanılıyor?</p>
+  <ol>
+    <li data-why="Doğru: (bx, by) karosu çıktıda (by, bx) konumuna gider.">Girdideki (bx, by) karosu çıktıda transpoze konuma, (by, bx)'e yazılmalı.</li>
+    <li data-why="Bank conflict'i padding çözer; bu indeks değişikliği karonun yerini belirler.">Bank conflict'leri azaltmak için.</li>
+    <li data-why="threadIdx.x en sağda kaldığı için yazma coalesced; ama soru blok ofsetini soruyor.">Okumayı coalesced yapmak için.</li>
+    <li data-why="Hata değil; olmasaydı karolar kendi yerlerinde transpoze edilir, matris yanlış olurdu.">Bir yazım hatası; blockIdx.x olmalı.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p><code>#pragma unroll</code> için hangisi doğru?</p>
+  <ol>
+    <li data-why="Unrolling seri döngüyü thread'lere dağıtmaz; aynı thread içinde kopyalar.">Döngü turlarını farklı thread'lere dağıtır.</li>
+    <li data-why="Register kullanımı genelde artar.">Register kullanımını azaltır.</li>
+    <li data-why="Sonuç değişmez (aynı işlemler, aynı sırada).">Sonucu değiştirebilir, dikkat edilmeli.</li>
+    <li data-why="Doğru: sabit döngü sayısında gövde tamamen kopyalanır, kontrol komutları kalkar.">Döngü sayısı derleme zamanında sabitse döngüyü tamamen açabilir.</li>
+  </ol>
+</div>
+
+<h2>Lecture 7 · Hata kontrolü ve kontrol akışı</h2>
+<p class="small muted">Kaynak sayfa: <a href="l7-review.html">l7-review.html</a></p>
+<h3>Ana fikirler</h3>
+<ul>
+  <li>Runtime çağrıları <code>cudaError_t</code> döndürür; kernel başlatma döndürmez. Asenkron hatalar sonraki bir çağrıda (ya da <code>cudaDeviceSynchronize()</code>'da) görünür.</li>
+  <li><code>cudaPeekAtLastError()</code> okur, <code>cudaGetLastError()</code> okur ve sıfırlar. Desen: önce temizle, başlat, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
+  <li>Divergence: bir warp içinde farklı yollar seri çalışır (tek program sayacı). Koşulu <code>threadIdx / 32</code>'ye hizalamak divergence'ı önler.</li>
+  <li>Predication (GPU): komutlar atlanmaz, thread başına predicate ile maskelenir. Prediction (CPU): dal tahmini + spekülatif yürütme.</li>
+  <li><code>#pragma unroll N</code> döngüyü N kez açar (artan turlar için kod eklenir); <code>1</code> açmaz; sayısız: sabit sayıda tam açar.</li>
+  <li>Döngü sayaçlarını <code>int</code> yapın: signed taşma tanımsız olduğu için derleyici daha çok optimize eder.</li>
+</ul>
+<h3>Sık yapılan hatalar</h3>
+<ul>
+  <li>"Kernel başlatma hata döndürmedi, demek ki çalıştı" sanmak: başlatma hiçbir zaman hata döndürmez, çalışma hatası sonradan gelir.</li>
+  <li><code>cudaGetLastError()</code>'ı iki kez çağırıp ikincisinde de hatayı beklemek: ilk çağrı sıfırlar.</li>
+  <li>Predication ile prediction'ı karıştırmak, ya da farklı warp'ların farklı dallarını divergence saymak.</li>
+  <li><code>#pragma unroll</code>'u döngüden birkaç satır önce yazmak: hemen önünde olmalı.</li>
+</ul>
+<h3>Final için açık uçlu sorular</h3>
+<p><strong>1.</strong> Hata kontrolü olmayan <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code> çağrısını tamamlayın. Peek ve Get farkı nedir?</p>
+<div class="hint"><p>Önce önceki hataları temizle/kontrol et (<code>cudaGetLastError()</code>), başlat, <code>cudaError_t launch = cudaGetLastError();</code> (konfigürasyon/parametre hatası), sonra <code>cudaError_t run = cudaDeviceSynchronize();</code> (yürütme hatası); ikisi de <code>cudaSuccess</code> değilse raporla ve dur. Get okur ve sıfırlar, Peek sıfırlamaz.</p></div>
+<p><strong>2.</strong> 128 thread'lik 1D blokta <code>if (threadIdx.x &lt; 40)</code> ve <code>if (threadIdx.x % 4 == 0)</code> için kaç warp diverge olur?</p>
+<div class="hint"><p><code>&lt; 40</code>: warp 0 hep true, warp 1 (32–63) karışık, warp 2–3 hep false → <strong>1</strong>. <code>% 4 == 0</code>: her warp'ta 8 true, 24 false → <strong>4</strong> (hepsi).</p></div>
+<p><strong>3.</strong> Predication prediction'dan nasıl farklıdır? <code>#pragma unroll 4</code> neden her zaman daha hızlı değildir?</p>
+<div class="hint"><p>Prediction (CPU) dalı tahmin edip spekülatif yürütür, yanlışsa geri alır. Predication (GPU) komutları atlamaz; thread başına predicate ile maskeler, false olanlar sonuç yazmaz ve operand okumaz. Unrolling döngü kontrolünü azaltır ama kod boyutunu ve register kullanımını artırır; register spill ya da düşük occupancy kazancı silebilir.</p></div>
+<p><strong>4.</strong> Bir kernel <code>cudaMemcpy</code> çağrısında "illegal memory access" hatası verdi ama <code>cudaMemcpy</code>'nin parametreleri doğru. Neden?</p>
+<div class="hint"><p>Hata büyük ihtimalle önceki <strong>kernel'de</strong> oluştu (asenkron). Kernel başlatma hata döndürmez; hata bir sonraki ilgisiz çağrıda, burada <code>cudaMemcpy</code>'de raporlandı. Kernel'den hemen sonra <code>cudaDeviceSynchronize()</code>'ın dönüşünü kontrol etmek hatayı doğru yerde gösterir.</p></div>
+<h3>Kendini sına</h3>
+<div class="quiz" data-answer="3">
+  <p>Kernel başlatmasından hemen sonra <code>cudaGetLastError()</code> hangi hatayı yakalar?</p>
+  <ol>
+    <li data-why="Yürütme sırasındaki hatalar için senkronizasyon gerekir.">Kernel içindeki sınır dışı erişimi.</li>
+    <li data-why="Get sıfırlar; ama asıl soru hangi tür hatayı yakaladığı.">Hiçbir hatayı; kernel başlatması hata üretmez.</li>
+    <li data-why="Doğru: blok başına 2048 thread gibi başlatma öncesi (konfigürasyon/parametre) hataları.">Geçersiz konfigürasyon gibi başlatma öncesi hataları.</li>
+    <li data-why="Gelecekte olacak hataları hiçbir çağrı bilemez.">Sonraki <code>cudaMemcpy</code>'nin hatalarını.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p><code>cudaPeekAtLastError()</code> ile <code>cudaGetLastError()</code> arasındaki fark?</p>
+  <ol>
+    <li data-why="İkisi de aynı host-thread başına hata değişkenini okur.">Peek cihazdaki, Get host'taki hatayı okur.</li>
+    <li data-why="Doğru: Peek sadece okur, Get okur ve cudaSuccess'a sıfırlar.">Peek değişkeni sıfırlamaz, Get sıfırlar.</li>
+    <li data-why="İkisi de bloklamaz; senkronize olmak için cudaDeviceSynchronize gerekir.">Peek senkronize olur, Get olmaz.</li>
+    <li data-why="Fark var: sıfırlama.">Fark yoktur.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU'nun branch predication'ı için hangisi doğru?</p>
+  <ol>
+    <li data-why="Bu CPU'nun branch prediction'ı.">Dalın sonucunu tahmin edip spekülatif yürütür.</li>
+    <li data-why="Komutlar atlanmaz, hepsi zamanlanır.">Koşul false olan thread'lerin komutları atlanır.</li>
+    <li data-why="False predicate'li komutlar operand okumaz, sonuç yazmaz.">False predicate'li komutlar operand okur ama sonuç yazmaz.</li>
+    <li data-why="Doğru: her komut thread başına bir predicate taşır, sadece true olanlar etkili olur.">Her komut thread başına bir predicate ile ilişkilendirilir; sadece true olanlar yürütülür.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Sayı verilmemiş <code>#pragma unroll</code> neyi yapar?</p>
+  <ol>
+    <li data-why="Doğru: sabit sayıda tam açar, değilse hiç açmaz.">Döngü sayısı sabitse tamamen açar, değilse hiç açmaz.</li>
+    <li data-why="Varsayılan 4 diye bir kural yok.">Döngüyü 4 kez açar.</li>
+    <li data-why="Bu #pragma unroll 1.">Döngünün açılmasını engeller.</li>
+    <li data-why="Pragma sadece hemen arkasındaki döngüye uygulanır.">Dosyadaki tüm döngüleri açar.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>

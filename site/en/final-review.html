@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Final review · Parallel Computing</title>
+<meta name="description" content="BİL 455/533 final review: every lecture&#x27;s key ideas, common mistakes, open-ended final questions and quiz questions on one page.">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/theme-init.js"></script>
+<script type="module" src="../js/layout.js"></script>
+</head>
+<body data-page="final-review">
+<main><div class="content">
+
+<h1>Final review</h1>
+<p class="lead">The key ideas, common mistakes, open-ended final questions and quiz questions from the last page of every lecture, on one page, in course order. The solutions are hidden. For a more detailed summary and much harder questions: <a href="final-prep.html">all-out final prep</a>.</p>
+
+
+<h2>Lecture 1 · Introduction and performance</h2>
+<p class="small muted">Source page: <a href="l1-review.html">l1-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>Moore's law is about the <strong>number of transistors</strong>, not frequency. Frequency stopped at 2–4 GHz around 2005 because of power and heat (power ∝ f³); the extra transistors went into cores.</li>
+  <li>Getting performance from many cores needs <strong>parallel software</strong>; that is what this course is about.</li>
+  <li>Flynn: SISD, SIMD, MISD, MIMD. Multi-core CPUs and GPUs are MIMD; the GPU's programming model is SIMT.</li>
+  <li>Shared memory (common address space, easy, limited scale; NUMA) ↔ distributed memory (message passing, harder, scales far).</li>
+  <li>CPUs are designed for latency (big caches, complex control), GPUs for throughput (many simple ALUs, wide memory buses).</li>
+  <li>speedup = t<sub>seq</sub>/t<sub>par</sub>, efficiency = speedup/N. Amdahl: 1/((1−α) + α/N), ceiling 1/(1−α). Gustafson: (1−α) + αN.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Taking α to be the serial part. In this course α is the <strong>parallelisable</strong> part; the serial part is 1 − α.</li>
+  <li>Mixing up speedup and efficiency: a speedup of 8 on 16 cores is 50% efficiency; there is no such thing as "8 times efficiency".</li>
+  <li>Thinking NUMA is distributed memory: in NUMA addressing is shared, remote memory is just slower.</li>
+  <li>Comparing against a slow sequential version: the golden rule compares with the fastest known sequential solution.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 95% of a program can be parallelised. What are the speedup and efficiency on 19 cores? What is the most you can get with infinitely many cores?</p>
+<div class="hint"><p>1/(0.05 + 0.95/19) = 1/(0.05 + 0.05) = <strong>10</strong>; efficiency 10/19 ≈ <strong>53%</strong>. Bound: 1/0.05 = <strong>20</strong>.</p></div>
+<p><strong>2.</strong> For the same program, what are the speedup and efficiency on 19 cores according to Gustafson? Why is it different from Amdahl?</p>
+<div class="hint"><p>0.05 + 19·0.95 = 0.05 + 18.05 = <strong>18.1</strong>; efficiency 0.05/19 + 0.95 ≈ <strong>95.3%</strong>. Gustafson assumes the problem grows with the number of cores (fixed time); Amdahl keeps the problem fixed.</p></div>
+<p><strong>3.</strong> Why was it not possible to keep raising the clock frequency? Give two reasons.</p>
+<div class="hint"><p>(1) Power grows very fast with frequency (about f³): the heat cannot be removed. (2) A high-frequency clock signal is hard to generate and distribute across the chip (the waveform degrades). Lowering the voltage helped for a while but was not enough.</p></div>
+<p><strong>4.</strong> 10,000 nodes in a server farm will work together. Shared or distributed memory? Why?</p>
+<div class="hint"><p>Distributed memory: shared memory becomes a bottleneck in a single common medium (memory bus, cache coherence) and chokes at tens to hundreds of cores. In distributed memory each node has its own memory and communicates by messages; that is expensive, but with no shared bottleneck it scales very far.</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="2">
+  <p>80% of a program can be parallelised. By Amdahl, what is the maximum speedup with infinitely many processors?</p>
+  <ol>
+    <li data-why="That is α itself; the formula is 1/(1−α).">0.8</li>
+    <li data-why="1/(1 − 0.8) = 1/0.2 = 5.">5</li>
+    <li data-why="Gustafson has no bound; Amdahl does.">Unbounded</li>
+    <li data-why="1/0.8 = 1.25 mixes up the serial and parallel parts.">1.25</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true for distributed-memory MIMD?</p>
+  <ol>
+    <li data-why="That is shared memory.">All processors share a common address space.</li>
+    <li data-why="It is harder to program.">It is easier to program than shared memory.</li>
+    <li data-why="NUMA is a shared-memory design.">NUMA is a distributed-memory design.</li>
+    <li data-why="True: communication by messages; with no shared medium it scales very far.">Communication is by message passing and it scales very far.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>A speedup of 12 is measured on 16 cores. What is the efficiency?</p>
+  <ol>
+    <li data-why="12/16 = 0.75.">75%</li>
+    <li data-why="16/12 is the inverse ratio.">133%</li>
+    <li data-why="Efficiency is speedup divided by the number of cores.">12%</li>
+    <li data-why="That would be linear speedup.">100%</li>
+  </ol>
+</div>
+
+<h2>Lecture 2 · Parallel program design</h2>
+<p class="small muted">Source page: <a href="l2-review.html">l2-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>PCAM: <strong>P</strong>artition (as many pieces as possible, 10–100 times the number of processors), <strong>C</strong>ommunication (dependency graph), <strong>A</strong>gglomeration (group to reduce communication, ~10 times), <strong>M</strong>apping (load balance + communication; NP-complete in general).</li>
+  <li>Decomposition: functional (by steps), data (by data), data flow (pipeline, event).</li>
+  <li>The <strong>slowest stage</strong> sets a pipeline's speed; there is a benefit only if the stages run concurrently.</li>
+  <li>In divide-and-conquer, parallelism is read from the <strong>dependency graph</strong>, not the call graph.</li>
+  <li>GPLS (SPMD, MPMD, master-worker, map-reduce) ↔ GSLP (fork/join, loop parallelism). CUDA = SPMD.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Thinking task parallelism scales: the number of tasks is fixed, so it cannot follow the number of cores.</li>
+  <li>Confusing a pipeline's total latency with its throughput: in a 2+5+3 ms pipeline one item takes 10 ms, but in steady state there is one output every 5 ms.</li>
+  <li>Forgetting agglomeration: N² tiny tasks are very parallel in theory, slow in practice because of communication and task management costs.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Design a histogram computation (Exercise 1) with the PCAM steps. In which step does a race appear, and how do you solve it?</p>
+<div class="hint"><ul><li><strong>P:</strong> each pixel a task (data decomposition).</li><li><strong>C:</strong> each task updates one of 256 bins; everyone writes to the same small array → heavy communication and a <strong>race</strong>.</li><li><strong>A:</strong> group pixels into chunks per thread; each thread first keeps <strong>its own local histogram</strong>, summed at the end.</li><li><strong>M:</strong> equal-size chunks.</li></ul><p>If the shared histogram is written directly, an atomic or a mutex is needed (L3); on a GPU, a per-block shared-memory histogram + <code>atomicAdd</code>.</p></div>
+<p><strong>2.</strong> A 4-stage pipeline has stage times 4, 4, 8, 4 ms. How long do 100 items take? How do you remove the bottleneck?</p>
+<div class="hint"><p>The first output at 20 ms (fill), then one every 8 ms: about 20 + 99·8 = <strong>812 ms</strong>. The bottleneck is the 8 ms stage: split it in two (4+4) or run two copies of that stage in parallel; then there is an output every 4 ms (≈ 20 + 99·4 = 416 ms).</p></div>
+<p><strong>3.</strong> Explain the difference between SPMD and master-worker with one example each.</p>
+<div class="hint"><p>SPMD: everyone runs the same program and processes different data according to their unique ID (a CUDA kernel, MPI). Master-worker: the roles differ: the master hands out work and collects results, the workers do the work; since idle workers get new work, load balancing happens by itself (e.g. distributing frames in a render farm).</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="3">
+  <p>In PCAM, which step groups heavily communicating tasks into one group?</p>
+  <ol>
+    <li data-why="Partitioning splits into pieces, it does not group.">Partitioning</li>
+    <li data-why="Communication determines the communication volume.">Communication</li>
+    <li data-why="True: agglomeration groups tasks, removing communication within the group.">Agglomeration</li>
+    <li data-why="Mapping assigns groups to nodes.">Mapping</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What is the steady-state throughput of a 3-stage pipeline with stage times 2, 5, 3 ms?</p>
+  <ol>
+    <li data-why="The slowest stage is 5 ms → one output every 5 ms = 200 outputs/s.">One item every 5 ms</li>
+    <li data-why="The total 10 ms is one item's latency, not the throughput.">One item every 10 ms</li>
+    <li data-why="The average stage time does not decide the pipeline.">One item every 3.33 ms</li>
+    <li data-why="The slowest stage decides, not the fastest.">One item every 2 ms</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which program structure pattern do CUDA kernels fit best?</p>
+  <ol>
+    <li data-why="The number of tasks is limited; CUDA is data-parallel.">Task parallelism</li>
+    <li data-why="Threads do not run different programs.">MPMD</li>
+    <li data-why="Not event-based.">Event-based coordination</li>
+    <li data-why="True: one program (the kernel), each thread different data via its ID.">SPMD</li>
+  </ol>
+</div>
+
+<h2>Lecture 3 · Threads and synchronisation</h2>
+<p class="small muted">Source page: <a href="l3-review.html">l3-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>Threads share the process's address space: communication is cheap, but access to shared data must be synchronised.</li>
+  <li><strong>Data race</strong>: concurrent access with at least one writer (undefined behaviour in C++). <strong>Race condition</strong>: a wrong result because of ordering.</li>
+  <li>Read-modify-write must be indivisible: a mutex or an atomic.</li>
+  <li>Mutex = one thread + ownership; semaphore = N threads, a counter; condition variable = wait for a condition while releasing the lock.</li>
+  <li>Deadlock (nobody progresses, CPU idle), livelock (nobody progresses, CPU busy), starvation (one thread never gets a turn).</li>
+  <li>Producer-consumer: <code>slotsAvail</code> (free slots) and <code>resAvail</code> (full slots) semaphores + a mutex protecting the indices.</li>
+  <li>CAS (x86 <code>CMPXCHG</code>) and LL/SC: the hardware basis of atomics and lock-free structures.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Locking only the writer and not the reader: a read races with a write too.</li>
+  <li>Waiting on a condition variable with <code>if</code>: after waking, the condition must be checked again (<code>while</code> or <code>wait(lock, predicate)</code>).</li>
+  <li>Swapping the semaphore and mutex order in producer-consumer: taking the mutex first and then waiting on the semaphore for a full buffer deadlocks (the mutex holder sleeps, the consumer cannot get the mutex).</li>
+  <li>Writing lock-free code because "8 bytes are atomic on x86": compilers and types make relying on it wrong.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 4 threads each do an unprotected <code>counter++</code> 1000 times. What can the final value be at most? Why does it come out below 4000?</p>
+<div class="hint"><p>At most 4000 (if there is never an overlap). In practice less, because the read-add-write steps interleave and updates are lost (the step-by-step <code>counter++</code> table in <a href="l3-threads.html">3.1</a>). The theoretical lower bound is very small (a bad interleaving can bring it down to 2); in the exam what matters is explaining why: updates are lost and the result is nondeterministic.</p></div>
+<p><strong>2.</strong> In producer-consumer the consumer is written in this order: <code>l.acquire(); resAvail.acquire(); …</code>. What happens?</p>
+<div class="hint"><p>With an empty buffer the consumer takes the mutex, then sleeps on <code>resAvail</code> <strong>while holding the mutex</strong>. The producer cannot take the mutex to add an item → nobody can progress: <strong>deadlock</strong>. The right order is semaphore first, then mutex.</p></div>
+<p><strong>3.</strong> A web server can open at most 8 database connections at once. Which synchronisation tool do you use? Write the skeleton of the code.</p>
+<div class="hint"><p>A <strong>counting semaphore</strong> with initial value 8: each request takes a connection with <code>sem.acquire();</code> and calls <code>sem.release();</code> when done. The 9th request waits until a connection is freed.</p></div>
+<p><strong>4.</strong> Compare deadlock and livelock in terms of CPU usage and give a real-life example of each.</p>
+<div class="hint"><p>Deadlock: threads sleep waiting for each other's resources, CPU usage is <strong>low</strong> (two cars facing each other on a narrow bridge, neither backs off). Livelock: threads are not blocked but busy responding to each other, CPU usage is <strong>high</strong> but there is no progress (two people in a corridor dodging the same way).</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="2">
+  <p>Two threads only read the same <code>int</code>. Is this a data race?</p>
+  <ol>
+    <li data-why="A data race needs at least one write.">Yes, concurrent access is always a data race.</li>
+    <li data-why="True: reads only are no problem.">No, there is no data race unless at least one thread writes.</li>
+    <li data-why="Alignment does not change this.">Only if the variable is misaligned.</li>
+    <li data-why="No atomic needed; there is no write.">Only if it is not atomic.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Threads cannot make progress but CPU usage is high. Which is it?</p>
+  <ol>
+    <li data-why="In a deadlock threads wait/sleep; CPU is low.">Deadlock</li>
+    <li data-why="In starvation other threads progress.">Starvation</li>
+    <li data-why="True: in a livelock threads are busy responding to each other.">Livelock</li>
+    <li data-why="A race condition means wrong results, not lack of progress.">Race condition</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>The key difference between a mutex and a semaphore?</p>
+  <ol>
+    <li data-why="True: a semaphore admits N threads via its counter; a mutex one thread, with ownership.">A semaphore can admit N threads at once; a mutex one.</li>
+    <li data-why="Both can be cross-process.">A semaphore works only within one process.</li>
+    <li data-why="Both are implemented with atomic operations.">A mutex needs no atomic operations.</li>
+    <li data-why="With a mutex the acquiring thread must release (ownership); a semaphore can be released by another thread.">A mutex can be released by another thread.</li>
+  </ol>
+</div>
+
+<h2>Lecture 4 · GPUs and CUDA</h2>
+<p class="small muted">Source page: <a href="l4-review.html">l4-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>On a GPU the silicon goes to <strong>arithmetic units</strong> instead of control and caches; GPUs are throughput-oriented, CPUs latency-oriented.</li>
+  <li>CUDA = SIMT: same instruction, many threads. Divergence (different paths within a warp) slows down.</li>
+  <li>The host prepares the work (allocate, copy, launch), the device executes. Flow: profile → find the parallel part → copy → compute → copy back → verify (FP is not associative) → iterate.</li>
+  <li>Hierarchy: grid → block (≤ 1024 threads, on one SM) → warp (32 consecutive threads) → thread. Linear index: <code>tz·bx·by + ty·bx + tx</code>, warp = index/32.</li>
+  <li>Blocks are <strong>independent</strong> and unordered → scalability. Cooperation within a block: shared memory + <code>__syncthreads()</code>.</li>
+  <li>Memory: local per thread, shared per block, global for everyone; read-only constant and texture.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Mixing up <code>blockDim</code> (threads per block) and <code>gridDim</code> (blocks per grid).</li>
+  <li>Thinking a warp can span two blocks: warps are always inside one block; a 48-thread block = 2 warps (the second half full).</li>
+  <li>Assuming block 0 runs before block 1.</li>
+  <li>Expecting CPU and GPU results to match bit for bit (different summation order).</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> A kernel uses 100-thread blocks. How many warps per block, and how many thread slots are wasted?</p>
+<div class="hint"><p>⌈100/32⌉ = <strong>4 warps</strong>; 4·32 = 128 slots, 28 empty (only 4 threads active in the last warp). Choosing block sizes that are multiples of 32 avoids this waste.</p></div>
+<p><strong>2.</strong> <code>if (threadIdx.x &lt; 48) A(); else B();</code> in a 128-thread block: how many warps diverge?</p>
+<div class="hint"><p>Warp 0 (0–31): all A, no divergence. Warp 1 (32–63): 32–47 A, 48–63 B → <strong>diverges</strong>. Warps 2, 3: all B. So only <strong>1 warp</strong>.</p></div>
+<p><strong>3.</strong> Why must blocks be independent? What would we lose if they were not?</p>
+<div class="hint"><p>So that the runtime can distribute blocks to any SM in any order. If blocks waited for each other (order assumptions, synchronisation across blocks), the same program might not run, or might deadlock, on GPUs with different numbers of SMs: <strong>scalability</strong> would be lost.</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="3">
+  <p>In a <code>dim3 block(32, 4, 2)</code> block, which warp is the thread with <code>threadIdx = (0, 2, 1)</code> in?</p>
+  <ol>
+    <li data-why="The z component was forgotten: 2·32 = 64 → warp 2.">2</li>
+    <li data-why="The linear index is 192, 192/32 = 6, not 1.">1</li>
+    <li data-why="1·32·4 + 2·32 + 0 = 128 + 64 = 192 → 192/32 = 6.">6</li>
+    <li data-why="The block has 256/32 = 8 warps in total; the question is about one thread's warp.">8</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>What lets CUDA programs run unchanged on GPUs with different numbers of SMs?</p>
+  <ol>
+    <li data-why="The warp size is constant, but it is not the reason for scalability.">The warp size being 32 on every GPU.</li>
+    <li data-why="True: independent blocks can be distributed to any SM in any order.">Thread blocks being independent and runnable in any order.</li>
+    <li data-why="__syncthreads is within a block.">__syncthreads() synchronising all blocks.</li>
+    <li data-why="The programmer cannot control block → SM assignment.">The programmer assigning blocks to SMs by hand.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>GPU results do not match CPU results bit for bit. The most likely reason?</p>
+  <ol>
+    <li data-why="GPUs support IEEE 754 floats.">The GPU does not support floats.</li>
+    <li data-why="Commutativity holds (a+b = b+a).">FP addition is not commutative.</li>
+    <li data-why="A missing barrier gives wrong results, but 'small differences' typically come from ordering.">__syncthreads() is always missing.</li>
+    <li data-why="True: parallel summation changes the order of operations; FP is not associative.">FP operations are not associative; parallel code performs operations in a different order.</li>
+  </ol>
+</div>
+
+<h2>Lecture 5 · Kernels, indexing, tiling</h2>
+<p class="small muted">Source page: <a href="l5-review.html">l5-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>Kernel = the body of the loop; the outer loops become threads. Host: <code>cudaMalloc</code> → <code>cudaMemcpy</code> (H→D) → <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> → <code>cudaMemcpy</code> (D→H) → <code>cudaFree</code>.</li>
+  <li>Global index = <code>blockIdx·blockDim + threadIdx</code> (on each axis); row-major address <code>row·width + col</code>; round the grid up, check the bounds.</li>
+  <li><code>__syncthreads()</code>: barrier within a block, everyone in the block must execute it.</li>
+  <li>Blocks are assigned to SMs block by block; warp = 32 threads, the scheduling unit; many warps = latency hiding.</li>
+  <li>Naive matmul has CGMA = 1 → bandwidth-bound (~6% efficiency). Tiling: load a tile into shared memory once, use it T times → T times less global traffic, CGMA = T.</li>
+  <li>Two barriers in the tiled kernel: after loading (tile filled) and after computing (not overwritten).</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Passing a number of elements to <code>cudaMalloc</code>/<code>cudaMemcpy</code>: sizes are always in <strong>bytes</strong> (<code>n * sizeof(float)</code>).</li>
+  <li>Using x for the row and y for the column: consecutive threads go to distant elements (coalescing breaks) and the matrix is computed transposed.</li>
+  <li>Forgetting the second <code>__syncthreads()</code> in the tiled kernel: a fast thread writes the next phase's tile while others are reading.</li>
+  <li>Timing right after the kernel: the launch is asynchronous, call <code>cudaDeviceSynchronize()</code> first.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Write a kernel that multiplies an <code>n</code>-element array by <code>s</code>, and the host code that launches it (256 threads per block, <code>n</code> may not be a multiple of 256).</p>
+<div class="hint"><pre class="code" data-run="scale.cu">
+__global__ void scale(float* a, float s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] *= s;              // the extra threads do nothing
+}
+// host:
+float* d;
+cudaMalloc((void**)&d, n * sizeof(float));
+cudaMemcpy(d, h, n * sizeof(float), cudaMemcpyHostToDevice);
+scale<<<(n + 255) / 256, 256>>>(d, 2.0f, n);
+cudaMemcpy(h, d, n * sizeof(float), cudaMemcpyDeviceToHost);
+cudaFree(d);
+</pre></div>
+<p><strong>2.</strong> What is the CGMA ratio of tiled matmul with TILE_WIDTH = T? Show it.</p>
+<div class="hint"><p>In each phase a thread does <strong>2 global reads</strong> (one element each into Mds and Nds) and, in the inner loop, T multiplications + T additions = <strong>2T FP operations</strong>. CGMA = 2T / 2 = <strong>T</strong>. With T = 16, a 16 times improvement: on the G80 the 21.6 GFLOPS bound rises to ~345 GFLOPS (close to the 367 peak).</p></div>
+<p><strong>3.</strong> Compute the shared memory use of 16×16 tiled matmul and how many blocks fit on a G80 SM. What is the limit?</p>
+<div class="hint"><p>Mds + Nds = 2·16·16·4 B = <strong>2 KB/block</strong>; 16 KB/SM → 8 blocks by shared memory. But with 256 threads/block, 768/256 = <strong>3 blocks</strong>. The limit: threads per SM (not shared memory).</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="3">
+  <p>Why is <code>&amp;Md</code> passed in <code>cudaMalloc((void**)&amp;Md, size)</code>?</p>
+  <ol>
+    <li data-why="Md is not a host buffer; it is a variable that will hold a device address.">Because Md will be allocated in host memory.</li>
+    <li data-why="size is already in bytes; unrelated to &amp;.">To give the size in bytes.</li>
+    <li data-why="True: the function writes the device address it allocated into this pointer variable.">So that the function can write the allocated address into the variable Md.</li>
+    <li data-why="cudaMalloc only allocates; copying is cudaMemcpy's job.">To copy data into Md.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>With 256-thread blocks and 3 blocks on an SM, how many warps are on the SM?</p>
+  <ol>
+    <li data-why="That is the warp count of a single block.">8</li>
+    <li data-why="256/32 = 8 warps/block × 3 = 24.">24</li>
+    <li data-why="768 is the number of threads, not warps.">768</li>
+    <li data-why="A warp is 32 threads; 768/32 = 24.">32</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Why is the CGMA ratio of naive matmul 1?</p>
+  <ol>
+    <li data-why="The naive kernel does not use shared memory.">There is one FP operation per shared memory access.</li>
+    <li data-why="Each thread does 2·width reads in total; the ratio is per iteration.">Each thread reads one element.</li>
+    <li data-why="CGMA is FP operations / global accesses; registers are unrelated.">Each thread uses one register.</li>
+    <li data-why="True: per loop iteration 2 global reads (M and N) and 2 FP operations (multiply + add).">Each iteration does 2 global reads and 2 FP operations (multiply, add).</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What can happen if the <strong>second</strong> <code>__syncthreads()</code> in the tiled kernel is removed?</p>
+  <ol>
+    <li data-why="True: a fast thread may write the next phase's data into Mds/Nds while a slow thread is still reading the old phase's values.">A thread may load the next phase's tile while another thread is still reading the previous phase's values.</li>
+    <li data-why="The compiler does not catch a missing barrier.">A compile error.</li>
+    <li data-why="The global write is after the loop; the problem is in shared memory.">The write to Pd is no longer coalesced.</li>
+    <li data-why="A race gives undefined results; there is no guarantee it is always right.">Nothing; the second barrier is unnecessary.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Which is true for <code>__constant__</code> variables?</p>
+  <ol>
+    <li data-why="Constant memory is not on-chip; it is in global memory, cached.">They live in a separate on-chip memory, no cache needed.</li>
+    <li data-why="The declaration must be outside function bodies.">They are declared inside the kernel.</li>
+    <li data-why="True: scope all grids, lifetime the application, stored in global memory but cached.">All grids see the same version; stored in global memory but cached.</li>
+    <li data-why="Read-only from kernels; the host writes with cudaMemcpyToSymbol.">Kernels can write to them.</li>
+  </ol>
+</div>
+
+<h2>Lecture 6 · Compilation and memory types</h2>
+<p class="small muted">Source page: <a href="l6-review.html">l6-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>nvcc: <code>.cu</code> → PTX (virtual ISA) → ptxas → SASS (cubin). A cubin for X.y runs only on X.z (z ≥ y); future GPUs need PTX + JIT. <code>-arch</code> selects the PTX, <code>-code</code> the binary.</li>
+  <li>Kernel launches are asynchronous: call <code>cudaDeviceSynchronize()</code> when timing; the first call includes initialisation.</li>
+  <li>Register and shared memory limits decide the threads/blocks per SM; too many registers → spill → local memory (as slow as global).</li>
+  <li>Global: coalescing (aligned 32/64/128 B segments), pitch in 2D. Local: variable-indexed arrays and spills.</li>
+  <li>Shared: 32 banks, bank = word index % 32; different words in the same bank = conflict; for <code>s[stride·threadIdx.x]</code> the degree is gcd(stride, 32); <code>[32][33]</code> padding for column reads.</li>
+  <li>Constant: best when everyone reads the <strong>same</strong> address (broadcast). Texture: 2D locality, interpolation, boundary handling; read-only, needs a CUDA array.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Mixing up coalescing and bank conflicts: coalescing is about consecutive addresses in <strong>global</strong> memory; bank conflicts are about different words falling into the same bank of <strong>shared</strong> memory. <code>s[2*threadIdx.x]</code> means half efficiency in global memory and a 2-way conflict in shared memory.</li>
+  <li>Taking the pitch for a number of elements: the pitch is in <strong>bytes</strong>, the row start is <code>(char*)p + r*pitch</code>.</li>
+  <li>Having consecutive threads read consecutive addresses of constant memory: that is the bad pattern for constant memory (32 separate requests).</li>
+  <li>Thinking a binary built with <code>-code=sm_70</code> runs on an 8.x GPU (not across a major change, and with no PTX there is no JIT).</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> 32 threads read <code>s[8*threadIdx.x + 1]</code> from <code>__shared__ float s[1024]</code>. How many ways is the bank conflict?</p>
+<div class="hint"><p>Bank = (8i + 1) % 32: 1, 9, 17, 25, 1, 9, … → only 4 banks are used, with 8 different words each → <strong>8-way</strong> (gcd(8, 32) = 8; the offset does not change the degree).</p></div>
+<p><strong>2.</strong> Why is <code>tile[32][33]</code> used instead of <code>__shared__ float tile[32][32]</code> in the transpose? Show it with the bank calculation.</p>
+<div class="hint"><p>With width 32 the bank of <code>tile[r][c]</code> is <code>(32r + c) % 32 = c</code>: the 32 elements of a column are in the same bank, so a warp reading a column makes a 32-way conflict. With width 33 the bank is <code>(33r + c) % 32 = (r + c) % 32</code>: 32 different banks for r = 0..31 → no conflict. The cost is 32 floats.</p></div>
+<p><strong>3.</strong> A kernel uses 40 registers per thread and an SM has 65,536 registers. With 256 threads per block, how many blocks fit on an SM at most (by registers)?</p>
+<div class="hint"><p>256·40 = 10,240 registers per block; 65,536 / 10,240 = 6.4 → <strong>6 blocks</strong> (1536 threads). Bringing it down to 32 registers allows 8 blocks (2048 threads): register usage directly decides occupancy.</p></div>
+<p><strong>4.</strong> When do you choose constant memory and when texture memory? One example each.</p>
+<div class="hint"><p>Constant: when all threads read the same small data at the same time, e.g. the coefficients of a convolution filter (every thread reads the same coefficient at the same moment → broadcast). Texture: reads that are local in 2D but irregular, and fractional coordinates, e.g. image rotation (<code>texRotate.cu</code>): neighbouring pixels come from the cache, bilinear interpolation and edge handling are done in hardware.</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="2">
+  <p>Can a compute capability 8.6 GPU run an application compiled only with <code>-gencode arch=compute_70,code=sm_70</code>?</p>
+  <ol>
+    <li data-why="A cubin is forward-compatible within the same major; 7.x → 8.x changes the major.">Yes, the sm_70 binary runs on 8.6.</li>
+    <li data-why="True: the binary runs only on 7.z, and with no embedded PTX there is nothing to JIT.">No: binaries are not compatible across major versions and no PTX is embedded.</li>
+    <li data-why="JIT needs embedded PTX; code=sm_70 embeds only the binary.">Yes, the driver JIT-recompiles the sm_70 binary.</li>
+    <li data-why="Compatibility is decided by compute capability.">Only if compiled with the same driver version.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Why is <code>cudaDeviceSynchronize()</code> needed when timing a kernel?</p>
+  <ol>
+    <li data-why="Unrelated to allocation.">To complete memory allocation.</li>
+    <li data-why="cudaMemcpy is already synchronous; the question is about the kernel.">Because cudaMemcpy is asynchronous.</li>
+    <li data-why="The barrier is within a block; it does not hold the host.">To synchronise the blocks with each other.</li>
+    <li data-why="True: the launch returns immediately; without waiting you only measure the launch.">Kernel launches are asynchronous; timing without waiting for completion gives a far too short (wrong) time.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Which variable is most likely to be placed in local memory?</p>
+  <ol>
+    <li data-why="True: arrays the compiler cannot prove are indexed with constants go to local memory.">An automatic array accessed with an index computed at run time.</li>
+    <li data-why="Scalar automatic variables go to registers (unless spilled).">An <code>int</code> loop counter.</li>
+    <li data-why="__shared__ is explicitly shared memory.">A <code>__shared__</code> array.</li>
+    <li data-why="__constant__ is in constant memory.">A <code>__constant__</code> array.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Rows of 700 bytes were allocated with <code>cudaMallocPitch</code> (256 B alignment). How do you reach the start of row <code>r</code>?</p>
+  <ol>
+    <li data-why="Rows are pitch (768 B) apart, not 700.">(float*)((char*)p + r * 700)</li>
+    <li data-why="pitch is in bytes; float* arithmetic multiplies by 4.">p + r * pitch</li>
+    <li data-why="True: pitch = 768 B; cast to char* first and add bytes.">(float*)((char*)p + r * pitch), pitch = 768</li>
+    <li data-why="The pitch cannot be smaller than the width.">(float*)((char*)p + r * 512)</li>
+  </ol>
+</div>
+
+<h2>Lecture 6 · Coalescing, transpose, unrolling</h2>
+<p class="small muted">Source page: <a href="coalescing-review.html">coalescing-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>A warp's accesses are gathered into 32/64/128-byte segments aligned to their size; the fewer the segments, the better.</li>
+  <li>Check: is <code>threadIdx.x</code> without a multiplier and rightmost in the address? <code>A[row*W + col]</code> ✓, <code>A[col*W + row]</code> ✗.</li>
+  <li>For 2D arrays, <code>cudaMallocPitch</code> so that row starts are aligned; the pitch is in bytes.</li>
+  <li>Transpose: in the naive version the write is ✗; with a shared memory tile read and write are ✓; <code>[32][33]</code> padding removes bank conflicts.</li>
+  <li>Loop unrolling: reduces loop control, increases ILP; the price is registers.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> A warp reads <code>a[threadIdx.x * 2 + 1]</code> from a <code>float</code> array (128 B aligned). How many 32 B segments are moved, and what is the efficiency?</p>
+<div class="hint"><p>Addresses 4, 12, 20, …, 252 (bytes): all 8 segments of the range 0–255 are touched → 8 · 32 = 256 B moved, 128 B used: <strong>50%</strong>.</p></div>
+<p><strong>2.</strong> In the shared-memory transpose, why are both the global read and the global write coalesced? Which access stays scattered, and why is that not a problem?</p>
+<div class="hint"><p>In both the read and the write, <code>threadIdx.x</code> is rightmost in the global address (consecutive along a row). The swapping is done inside shared memory: <code>tile[threadIdx.x][…]</code> reads a column, so the scattered access is in <strong>shared</strong> memory. Shared memory is on-chip and fast, so this is cheap; its only cost is bank conflicts, which <code>[32][33]</code> padding removes.</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="2">
+  <p>A warp reads <code>a[3*threadIdx.x]</code> from a 128 B-aligned <code>float</code> array. How many 32 B segments are touched?</p>
+  <ol>
+    <li data-why="Consecutive would give 4; with stride 3 it spreads over 384 B.">4</li>
+    <li data-why="Addresses 0, 12, 24, …, 372: all 12 segments of the range 0–383 are touched.">12</li>
+    <li data-why="With stride 3 there are ~2.7 threads per segment; each thread is not a separate segment.">32</li>
+    <li data-why="That is the number of 128 B lines; the question asks about 32 B segments.">3</li>
+  </ol>
+  <div class="explain">Moved 12·32 = 384 B, used 128 B → efficiency 1/3.</div>
+</div>
+<div class="quiz" data-answer="3">
+  <p>Why are the transpose kernels' blocks 32×8 threads rather than 32×32?</p>
+  <ol>
+    <li data-why="32×32 = 1024 threads is allowed on today's GPUs; that is not the reason.">A 32×32 block cannot be launched.</li>
+    <li data-why="Unrelated to bank conflicts; padding fixes those.">To avoid bank conflicts.</li>
+    <li data-why="True: each thread processes 4 elements; the index calculation is shared, and coalescing is kept because the loop runs along rows.">So that each thread processes 4 elements of the tile and the index calculation cost is shared.</li>
+    <li data-why="The tile is still 32×32; same shared memory.">To save shared memory.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>Why does <code>transposeCoalesced</code> use <code>x = blockIdx.y*TILE_DIM + threadIdx.x</code> in the store phase?</p>
+  <ol>
+    <li data-why="True: tile (bx, by) goes to position (by, bx) in the output.">Tile (bx, by) of the input must be written to the transposed position (by, bx) of the output.</li>
+    <li data-why="Padding fixes bank conflicts; this index change decides where the tile goes.">To reduce bank conflicts.</li>
+    <li data-why="threadIdx.x stays on the right, so the write is coalesced; but the question is about the block offset.">To make the read coalesced.</li>
+    <li data-why="Not a typo; without it each tile would be transposed in place and the matrix would be wrong.">A typo; it should be blockIdx.x.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true about <code>#pragma unroll</code>?</p>
+  <ol>
+    <li data-why="Unrolling does not distribute a serial loop over threads; it copies it within the same thread.">It distributes the loop iterations over different threads.</li>
+    <li data-why="Register usage usually increases.">It reduces register usage.</li>
+    <li data-why="The result does not change (same operations, same order).">It may change the result, be careful.</li>
+    <li data-why="True: with a constant trip count the body is copied completely and the control instructions disappear.">It can fully unroll a loop whose trip count is constant at compile time.</li>
+  </ol>
+</div>
+
+<h2>Lecture 7 · Error checking and control flow</h2>
+<p class="small muted">Source page: <a href="l7-review.html">l7-review.html</a></p>
+<h3>Key ideas</h3>
+<ul>
+  <li>Runtime calls return <code>cudaError_t</code>; a kernel launch does not. Asynchronous errors appear at a later call (or at <code>cudaDeviceSynchronize()</code>).</li>
+  <li><code>cudaPeekAtLastError()</code> reads, <code>cudaGetLastError()</code> reads and resets. Pattern: clear first, launch, <code>cudaGetLastError()</code>, <code>cudaDeviceSynchronize()</code>.</li>
+  <li>Divergence: different paths within a warp run one after the other (one program counter). Aligning the condition with <code>threadIdx / 32</code> avoids divergence.</li>
+  <li>Predication (GPU): instructions are not skipped, they are masked with a per-thread predicate. Prediction (CPU): guessing the branch + speculative execution.</li>
+  <li><code>#pragma unroll N</code> unrolls N times (code is added for leftover iterations); <code>1</code> does not unroll; without a number: fully unrolls a constant trip count.</li>
+  <li>Make loop counters <code>int</code>: since signed overflow is undefined, the compiler optimises more.</li>
+</ul>
+<h3>Common mistakes</h3>
+<ul>
+  <li>Thinking "the launch returned no error, so it ran": a launch never returns an error; execution errors come later.</li>
+  <li>Calling <code>cudaGetLastError()</code> twice and expecting the error the second time too: the first call resets it.</li>
+  <li>Mixing up predication and prediction, or counting different warps taking different branches as divergence.</li>
+  <li>Writing <code>#pragma unroll</code> a few lines before the loop: it must be immediately before it.</li>
+</ul>
+<h3>Open-ended questions for the final</h3>
+<p><strong>1.</strong> Complete the unchecked call <code>k&lt;&lt;&lt;g, b&gt;&gt;&gt;(…);</code>. What is the difference between Peek and Get?</p>
+<div class="hint"><p>First clear/check earlier errors (<code>cudaGetLastError()</code>), launch, <code>cudaError_t launch = cudaGetLastError();</code> (configuration/parameter errors), then <code>cudaError_t run = cudaDeviceSynchronize();</code> (execution errors); if either is not <code>cudaSuccess</code>, report and stop. Get reads and resets, Peek does not reset.</p></div>
+<p><strong>2.</strong> In a 128-thread 1D block, how many warps diverge for <code>if (threadIdx.x &lt; 40)</code> and for <code>if (threadIdx.x % 4 == 0)</code>?</p>
+<div class="hint"><p><code>&lt; 40</code>: warp 0 all true, warp 1 (32–63) mixed, warps 2–3 all false → <strong>1</strong>. <code>% 4 == 0</code>: 8 true, 24 false in every warp → <strong>4</strong> (all).</p></div>
+<p><strong>3.</strong> How is predication different from prediction? Why is <code>#pragma unroll 4</code> not always faster?</p>
+<div class="hint"><p>Prediction (CPU) guesses the branch and executes speculatively, rolling back if wrong. Predication (GPU) does not skip instructions; it masks them with a per-thread predicate, and false ones neither write results nor read operands. Unrolling reduces loop control but increases code size and register usage; register spills or lower occupancy can erase the gain.</p></div>
+<p><strong>4.</strong> A program reports "illegal memory access" at a <code>cudaMemcpy</code> call, but the <code>cudaMemcpy</code> parameters are correct. Why?</p>
+<div class="hint"><p>The error most likely happened in the previous <strong>kernel</strong> (asynchronously). A kernel launch returns no error; the error was reported at the next unrelated call, here the <code>cudaMemcpy</code>. Checking the return value of <code>cudaDeviceSynchronize()</code> right after the kernel shows the error in the right place.</p></div>
+<h3>Check yourself</h3>
+<div class="quiz" data-answer="3">
+  <p>Which error does <code>cudaGetLastError()</code> catch right after a kernel launch?</p>
+  <ol>
+    <li data-why="Errors during execution need a synchronisation.">An out-of-bounds access inside the kernel.</li>
+    <li data-why="Get resets; but the question is which kind of error it catches.">None; a kernel launch produces no errors.</li>
+    <li data-why="True: pre-launch (configuration/parameter) errors such as 2048 threads per block.">Pre-launch errors such as an invalid configuration.</li>
+    <li data-why="No call can know about future errors.">The errors of the next <code>cudaMemcpy</code>.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="2">
+  <p>The difference between <code>cudaPeekAtLastError()</code> and <code>cudaGetLastError()</code>?</p>
+  <ol>
+    <li data-why="Both read the same per-host-thread error variable.">Peek reads the device's error, Get the host's.</li>
+    <li data-why="True: Peek only reads, Get reads and resets to cudaSuccess.">Peek does not reset the variable, Get does.</li>
+    <li data-why="Neither blocks; synchronising needs cudaDeviceSynchronize.">Peek synchronises, Get does not.</li>
+    <li data-why="There is a difference: the reset.">There is no difference.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="4">
+  <p>Which is true of the GPU's branch predication?</p>
+  <ol>
+    <li data-why="That is the CPU's branch prediction.">It guesses the branch outcome and executes speculatively.</li>
+    <li data-why="Instructions are not skipped; all are scheduled.">The instructions of threads whose condition is false are skipped.</li>
+    <li data-why="Instructions with a false predicate read no operands and write no results.">Instructions with a false predicate read operands but do not write results.</li>
+    <li data-why="True: each instruction carries a per-thread predicate; only true ones take effect.">Each instruction is associated with a per-thread predicate; only true ones execute.</li>
+  </ol>
+</div>
+<div class="quiz" data-answer="1">
+  <p>What does <code>#pragma unroll</code> without a number do?</p>
+  <ol>
+    <li data-why="True: fully unrolls a constant trip count, otherwise not at all.">Fully unrolls the loop if its trip count is constant, otherwise not at all.</li>
+    <li data-why="There is no default of 4.">Unrolls the loop 4 times.</li>
+    <li data-why="That is #pragma unroll 1.">Prevents the loop from being unrolled.</li>
+    <li data-why="The pragma applies only to the loop right after it.">Unrolls every loop in the file.</li>
+  </ol>
+</div>
+
+</div></main>
+</body>
+</html>
