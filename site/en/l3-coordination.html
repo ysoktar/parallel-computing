@@ -66,9 +66,18 @@ resAvail.release();                  slotsAvail.release();
   <li>On GPUs atomic operations can be very slow (the histogram example: many writes to the same bin).</li>
 </ul>
 <pre class="code" data-run="spinlock.cpp" data-title="A spin lock with atomic&lt;bool&gt;">
-std::atomic<bool> locked{false};
-void lock()   { bool exp = false; while (!locked.compare_exchange_weak(exp, true)) exp = false; }
-void unlock() { locked.store(false); }
+std::atomic&lt;bool&gt; locked{false};
+
+void lock() {
+    bool expected = false;
+    // CAS: if locked == false, set it to true and stop; otherwise someone holds the lock → try again
+    while (!locked.compare_exchange_weak(expected, true))
+        expected = false;   // a failed CAS writes the current value (true) into expected: reset it
+}
+
+void unlock() {
+    locked.store(false);
+}
 </pre>
 <h3>Memory ordering of atomics</h3>
 <ul>
@@ -85,12 +94,21 @@ void unlock() { locked.store(false); }
 </ul>
 <pre class="code" data-run="monitor.cpp" data-title="The C++11 monitor pattern">
 class Monitor {
-    std::mutex m; std::condition_variable cv; int count = 0;
+    std::mutex m;
+    std::condition_variable cv;
+    int count = 0;
+
 public:
-    void put()  { std::unique_lock<std::mutex> l(m); count++; cv.notify_one(); }
-    void take() { std::unique_lock<std::mutex> l(m);
-                  cv.wait(l, [&]{ return count > 0; });   // releases the lock while waiting
-                  count--; }
+    void put() {
+        std::unique_lock&lt;std::mutex&gt; l(m);
+        count++;
+        cv.notify_one();                          // wake one waiting take()
+    }
+    void take() {
+        std::unique_lock&lt;std::mutex&gt; l(m);
+        cv.wait(l, [&amp;] { return count &gt; 0; });    // releases the lock while waiting, rechecks the condition on waking
+        count--;
+    }
 };
 </pre>
 

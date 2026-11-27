@@ -77,9 +77,9 @@ cudaError_t run = cudaDeviceSynchronize();   // != cudaSuccess: report and stop<
 }</pre>
 <div class="hint"><p>In the last block some threads never reach the barrier (undefined behaviour), and the tile element to be read may not have been loaded. Every thread must fill the tile and reach the barrier:</p>
 <pre class="code" data-run="q23_barrier.cu">
-tile[threadIdx.x]=(i<N)?A[i]:0;
-__syncthreads();
-if(i<N) B[i]=tile[(threadIdx.x+1)%blockDim.x];
+tile[threadIdx.x] = (i &lt; N) ? A[i] : 0;                    // every thread fills its slot (0 if outside)
+__syncthreads();                                            // reached by all threads of the block
+if (i &lt; N) B[i] = tile[(threadIdx.x + 1) % blockDim.x];     // read the right neighbour, loaded by ANOTHER thread
 </pre>
 <p>If the same tile is reloaded, a second barrier is needed after the reads.</p></div>
 
@@ -93,22 +93,22 @@ if(i<N) B[i]=tile[(threadIdx.x+1)%blockDim.x];
 <p>Write a 16×16 shared-memory matmul for N = 100 square matrices. SM: 48 KiB shared, 2048 threads, 64 warps, 16 blocks, 65536 registers; 32 registers per thread. Number of phases, barriers, occupancy?</p>
 <div class="hint">
 <pre class="code" data-run="q30_tiled.cu">
-#define T 16
-__global__ void matmul(const float* A,const float* B,
-                       float* C,int N) {
+#define T 16   // tile width = block width
+__global__ void matmul(const float* A, const float* B, float* C, int N) {
     __shared__ float a[T][T], b[T][T];
-    int x=threadIdx.x, y=threadIdx.y;
-    int r=blockIdx.y*T+y, c=blockIdx.x*T+x;
-    float s=0;
-    for(int p=0;p<(N+T-1)/T;p++) {
-        int kx=p*T+x, ky=p*T+y;
-        a[y][x]=(r<N && kx<N)?A[r*N+kx]:0;
-        b[y][x]=(ky<N && c<N)?B[ky*N+c]:0;
-        __syncthreads();
-        for(int k=0;k<T;k++) s+=a[y][k]*b[k][x];
-        __syncthreads();
+    int x = threadIdx.x, y = threadIdx.y;
+    int r = blockIdx.y * T + y, c = blockIdx.x * T + x;      // this thread's element of C
+    float s = 0;
+    for (int p = 0; p &lt; (N + T - 1) / T; p++) {               // phase p: tile p of A's row band and of B's column band
+        int kx = p * T + x, ky = p * T + y;
+        a[y][x] = (r &lt; N &amp;&amp; kx &lt; N) ? A[r * N + kx] : 0;
+        b[y][x] = (ky &lt; N &amp;&amp; c &lt; N) ? B[ky * N + c] : 0;
+        __syncthreads();                                      // (1) both tiles are full
+        for (int k = 0; k &lt; T; k++)
+            s += a[y][k] * b[k][x];
+        __syncthreads();                                      // (2) everyone is done; the next phase may overwrite
     }
-    if(r<N && c<N) C[r*N+c]=s;
+    if (r &lt; N &amp;&amp; c &lt; N) C[r * N + c] = s;
 }
 </pre>
 <p>Grid = (7,7), block = (16,16), phases = ⌈100/16⌉ = <strong>7</strong>; 12544 threads, 10000 valid. The first barrier guarantees the loads, the second the end of the reads. Shared 2·16²·4 = 2048 B/block. Limits: threads 2048/256 = 8, warps 64/8 = 8, registers 65536/(256·32) = 8, shared 24, blocks 16 → <strong>8 blocks, 100%</strong> theoretical occupancy. Out-of-range lanes take part in the barriers too.</p></div>
@@ -177,15 +177,14 @@ __global__ void matmul(const float* A,const float* B,
 <p>Write the kernel and launch computing <code>C[i] = 2A[i] + B[i]</code>; give the <code>cudaMemcpy</code> directions.</p>
 <div class="hint">
 <pre class="code" data-run="q5_vecop.cu">
-__global__ void f(const float* A,const float* B,
-                  float* C,int N) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;
-    if(i<N) C[i]=2*A[i]+B[i];
+__global__ void f(const float* A, const float* B, float* C, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i &lt; N) C[i] = 2 * A[i] + B[i];
 }
-cudaMemcpy(dA,A,N*sizeof(float),cudaMemcpyHostToDevice);
-cudaMemcpy(dB,B,N*sizeof(float),cudaMemcpyHostToDevice);
-f<<<(N+255)/256,256>>>(dA,dB,dC,N);
-cudaMemcpy(C,dC,N*sizeof(float),cudaMemcpyDeviceToHost);
+cudaMemcpy(dA, A, bytes, cudaMemcpyHostToDevice);   // bytes = N * sizeof(float)
+cudaMemcpy(dB, B, bytes, cudaMemcpyHostToDevice);
+f&lt;&lt;&lt;(N + 255) / 256, 256&gt;&gt;&gt;(dA, dB, dC, N);           // dC needs no copy in: every element is written
+cudaMemcpy(C, dC, bytes, cudaMemcpyDeviceToHost);
 </pre>
 <p>No H2D copy to dC is needed since the output is fully overwritten. 2 FLOPs, 2 reads + 1 write per output → CGMA = 2/3 counting all accesses.</p></div>
 
@@ -193,16 +192,16 @@ cudaMemcpy(C,dC,N*sizeof(float),cudaMemcpyDeviceToHost);
 <p>A = 35×19, B = 19×65, 16×16 blocks. Kernel and launch?</p>
 <div class="hint">
 <pre class="code" data-run="q6_mm_rect.cu">
-__global__ void mm(const float* A,const float* B,float* C,
-                   int M,int K,int N) {
-    int r=blockIdx.y*blockDim.y+threadIdx.y;
-    int c=blockIdx.x*blockDim.x+threadIdx.x;
-    if(r>=M || c>=N) return;
-    float s=0;
-    for(int k=0;k<K;k++) s+=A[r*K+k]*B[k*N+c];
-    C[r*N+c]=s;
+__global__ void mm(const float* A, const float* B, float* C, int M, int K, int N) {
+    int r = blockIdx.y * blockDim.y + threadIdx.y;   // row of C
+    int c = blockIdx.x * blockDim.x + threadIdx.x;   // column of C
+    if (r &gt;= M || c &gt;= N) return;
+    float s = 0;
+    for (int k = 0; k &lt; K; k++)
+        s += A[r * K + k] * B[k * N + c];
+    C[r * N + c] = s;
 }
-mm<<<dim3(5,3),dim3(16,16)>>>(dA,dB,dC,35,19,65);
+mm&lt;&lt;&lt;dim3(5, 3), dim3(16, 16)&gt;&gt;&gt;(dA, dB, dC, 35, 19, 65);   // ⌈65/16⌉ = 5 columns, ⌈35/16⌉ = 3 rows of blocks
 </pre>
 <p>C = 35×65 = 2275 outputs; grid (⌈65/16⌉, ⌈35/16⌉) = (5,3), 3840 threads, 1565 idle. Trap: A's row stride is 19, B's and C's is 65; indexing all three with the same width is wrong.</p></div>
 
@@ -210,24 +209,24 @@ mm<<<dim3(5,3),dim3(16,16)>>>(dA,dB,dC,35,19,65);
 <p>A kernel applying the filter (1/16)·[1 2 1; 2 4 2; 1 2 1] to a W×H image with zero padding; the block size is a parameter.</p>
 <div class="hint">
 <pre class="code" data-run="q7_conv.cu">
-__constant__ float F[9];
-__global__ void conv(const float* in,float* out,int W,int H) {
-    int x=blockIdx.x*blockDim.x+threadIdx.x;
-    int y=blockIdx.y*blockDim.y+threadIdx.y;
-    if(x>=W || y>=H) return;
-    float sum=0;
-    for(int dy=-1;dy<=1;dy++) {
-        for(int dx=-1;dx<=1;dx++) {
-            int xx=x+dx, yy=y+dy;
-            if(xx>=0 && xx<W && yy>=0 && yy<H)
-                sum+=in[yy*W+xx]*F[(dy+1)*3+dx+1];
+__constant__ float F[9];   // filled from the host with cudaMemcpyToSymbol
+__global__ void conv(const float* in, float* out, int W, int H) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;   // column
+    int y = blockIdx.y * blockDim.y + threadIdx.y;   // row
+    if (x &gt;= W || y &gt;= H) return;
+    float sum = 0;
+    for (int dy = -1; dy &lt;= 1; dy++) {
+        for (int dx = -1; dx &lt;= 1; dx++) {
+            int xx = x + dx, yy = y + dy;                       // neighbour
+            if (xx &gt;= 0 &amp;&amp; xx &lt; W &amp;&amp; yy &gt;= 0 &amp;&amp; yy &lt; H)         // outside the image counts as 0
+                sum += in[yy * W + xx] * F[(dy + 1) * 3 + dx + 1];
         }
     }
-    out[y*W+x]=sum;
+    out[y * W + x] = sum;
 }
-cudaMemcpyToSymbol(F,hF,9*sizeof(float));
-dim3 b(BX,BY),g((W+BX-1)/BX,(H+BY-1)/BY);
-conv<<<g,b>>>(dIn,dOut,W,H);
+cudaMemcpyToSymbol(F, hF, 9 * sizeof(float));
+dim3 b(BX, BY), g((W + BX - 1) / BX, (H + BY - 1) / BY);
+conv&lt;&lt;&lt;g, b&gt;&gt;&gt;(dIn, dOut, W, H);
 </pre>
 <p>A filter coefficient is the same address within a warp at the same loop step → a constant broadcast fits. Out-of-range input is 0. For a 16×16 tile the shared area including the halo is (16+2)² = 324 floats = 1296 B.</p></div>
 

@@ -1,4 +1,5 @@
-// Midterm 2 exercise (b): k2<<<dim3(2,2), dim3(8,8)>>> on a 16×16 matrix, with x used as the row.
+// Midterm 2 guide, exercise (b): k2<<<dim3(2,2), dim3(8,8)>>> on a 16×16 matrix. The kernel uses x (the
+// consecutive direction within a warp) as the ROW, so it writes the matrix transposed and its writes do not coalesce.
 #include <cstdio>
 
 __global__ void k2(int* B, int width) {
@@ -8,11 +9,20 @@ __global__ void k2(int* B, int width) {
 }
 
 int main() {
-    const int W = 16; int h[W * W];
-    int* B; cudaMalloc((void**)&B, sizeof h); cudaMemset(B, 0xff, sizeof h);
+    const int W = 16;
+    int h[W * W];
+
+    int* B;
+    cudaMalloc((void**)&B, sizeof h);
+    cudaMemset(B, 0xff, sizeof h);       // every element -1 before the kernel
     k2<<<dim3(2, 2), dim3(8, 8)>>>(B, W);
     cudaMemcpy(h, B, sizeof h, cudaMemcpyDeviceToHost);
-    for (int r = 0; r < W; r++) { for (int c = 0; c < W; c++) printf("%2d", h[r * W + c]); printf("\n"); }
+
+    for (int r = 0; r < W; r++) {
+        for (int c = 0; c < W; c++)
+            printf("%2d", h[r * W + c]);
+        printf("\n");
+    }
     printf("B[181] = %d (thread blockIdx=(1,0) threadIdx=(3,5): x=11, y=5)\n", h[181]);
     printf("→ every element of row r is r %% 8; the fix for coalescing is B[y * width + x]\n");
     cudaFree(B);

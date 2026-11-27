@@ -52,30 +52,34 @@
 <p><strong>CUDA arrays:</strong> <strong>opaque</strong> (no direct access to values) 1D/2D/3D memory layouts optimised for texture fetching; elements with 1, 2 or 4 components (8/16/32-bit integers, 16/32-bit floats). Kernels access them only through texture fetches (read) or surface reads/writes.</p>
 <pre class="code" data-run="texrotate.cu" data-title="texRotate.cu (class example): image rotation with a texture, summary">
 // Host: 1) allocate CUDA array  2) copy data  3) resDesc  4) texDesc  5) create texture object
-cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+cudaChannelFormatDesc ch = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);   // one 32-bit float per texel
 cudaArray_t cuArray;
-cudaMallocArray(&cuArray, &ch, width, height);
+cudaMallocArray(&amp;cuArray, &amp;ch, width, height);
 cudaMemcpy2DToArray(cuArray, 0, 0, img, width * sizeof(float), width * sizeof(float), height,
                     cudaMemcpyHostToDevice);
 
-cudaResourceDesc resDesc = {};  resDesc.resType = cudaResourceTypeArray;  resDesc.res.array.array = cuArray;
+cudaResourceDesc resDesc = {};
+resDesc.resType = cudaResourceTypeArray;
+resDesc.res.array.array = cuArray;
 cudaTextureDesc texDesc = {};
-texDesc.addressMode[0] = cudaAddressModeWrap;   texDesc.addressMode[1] = cudaAddressModeWrap;
+texDesc.addressMode[0] = cudaAddressModeWrap;   // outside [0, 1) wraps around, in x ...
+texDesc.addressMode[1] = cudaAddressModeWrap;   // ... and in y
 texDesc.filterMode = cudaFilterModeLinear;      // bilinear interpolation for free
 texDesc.readMode = cudaReadModeElementType;
 texDesc.normalizedCoords = 1;                   // coordinates in [0, 1)
 cudaTextureObject_t texObj = 0;
-cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
+cudaCreateTextureObject(&amp;texObj, &amp;resDesc, &amp;texDesc, NULL);
 
-// Device: rotate the normalised coordinate by θ about the centre, read from the texture
+// Device: rotate the normalised coordinate by θ around the centre, read from the texture
 __global__ void transformKernel(float* output, cudaTextureObject_t texObj, int width, int height, float theta) {
     unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x < width && y < height) {
-        float u = x / (float)width - 0.5f, v = y / (float)height - 0.5f;
-        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
+    if (x &lt; width &amp;&amp; y &lt; height) {
+        float u = x / (float)width - 0.5f;          // coordinates centred on the middle of the image
+        float v = y / (float)height - 0.5f;
+        float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;   // rotate, then move back to [0, 1)
         float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
-        output[y * width + x] = tex2D<float>(texObj, tu, tv);
+        output[y * width + x] = tex2D&lt;float&gt;(texObj, tu, tv);   // fractional coordinates: the hardware interpolates
     }
 }
 // dim3 block(16, 16); dim3 grid((width + 15) / 16, (height + 15) / 16);
